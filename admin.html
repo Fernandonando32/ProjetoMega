@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administração de Usuários</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="users.js"></script>
+    <script>
+        // Verificar autenticação
+        if (!Auth.isAuthenticated()) {
+            window.location.href = 'login.html';
+            throw new Error('Não autenticado');
+        }
+
+        // Obter usuário atual
+        const currentUser = Auth.getCurrentUser();
+        
+        // Verificar se é administrador
+        if (!Auth.hasPermission(currentUser, Auth.PERMISSIONS.MANAGE_USERS)) {
+            window.location.href = 'Agenda.html';
+            throw new Error('Sem permissão');
+        }
+    </script>
+    <style>
+        :root {
+            --primary-color: #2a3d66;
+            --secondary-color: #eaf0fa;
+            --accent-color: #27ae60;
+            --danger-color: #c0392b;
+            --text-color: #2a3d66;
+            --light-text: #666;
+            --border-color: #e0e6f0;
+            --shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #f4f6fb;
+            color: var(--text-color);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo i {
+            font-size: 24px;
+            color: var(--primary-color);
+        }
+
+        .logo h1 {
+            font-size: 20px;
+            color: var(--primary-color);
+        }
+
+        .user-info {
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .button {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1a2540;
+        }
+
+        .btn-danger {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #a93226;
+        }
+
+        .btn-success {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #219653;
+        }
+
+        .panel {
+            background: white;
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            margin-bottom: 30px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 15px 20px;
+            background: var(--secondary-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-header h2 {
+            font-size: 18px;
+            color: var(--primary-color);
+        }
+
+        .panel-body {
+            padding: 20px;
+        }
+
+        .panel-footer {
+            padding: 15px 20px;
+            background: var(--secondary-color);
+            text-align: right;
+        }
+
+        .user-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .user-table th,
+        .user-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .user-table th {
+            background: var(--secondary-color);
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .user-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .user-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .user-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+
+        .modal-content {
+            position: relative;
+            background: white;
+            width: 90%;
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+        }
+
+        .close {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .permission-group {
+            margin-top: 20px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .permission-group h3 {
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .permission-checkbox {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .permission-checkbox input {
+            width: auto;
+            margin-right: 10px;
+        }
+
+        .permission-description {
+            font-size: 12px;
+            color: var(--light-text);
+            margin-left: 25px;
+        }
+
+        .required {
+            color: var(--danger-color);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+
+        .badge-admin {
+            background: #2a3d66;
+            color: white;
+        }
+
+        .badge-user {
+            background: #27ae60;
+            color: white;
+        }
+
+        .badge-viewer {
+            background: #3498db;
+            color: white;
+        }
+
+        .error-message {
+            color: var(--danger-color);
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .links {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .links a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .links a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">
+                <i class="fas fa-users-cog"></i>
+                <h1>Administração de Usuários</h1>
+            </div>
+            <div class="user-info">
+                <span id="currentUserName"></span>
+                <button class="button btn-primary" id="backButton">
+                    <i class="fas fa-calendar-alt"></i> Voltar para Agenda
+                </button>
+                <button class="button btn-danger" id="logoutButton">
+                    <i class="fas fa-sign-out-alt"></i> Sair
+                </button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-header">
+                <h2>Lista de Usuários</h2>
+                <button class="button btn-success" id="addUserButton">
+                    <i class="fas fa-plus"></i> Adicionar Usuário
+                </button>
+            </div>
+            <div class="panel-body">
+                <table class="user-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Usuário</th>
+                            <th>E-mail</th>
+                            <th>Nível de Acesso</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="userTableBody">
+                        <!-- Será preenchido dinamicamente -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Adicionar/Editar Usuário -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="modalTitle">Adicionar Usuário</h2>
+            <form id="userForm">
+                <input type="hidden" id="userId">
+                <div class="form-group">
+                    <label for="name">Nome Completo <span class="required">*</span></label>
+                    <input type="text" id="name" required>
+                </div>
+                <div class="form-group">
+                    <label for="username">Nome de Usuário <span class="required">*</span></label>
+                    <input type="text" id="username" required>
+                    <div class="error-message" id="usernameError">Este nome de usuário já existe</div>
+                </div>
+                <div class="form-group">
+                    <label for="email">E-mail <span class="required">*</span></label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Senha <span class="required">*</span></label>
+                    <input type="password" id="password" required>
+                </div>
+                <div class="form-group">
+                    <label for="accessLevel">Nível de Acesso <span class="required">*</span></label>
+                    <select id="accessLevel">
+                        <option value="ADMIN">Administrador</option>
+                        <option value="USER">Usuário Padrão</option>
+                        <option value="VIEWER">Visualizador</option>
+                    </select>
+                </div>
+
+                <div class="permission-group">
+                    <h3>Permissões Personalizadas</h3>
+                    <p style="font-size: 12px; margin-bottom: 10px;">Se você quiser personalizar as permissões além do nível de acesso padrão, marque as opções abaixo:</p>
+                    
+                    <div class="permission-checkbox">
+                        <input type="checkbox" id="customPermissions">
+                        <label for="customPermissions">Usar permissões personalizadas</label>
+                    </div>
+
+                    <div id="permissionsContainer" style="display: none; margin-top: 15px;">
+                        <!-- VIEW_TASKS -->
+                        <div class="permission-checkbox">
+                            <input type="checkbox" id="perm_view_tasks" value="view_tasks">
+                            <label for="perm_view_tasks">Visualizar Tarefas</label>
+                        </div>
+                        <div class="permission-description">Permite visualizar o calendário e as tarefas</div>
+
+                        <!-- CREATE_TASKS -->
+                        <div class="permission-checkbox">
+                            <input type="checkbox" id="perm_create_tasks" value="create_tasks">
+                            <label for="perm_create_tasks">Criar Tarefas</label>
+                        </div>
+                        <div class="permission-description">Permite adicionar novas tarefas no sistema</div>
+
+                        <!-- EDIT_TASKS -->
+                        <div class="permission-checkbox">
+                            <input type="checkbox" id="perm_edit_tasks" value="edit_tasks">
+                            <label for="perm_edit_tasks">Editar Tarefas</label>
+                        </div>
+                        <div class="permission-description">Permite modificar tarefas existentes</div>
+
+                        <!-- DELETE_TASKS -->
+                        <div class="permission-checkbox">
+                            <input type="checkbox" id="perm_delete_tasks" value="delete_tasks">
+                            <label for="perm_delete_tasks">Excluir Tarefas</label>
+                        </div>
+                        <div class="permission-description">Permite remover tarefas do sistema</div>
+
+                        <!-- COMPLETE_TASKS -->
+                        <div class="permission-checkbox">
+                            <input type="checkbox" id="perm_complete_tasks" value="complete_tasks">
+                            <label for="perm_complete_tasks">Concluir Tarefas</label>
+                        </div>
+                        <div class="permission-description">Permite marcar tarefas como concluídas</div>
+
+                        <!-- VIEW_COMPLETED -->
+                        <div class="permission-checkbox">
+                            <input type="checkbox" id="perm_view_completed" value="view_completed">
+                            <label for="perm_view_completed">Ver Tarefas Concluídas</label>
+                        </div>
+                        <div class="permission-description">Permite acessar a visualização de tarefas concluídas</div>
+
+                        <!-- MANAGE_USERS -->
+                        <div class="permission-checkbox">
+                            <input type="checkbox" id="perm_manage_users" value="manage_users">
+                            <label for="perm_manage_users">Gerenciar Usuários</label>
+                        </div>
+                        <div class="permission-description">Permite adicionar, editar e remover usuários do sistema</div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <button type="submit" class="button btn-primary" style="width: 100%;">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmação -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content" style="max-width: 400px;">
+            <h2 style="margin-bottom: 20px;">Confirmar Exclusão</h2>
+            <p>Tem certeza que deseja excluir este usuário?</p>
+            <p style="margin-top: 10px; color: var(--danger-color);">Esta ação não pode ser desfeita.</p>
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+                <button class="button" id="cancelDeleteButton">Cancelar</button>
+                <button class="button btn-danger" id="confirmDeleteButton">Excluir</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variáveis Globais
+        let users = [];
+        let currentEditingUserId = null;
+
+        // Elementos do DOM
+        const currentUserNameElement = document.getElementById('currentUserName');
+        const backButton = document.getElementById('backButton');
+        const logoutButton = document.getElementById('logoutButton');
+        const addUserButton = document.getElementById('addUserButton');
+        const userTableBody = document.getElementById('userTableBody');
+        const userModal = document.getElementById('userModal');
+        const confirmModal = document.getElementById('confirmModal');
+        const closeModalButton = document.querySelector('.close');
+        const userForm = document.getElementById('userForm');
+        const modalTitle = document.getElementById('modalTitle');
+        const usernameError = document.getElementById('usernameError');
+        const customPermissionsCheckbox = document.getElementById('customPermissions');
+        const permissionsContainer = document.getElementById('permissionsContainer');
+        const cancelDeleteButton = document.getElementById('cancelDeleteButton');
+        const confirmDeleteButton = document.getElementById('confirmDeleteButton');
+
+        // Carregar dados ao iniciar
+        document.addEventListener('DOMContentLoaded', () => {
+            // Mostrar informações do usuário atual
+            currentUserNameElement.textContent = `${currentUser.name} (${Auth.ACCESS_LEVELS[currentUser.accessLevel].name})`;
+            
+            // Carregar lista de usuários
+            loadUsers();
+            
+            // Configurar eventos
+            setupEventListeners();
+        });
+
+        // Configurar event listeners
+        function setupEventListeners() {
+            backButton.addEventListener('click', () => {
+                window.location.href = 'Agenda.html';
+            });
+            
+            logoutButton.addEventListener('click', () => {
+                Auth.logout();
+                window.location.href = 'login.html';
+            });
+            
+            addUserButton.addEventListener('click', () => {
+                openUserModal();
+            });
+            
+            closeModalButton.addEventListener('click', () => {
+                userModal.style.display = 'none';
+            });
+            
+            userForm.addEventListener('submit', handleUserFormSubmit);
+            
+            customPermissionsCheckbox.addEventListener('change', (e) => {
+                permissionsContainer.style.display = e.target.checked ? 'block' : 'none';
+            });
+            
+            document.getElementById('accessLevel').addEventListener('change', updatePermissionsFromAccessLevel);
+            
+            // Fechar modais quando clicar fora deles
+            window.addEventListener('click', (e) => {
+                if (e.target === userModal) {
+                    userModal.style.display = 'none';
+                }
+                if (e.target === confirmModal) {
+                    confirmModal.style.display = 'none';
+                }
+            });
+            
+            cancelDeleteButton.addEventListener('click', () => {
+                confirmModal.style.display = 'none';
+            });
+        }
+
+        // Carregar lista de usuários
+        function loadUsers() {
+            users = JSON.parse(localStorage.getItem('users')) || Auth.DEFAULT_USERS;
+            
+            // Renderizar tabela
+            renderUserTable();
+        }
+
+        // Renderizar tabela de usuários
+        function renderUserTable() {
+            userTableBody.innerHTML = '';
+            
+            users.forEach(user => {
+                const tr = document.createElement('tr');
+                
+                // Determinar qual badge usar baseado no nível de acesso
+                let badgeClass = '';
+                switch(user.accessLevel) {
+                    case 'ADMIN':
+                        badgeClass = 'badge-admin';
+                        break;
+                    case 'USER':
+                        badgeClass = 'badge-user';
+                        break;
+                    case 'VIEWER':
+                        badgeClass = 'badge-viewer';
+                        break;
+                }
+                
+                tr.innerHTML = `
+                    <td>${user.id}</td>
+                    <td>${user.name}</td>
+                    <td>${user.username}</td>
+                    <td>${user.email || '-'}</td>
+                    <td>${Auth.ACCESS_LEVELS[user.accessLevel].name} <span class="badge ${badgeClass}">${user.accessLevel}</span></td>
+                    <td class="user-actions">
+                        <button class="button btn-primary edit-user" data-id="${user.id}">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="button btn-danger delete-user" data-id="${user.id}" ${user.id === currentUser.id ? 'disabled' : ''}>
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                `;
+                
+                userTableBody.appendChild(tr);
+            });
+            
+            // Adicionar eventos de edição e exclusão
+            document.querySelectorAll('.edit-user').forEach(button => {
+                button.addEventListener('click', () => {
+                    const userId = parseInt(button.dataset.id);
+                    editUser(userId);
+                });
+            });
+            
+            document.querySelectorAll('.delete-user').forEach(button => {
+                button.addEventListener('click', () => {
+                    const userId = parseInt(button.dataset.id);
+                    if (userId !== currentUser.id) {
+                        openDeleteConfirmation(userId);
+                    }
+                });
+            });
+        }
+
+        // Abrir modal para adicionar usuário
+        function openUserModal(userId = null) {
+            // Resetar o formulário
+            userForm.reset();
+            usernameError.style.display = 'none';
+            
+            // Desativar permissões personalizadas
+            customPermissionsCheckbox.checked = false;
+            permissionsContainer.style.display = 'none';
+            
+            if (userId) {
+                // Modo de edição
+                currentEditingUserId = userId;
+                modalTitle.textContent = 'Editar Usuário';
+                
+                // Encontrar o usuário
+                const user = users.find(u => u.id === userId);
+                if (user) {
+                    // Preencher o formulário
+                    document.getElementById('userId').value = user.id;
+                    document.getElementById('name').value = user.name;
+                    document.getElementById('username').value = user.username;
+                    document.getElementById('email').value = user.email || '';
+                    document.getElementById('password').value = user.password;
+                    document.getElementById('password').placeholder = '(Manter a mesma senha)';
+                    document.getElementById('accessLevel').value = user.accessLevel;
+                    
+                    // Verificar se o usuário tem permissões personalizadas
+                    if (user.customPermissions) {
+                        customPermissionsCheckbox.checked = true;
+                        permissionsContainer.style.display = 'block';
+                        
+                        // Resetar todas as permissões
+                        document.querySelectorAll('#permissionsContainer input[type="checkbox"]').forEach(checkbox => {
+                            checkbox.checked = false;
+                        });
+                        
+                        // Marcar as permissões que o usuário tem
+                        if (user.permissions) {
+                            user.permissions.forEach(permission => {
+                                const checkbox = document.getElementById(`perm_${permission}`);
+                                if (checkbox) {
+                                    checkbox.checked = true;
+                                }
+                            });
+                        }
+                    } else {
+                        // Atualizar os checkboxes baseado no nível de acesso
+                        updatePermissionsFromAccessLevel();
+                    }
+                }
+            } else {
+                // Modo de adição
+                currentEditingUserId = null;
+                modalTitle.textContent = 'Adicionar Usuário';
+                document.getElementById('userId').value = '';
+                document.getElementById('password').placeholder = 'Senha';
+                
+                // Atualizar os checkboxes baseado no nível de acesso padrão
+                updatePermissionsFromAccessLevel();
+            }
+            
+            // Mostrar o modal
+            userModal.style.display = 'block';
+        }
+
+        // Editar usuário
+        function editUser(userId) {
+            openUserModal(userId);
+        }
+
+        // Abrir confirmação de exclusão
+        function openDeleteConfirmation(userId) {
+            // Armazenar o ID do usuário a ser excluído
+            confirmDeleteButton.dataset.userId = userId;
+            
+            // Configurar evento de confirmação
+            confirmDeleteButton.onclick = () => {
+                deleteUser(userId);
+                confirmModal.style.display = 'none';
+            };
+            
+            // Mostrar o modal
+            confirmModal.style.display = 'block';
+        }
+
+        // Excluir usuário
+        function deleteUser(userId) {
+            // Não permitir excluir o próprio usuário
+            if (userId === currentUser.id) {
+                alert('Você não pode excluir seu próprio usuário!');
+                return;
+            }
+            
+            // Filtrar o usuário da lista
+            users = users.filter(user => user.id !== userId);
+            
+            // Salvar no localStorage
+            localStorage.setItem('users', JSON.stringify(users));
+            
+            // Atualizar a tabela
+            renderUserTable();
+            
+            // Mostrar mensagem de sucesso
+            alert('Usuário excluído com sucesso!');
+        }
+
+        // Atualizar permissões baseado no nível de acesso
+        function updatePermissionsFromAccessLevel() {
+            if (customPermissionsCheckbox.checked) {
+                return; // Não alterar se estiver usando permissões personalizadas
+            }
+            
+            const accessLevel = document.getElementById('accessLevel').value;
+            const permissions = Auth.ACCESS_LEVELS[accessLevel].permissions;
+            
+            // Resetar todas as permissões
+            document.querySelectorAll('#permissionsContainer input[type="checkbox"]').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            
+            // Marcar as permissões do nível de acesso
+            permissions.forEach(permission => {
+                const checkbox = document.getElementById(`perm_${permission}`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
+        }
+
+        // Manipular envio do formulário
+        function handleUserFormSubmit(e) {
+            e.preventDefault();
+            
+            // Obter valores do formulário
+            const userId = document.getElementById('userId').value ? parseInt(document.getElementById('userId').value) : null;
+            const name = document.getElementById('name').value.trim();
+            const username = document.getElementById('username').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const accessLevel = document.getElementById('accessLevel').value;
+            
+            // Verificar se o nome de usuário já existe (exceto para o usuário atual em edição)
+            const usernameExists = users.some(user => user.username === username && user.id !== userId);
+            if (usernameExists) {
+                usernameError.style.display = 'block';
+                return;
+            }
+            
+            // Criar objeto de usuário
+            let user = {
+                id: userId || Date.now(),
+                name,
+                username,
+                email,
+                accessLevel,
+            };
+            
+            // Adicionar senha apenas se for um novo usuário ou se a senha foi alterada
+            if (!userId || password.trim() !== '') {
+                user.password = password;
+            } else {
+                // Manter a senha existente
+                const existingUser = users.find(u => u.id === userId);
+                if (existingUser) {
+                    user.password = existingUser.password;
+                }
+            }
+            
+            // Verificar se está usando permissões personalizadas
+            if (customPermissionsCheckbox.checked) {
+                user.customPermissions = true;
+                user.permissions = [];
+                
+                // Coletar permissões marcadas
+                document.querySelectorAll('#permissionsContainer input[type="checkbox"]:checked').forEach(checkbox => {
+                    user.permissions.push(checkbox.value);
+                });
+            }
+            
+            // Atualizar ou adicionar usuário
+            if (userId) {
+                // Atualizar usuário existente
+                users = users.map(u => u.id === userId ? { ...u, ...user } : u);
+            } else {
+                // Adicionar novo usuário
+                users.push(user);
+            }
+            
+            // Salvar no localStorage
+            localStorage.setItem('users', JSON.stringify(users));
+            
+            // Atualizar a tabela
+            renderUserTable();
+            
+            // Fechar o modal
+            userModal.style.display = 'none';
+            
+            // Mostrar mensagem de sucesso
+            alert(userId ? 'Usuário atualizado com sucesso!' : 'Usuário adicionado com sucesso!');
+        }
+    </script>
+</body>
+</html> 

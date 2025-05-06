@@ -1,0 +1,2673 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Acompanhamento de Técnicos e Veículos - FTTH</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6fb;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .container {
+            flex: 1;
+            width: 100%;
+            max-width: none;
+            margin: 0;
+            background: #fff;
+            border-radius: 0;
+            box-shadow: none;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        h1 {
+            text-align: center;
+            color: #2a3d66;
+            margin: 0 0 20px 0;
+        }
+        form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: flex-end;
+        }
+        form > div {
+            flex: 1 1 180px;
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            font-size: 0.95em;
+            margin-bottom: 4px;
+            color: #2a3d66;
+        }
+        input, select {
+            padding: 7px 10px;
+            border: 1px solid #bfc9d9;
+            border-radius: 5px;
+            font-size: 1em;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px 18px;
+            background: #2a3d66;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #1a2540;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            flex: 1;
+        }
+        th, td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #e0e6f0;
+            text-align: left;
+        }
+        th {
+            background: #eaf0fa;
+            color: #2a3d66;
+            position: sticky;
+            top: 0;
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+        .actions button {
+            margin-right: 6px;
+            padding: 6px 12px;
+            font-size: 0.95em;
+        }
+        @media (max-width: 900px) {
+            .container { padding: 15px; }
+            form { flex-direction: column; gap: 8px; }
+        }
+        #mapaContainer {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+        }
+        #mapa {
+            width: 90%;
+            height: 90%;
+            margin: 2% auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        .fecharMapa {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #c0392b;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9em;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: all 0.2s ease;
+            z-index: 1001;
+        }
+        .fecharMapa:hover {
+            background: #a93226;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        #painelEstatisticas {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px #0001;
+        }
+        #painelEstatisticasCidade {
+            margin: 20px 0;
+            background: #eaf0fa;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px #0001;
+        }
+        #tabelaRegistros {
+            flex: 1;
+            overflow-y: auto;
+            display: block;
+            max-height: calc(100vh - 500px);
+        }
+        #tabelaRegistros thead {
+            position: sticky;
+            top: 0;
+            background: #eaf0fa;
+            z-index: 1;
+        }
+        /* Estilo para a notificação de alertas */
+        #alertaContratosNotificacao {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 0;
+            width: 320px;
+            max-width: 90%;
+            z-index: 1003;
+            overflow: hidden;
+        }
+        
+        .alerta-header {
+            background-color: #e74c3c;
+            color: white;
+            padding: 12px 15px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .alerta-body {
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .alerta-footer {
+            padding: 10px 15px;
+            background-color: #f8f9fa;
+            text-align: right;
+            border-top: 1px solid #eee;
+        }
+        
+        .alerta-item {
+            padding: 8px 10px;
+            border-bottom: 1px solid #eee;
+            font-size: 0.9em;
+        }
+        
+        .alerta-item:last-child {
+            border-bottom: none;
+        }
+        
+        .alerta-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+        }
+        
+        .alerta-action {
+            background: #2a3d66;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        /* Indicador de alerta para manutenções frequentes */
+        .alerta-manutencao {
+            background-color: #e74c3c;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            display: inline-flex;
+            align-items: center;
+            margin-right: 5px;
+        }
+        .alerta-manutencao i {
+            margin-right: 5px;
+            font-size: 1.1em;
+        }
+        /* Indicador de alerta para troca de óleo */
+        .alerta-troca-oleo {
+            background-color: #f39c12;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            display: inline-flex;
+            align-items: center;
+            margin-right: 5px;
+        }
+        .alerta-troca-oleo i {
+            margin-right: 5px;
+            font-size: 1.1em;
+        }
+        /* Estilo para o balão de estatísticas */
+        .estatisticas-tooltip {
+            display: none;
+            position: absolute;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            padding: 15px;
+            z-index: 1050; /* Z-index aumentado para garantir que fique por cima de outros elementos */
+            min-width: 300px;
+            max-width: 400px;
+            max-height: 70vh; /* Limitar altura para não sair da tela */
+            overflow-y: auto; /* Adicionar scroll se necessário */
+            left: 0; /* Posicionar à esquerda por padrão */
+            top: 100%; /* Posicionar abaixo do elemento pai por padrão */
+            margin-top: 10px; /* Espaçamento superior */
+        }
+
+        .estatisticas-tooltip h3 {
+            margin: 0 0 10px 0;
+            color: #2a3d66;
+            font-size: 1.1em;
+        }
+
+        .estatisticas-tooltip .estatistica-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .estatisticas-tooltip .estatistica-item:last-child {
+            border-bottom: none;
+        }
+
+        .estatisticas-tooltip .estatistica-label {
+            color: #666;
+        }
+
+        .estatisticas-tooltip .estatistica-valor {
+            font-weight: bold;
+            color: #2a3d66;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Acompanhamento de Técnicos e Veículos - FTTH</h1>
+        <!-- Painel de Estatísticas -->
+        <div id="painelEstatisticas" style="display: flex; gap: 30px; justify-content: center; margin-bottom: 25px; flex-wrap: wrap;">
+            <div style="background:#eaf0fa; border-radius:8px; padding:18px 28px; min-width:180px; text-align:center;">
+                <div style="font-size:2em; font-weight:bold; color:#2a3d66;" id="totalTecnicos">0</div>
+                <div style="color:#2a3d66;">Total de Pessoal Técnico</div>
+            </div>
+            <div style="background:#eaf0fa; border-radius:8px; padding:18px 28px; min-width:180px; text-align:center;">
+                <div style="font-size:2em; font-weight:bold; color:#2a3d66;" id="totalVeiculos">0</div>
+                <div style="color:#2a3d66;">Total de Veículos</div>
+            </div>
+            <div style="background:#eaf0fa; border-radius:8px; padding:18px 28px; min-width:180px; text-align:center;">
+                <div style="font-size:2em; font-weight:bold; color:#2a3d66;" id="totalCidades">0</div>
+                <div style="color:#2a3d66;">Cidades Distintas</div>
+            </div>
+            <div style="background:#eaf0fa; border-radius:8px; padding:18px 28px; min-width:180px; text-align:center;">
+                <div style="font-size:1.2em; color:#2a3d66;">BJ Fibra: <span id="bjfibraCount">0</span></div>
+                <div style="font-size:1.2em; color:#2a3d66;">Megalink: <span id="megalinkCount">0</span></div>
+                <div style="color:#2a3d66; margin-top:4px;">Pessoal Técnico por Operação</div>
+            </div>
+        </div>
+        <!-- Novo painel de estatísticas por cidade -->
+        <div id="painelEstatisticasCidade" style="position: relative;">
+            <div style="display: flex; gap: 10px;">
+                <button id="mostrarEstatisticas">Mostrar Estatísticas</button>
+                <button id="btnManutencao" style="background: #2980b9;" onclick="window.location.href='manutencao.html'">Manutenção de Veículos</button>
+                <button id="verMapa" style="background: #16a085;">Ver Mapa</button>
+            </div>
+            <div id="estatisticasTooltip" class="estatisticas-tooltip">
+                <h3>Estatísticas por Cidade</h3>
+                <div id="estatisticasConteudo"></div>
+            </div>
+        </div>
+        <!-- Fim Painel Estatísticas -->
+        <form id="registroForm">
+            <div>
+                <label for="cidade">Cidade</label>
+                <input type="text" id="cidade" required>
+            </div>
+            <div>
+                <label for="tecnico">Nome do Técnico</label>
+                <input type="text" id="tecnico" required>
+            </div>
+            <div>
+                <label for="auxiliar">Auxiliar</label>
+                <input type="text" id="auxiliar">
+            </div>
+            <div>
+                <label for="placa">Placa</label>
+                <input type="text" id="placa" required>
+            </div>
+            <div>
+                <label for="modelo">Modelo</label>
+                <input type="text" id="modelo" required>
+            </div>
+            <div>
+                <label for="operacao">Operação</label>
+                <select id="operacao" required>
+                    <option value="Megalink">Megalink</option>
+                    <option value="BJ Fibra">BJ Fibra</option>
+                </select>
+            </div>
+            <div>
+                <label for="equipes">Equipes Varejo e Backbone</label>
+                <input type="text" id="equipes">
+            </div>
+            <div>
+                <label for="kmAtual">KM Atual</label>
+                <input type="text" id="kmAtual">
+            </div>
+            <div>
+                <label for="ultimaTrocaOleoInfo" style="display: flex; align-items: center;">
+                    Última Troca de Óleo 
+                    <span style="background: #95a5a6; color: white; font-size: 0.8em; padding: 2px 5px; border-radius: 3px; margin-left: 8px;">Somente Leitura</span>
+                </label>
+                <input type="text" id="ultimaTrocaOleoInfo" disabled style="background-color: #f0f0f0; color: #666;">
+            </div>
+            <div>
+                <label for="renavam">Renavam</label>
+                <input type="text" id="renavam">
+            </div>
+            <div>
+                <label for="lat">Latitude</label>
+                <input type="text" id="lat">
+            </div>
+            <div>
+                <label for="lng">Longitude</label>
+                <input type="text" id="lng">
+            </div>
+            <div>
+                <label for="observacoes">Observações</label>
+                <input type="text" id="observacoes">
+            </div>
+            <div>
+                <label for="dataInicioContrato">Início do Contrato</label>
+                <input type="date" id="dataInicioContrato">
+            </div>
+            <div>
+                <button type="submit" id="btnSalvar">Adicionar</button>
+            </div>
+        </form>
+
+        <div style="margin: 20px 0;">
+            <input type="file" id="fileInput" accept=".csv" style="display: none;">
+            <button onclick="document.getElementById('fileInput').click()" style="background: #27ae60;">Importar Planilha</button>
+            <button onclick="excluirTodosRegistros()" style="background: #c0392b; margin-left: 10px;">Excluir Todos os Registros</button>
+        </div>
+
+        <!-- Adicionar sistema de filtros -->
+        <div style="margin: 20px 0; background: #eaf0fa; padding: 15px; border-radius: 8px;">
+            <h3 style="color: #2a3d66; margin-top: 0;">Filtros</h3>
+            <div style="display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end;">
+                <div>
+                    <label for="filtroCidade">Cidade</label>
+                    <input type="text" id="filtroCidade" oninput="filtrarRegistros()" style="width: 150px;">
+                </div>
+                <div>
+                    <label for="filtroTecnico">Técnico</label>
+                    <input type="text" id="filtroTecnico" oninput="filtrarRegistros()" style="width: 200px;">
+                </div>
+                <div>
+                    <label for="filtroAuxiliar">Auxiliar</label>
+                    <input type="text" id="filtroAuxiliar" oninput="filtrarRegistros()" style="width: 200px;">
+                </div>
+                <div>
+                    <label for="filtroPlaca">Placa</label>
+                    <input type="text" id="filtroPlaca" oninput="filtrarRegistros()" style="width: 120px;">
+                </div>
+                <div>
+                    <label for="filtroModelo">Modelo</label>
+                    <input type="text" id="filtroModelo" oninput="filtrarRegistros()" style="width: 120px;">
+                </div>
+                <div>
+                    <label for="filtroOperacao">Operação</label>
+                    <select id="filtroOperacao" onchange="filtrarRegistros()" style="width: 120px;">
+                        <option value="">Todos</option>
+                        <option value="Megalink">Megalink</option>
+                        <option value="BJ Fibra">BJ Fibra</option>
+                    </select>
+                </div>
+                <div>
+                    <button onclick="limparFiltros()" style="background: #2a3d66;">Limpar Filtros</button>
+                </div>
+            </div>
+        </div>
+
+        <table id="tabelaRegistros">
+            <thead>
+                <tr>
+                    <th>Cidade</th>
+                    <th>Nome do Técnico</th>
+                    <th>Auxiliar</th>
+                    <th>Placa</th>
+                    <th>Modelo</th>
+                    <th>Operação</th>
+                    <th>Equipes Varejo e Backbone</th>
+                    <th>KM Atual</th>
+                    <th>Última Troca Óleo</th>
+                    <th>Renavam</th>
+                    <th>Latitude</th>
+                    <th>Longitude</th>
+                    <th>Observações</th>
+                    <th>Início Contrato</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Registros aparecerão aqui -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Container do Mapa -->
+    <div id="mapaContainer">
+        <div id="mapa"></div>
+    </div>
+
+    <!-- Notificação de Alertas de Contratos -->
+    <div id="alertaContratosNotificacao">
+        <div class="alerta-header">
+            <span>Alertas de Contratos</span>
+            <button class="alerta-close" onclick="fecharAlertaNotificacao()">&times;</button>
+        </div>
+        <div class="alerta-body" id="alertaContratosConteudo">
+            <!-- Conteúdo dos alertas será adicionado dinamicamente -->
+        </div>
+        <div class="alerta-footer">
+            <button class="alerta-action" onclick="verTodosAlertas()">Ver Todos os Alertas</button>
+        </div>
+    </div>
+    
+    <!-- Notificação de Manutenções Frequentes -->
+    <div id="alertaManutencoesNotificacao" style="display: none; position: fixed; top: 20px; right: 360px; background-color: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 0; width: 320px; max-width: 90%; z-index: 1003; overflow: hidden;">
+        <div class="alerta-header" style="background-color: #e74c3c; color: white; padding: 12px 15px; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
+            <span>Manutenções Frequentes</span>
+            <button class="alerta-close" onclick="fecharAlertaManutencoesNotificacao()" style="background: none; border: none; color: white; font-size: 18px; cursor: pointer;">&times;</button>
+        </div>
+        <div class="alerta-body" id="alertaManutencoesConteudo" style="padding: 15px; max-height: 300px; overflow-y: auto;">
+            <!-- Conteúdo dos alertas será adicionado dinamicamente -->
+        </div>
+        <div class="alerta-footer" style="padding: 10px 15px; background-color: #f8f9fa; text-align: right; border-top: 1px solid #eee;">
+            <button class="alerta-action" onclick="verTodosManutencoesFrequentes()" style="background: #2a3d66; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Ver Todos os Veículos</button>
+        </div>
+    </div>
+    
+    <!-- Notificação de Troca de Óleo -->
+    <div id="alertaTrocaOleoNotificacao" style="display: none; position: fixed; top: 20px; right: 700px; background-color: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 0; width: 320px; max-width: 90%; z-index: 1003; overflow: hidden;">
+        <div class="alerta-header" style="background-color: #f39c12; color: white; padding: 12px 15px; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
+            <span>Alertas de Troca de Óleo</span>
+            <button class="alerta-close" onclick="fecharAlertaTrocaOleoNotificacao()" style="background: none; border: none; color: white; font-size: 18px; cursor: pointer;">&times;</button>
+        </div>
+        <div class="alerta-body" id="alertaTrocaOleoConteudo" style="padding: 15px; max-height: 300px; overflow-y: auto;">
+            <!-- Conteúdo dos alertas será adicionado dinamicamente -->
+        </div>
+        <div class="alerta-footer" style="padding: 10px 15px; background-color: #f8f9fa; text-align: right; border-top: 1px solid #eee;">
+            <button class="alerta-action" onclick="verTodosTrocaOleo()" style="background: #2a3d66; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.9em;">Ver Todos os Veículos</button>
+        </div>
+    </div>
+
+    <!-- Modal de Manutenção de Veículo -->
+    <div id="manutencaoModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1001;">
+        <div style="width: 500px; max-width: 90%; background: white; margin: 50px auto; padding: 20px; border-radius: 8px; position: relative;">
+            <button onclick="fecharModalManutencao()" style="position: absolute; top: 10px; right: 10px; background: #c0392b; color: white; border: none; border-radius: 50%; width: 25px; height: 25px; cursor: pointer; font-size: 14px;">✕</button>
+            <h2 style="color: #2a3d66; margin-top: 0;">Registro de Manutenção</h2>
+            <p id="manutencaoVeiculoInfo" style="margin-bottom: 20px; font-weight: bold;"></p>
+            
+            <form id="manutencaoForm">
+                <input type="hidden" id="manutencaoVeiculoId">
+                <div style="margin-bottom: 15px;">
+                    <label for="tipoManutencao" style="display: block; margin-bottom: 5px; color: #2a3d66;">Tipo de Manutenção</label>
+                    <select id="tipoManutencao" style="width: 100%; padding: 8px; border: 1px solid #bfc9d9; border-radius: 5px;">
+                        <option value="Troca de Óleo">Troca de Óleo</option>
+                        <option value="Revisão">Revisão</option>
+                        <option value="Troca de Pneus">Troca de Pneus</option>
+                        <option value="Reparo de Motor">Reparo de Motor</option>
+                        <option value="Elétrica">Elétrica</option>
+                        <option value="Outro">Outro</option>
+                    </select>
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label for="dataManutencao" style="display: block; margin-bottom: 5px; color: #2a3d66;">Data</label>
+                    <input type="date" id="dataManutencao" style="width: 100%; padding: 8px; border: 1px solid #bfc9d9; border-radius: 5px;">
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label for="kmManutencao" style="display: block; margin-bottom: 5px; color: #2a3d66;">Quilometragem</label>
+                    <input type="number" id="kmManutencao" style="width: 100%; padding: 8px; border: 1px solid #bfc9d9; border-radius: 5px;">
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label for="valorManutencao" style="display: block; margin-bottom: 5px; color: #2a3d66;">Valor (R$)</label>
+                    <input type="number" id="valorManutencao" step="0.01" style="width: 100%; padding: 8px; border: 1px solid #bfc9d9; border-radius: 5px;">
+                </div>
+                
+                <div style="margin-bottom: 15px;">
+                    <label for="observacoesManutencao" style="display: block; margin-bottom: 5px; color: #2a3d66;">Observações</label>
+                    <textarea id="observacoesManutencao" rows="3" style="width: 100%; padding: 8px; border: 1px solid #bfc9d9; border-radius: 5px;"></textarea>
+                </div>
+                
+                <div style="text-align: right;">
+                    <button type="button" onclick="fecharModalManutencao()" style="background: #95a5a6; color: white; border: none; border-radius: 5px; padding: 8px 15px; margin-right: 10px; cursor: pointer;">Cancelar</button>
+                    <button type="submit" style="background: #2a3d66; color: white; border: none; border-radius: 5px; padding: 8px 15px; cursor: pointer;">Salvar Manutenção</button>
+                </div>
+            </form>
+            
+            <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
+                <h3 style="color: #2a3d66; margin-top: 0; font-size: 16px;">Histórico de Manutenções</h3>
+                <div id="historicoManutencao" style="max-height: 200px; overflow-y: auto;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Adicionar evento de clique diretamente ao botão de manutenção
+        document.getElementById('btnManutencao').onclick = function() {
+            window.location.href = "manutencao.html";
+        };
+        
+        let registros = [];
+        let editIndex = null;
+
+        // Carregar registros do localStorage ao iniciar
+        function carregarRegistros() {
+            const dados = localStorage.getItem('registrosFTTH');
+            if (dados) {
+                try {
+                    registros = JSON.parse(dados);
+                } catch (e) {
+                    registros = [];
+                }
+            }
+        }
+
+        // Salvar registros no localStorage
+        function salvarRegistros() {
+            localStorage.setItem('registrosFTTH', JSON.stringify(registros));
+        }
+
+        function atualizarEstatisticas() {
+            // Total de técnicos (nomes únicos)
+            const tecnicosUnicos = new Set(registros.map(r => r.tecnico.toLowerCase().trim()));
+            
+            // Total de auxiliares (nomes únicos)
+            const auxiliaresUnicos = new Set();
+            registros.forEach(r => {
+                if (r.auxiliar && r.auxiliar.trim()) {
+                    auxiliaresUnicos.add(r.auxiliar.toLowerCase().trim());
+                }
+            });
+            
+            // Total de pessoal técnico (técnicos + auxiliares)
+            const totalPessoalTecnico = tecnicosUnicos.size + auxiliaresUnicos.size;
+            
+            document.getElementById("totalTecnicos").textContent = totalPessoalTecnico;
+            
+            // Total de veículos (placas únicas, apenas registros com placa)
+            const veiculosUnicos = new Set();
+            registros.forEach(r => {
+                if (r.placa && r.placa.trim()) {
+                    veiculosUnicos.add(r.placa.toUpperCase().trim());
+                }
+            });
+            document.getElementById("totalVeiculos").textContent = veiculosUnicos.size;
+            
+            // Total de cidades distintas
+            const cidadesUnicas = new Set(registros.map(r => r.cidade.toLowerCase().trim()));
+            document.getElementById("totalCidades").textContent = cidadesUnicas.size;
+            
+            // Técnicos por operação
+            const bjfibraTecnicos = new Set(registros.filter(r => r.operacao === "BJ Fibra").map(r => r.tecnico.toLowerCase().trim()));
+            const bjfibraAuxiliares = new Set();
+            registros.filter(r => r.operacao === "BJ Fibra").forEach(r => {
+                if (r.auxiliar && r.auxiliar.trim()) {
+                    bjfibraAuxiliares.add(r.auxiliar.toLowerCase().trim());
+                }
+            });
+            
+            const megalinkTecnicos = new Set(registros.filter(r => r.operacao === "Megalink").map(r => r.tecnico.toLowerCase().trim()));
+            const megalinkAuxiliares = new Set();
+            registros.filter(r => r.operacao === "Megalink").forEach(r => {
+                if (r.auxiliar && r.auxiliar.trim()) {
+                    megalinkAuxiliares.add(r.auxiliar.toLowerCase().trim());
+                }
+            });
+            
+            document.getElementById("bjfibraCount").textContent = bjfibraTecnicos.size + bjfibraAuxiliares.size;
+            document.getElementById("megalinkCount").textContent = megalinkTecnicos.size + megalinkAuxiliares.size;
+
+            // Estatísticas por cidade
+            const estatisticasPorCidade = {};
+            registros.forEach(reg => {
+                const cidade = reg.cidade.trim();
+                if (!cidade) return;
+
+                if (!estatisticasPorCidade[cidade]) {
+                    estatisticasPorCidade[cidade] = {
+                        tecnicos: new Set(),
+                        auxiliares: new Set(),
+                        veiculos: new Set(),
+                        veiculosComAuxiliar: new Set()
+                    };
+                }
+
+                if (reg.tecnico) {
+                    estatisticasPorCidade[cidade].tecnicos.add(reg.tecnico.toLowerCase().trim());
+                }
+                if (reg.auxiliar && reg.auxiliar.trim()) {
+                    estatisticasPorCidade[cidade].auxiliares.add(reg.auxiliar.toLowerCase().trim());
+                    
+                    // Só contador como veículo com auxiliar se tiver placa 
+                    if (reg.placa && reg.placa.trim()) {
+                        estatisticasPorCidade[cidade].veiculosComAuxiliar.add(reg.placa.toUpperCase().trim());
+                    }
+                }
+                if (reg.placa && reg.placa.trim()) {
+                    estatisticasPorCidade[cidade].veiculos.add(reg.placa.toUpperCase().trim());
+                }
+            });
+
+            // Comentado, pois o elemento estatisticasCidade não existe no HTML
+            // const container = document.getElementById("estatisticasCidade");
+            // container.innerHTML = "";
+            
+            // Não vamos mostrar as estatísticas por cidade aqui, já que elas são mostradas no tooltip
+        }
+
+        function renderTabela() {
+            renderTabelaFiltrada(registros);
+            atualizarEstatisticas();
+        }
+
+        document.getElementById("registroForm").onsubmit = function(e) {
+            e.preventDefault();
+            const cidade = document.getElementById("cidade").value.trim().toUpperCase();
+            const tecnico = document.getElementById("tecnico").value.trim().toUpperCase();
+            const auxiliar = document.getElementById("auxiliar").value.trim().toUpperCase();
+            const placa = document.getElementById("placa").value.trim().toUpperCase();
+            const modelo = document.getElementById("modelo").value.trim().toUpperCase();
+            const operacao = document.getElementById("operacao").value;
+            const equipes = document.getElementById("equipes").value.trim().toUpperCase();
+            const kmAtual = document.getElementById("kmAtual").value.trim().toUpperCase();
+            // Não pegar o valor de ultimaTrocaOleoInfo pois é somente leitura
+            const renavam = document.getElementById("renavam").value.trim().toUpperCase();
+            const lat = document.getElementById("lat").value.trim();
+            const lng = document.getElementById("lng").value.trim();
+            const observacoes = document.getElementById("observacoes").value.trim().toUpperCase();
+            const dataInicioContrato = document.getElementById("dataInicioContrato").value;
+
+            if (editIndex === null) {
+                registros.push({ 
+                    cidade, tecnico, auxiliar, placa, modelo, operacao, equipes, 
+                    kmAtual, ultimaTrocaOleo: '', renavam, lat, lng, observacoes, dataInicioContrato,
+                    manutencoes: [] // Inicializar o array de manutenções vazio para novos registros
+                });
+            } else {
+                // Preservar o histórico de manutenções e outros dados que não estão no formulário
+                const manutencoes = registros[editIndex].manutencoes || [];
+                const placaOuId = registros[editIndex].placaOuId; // Preservar ID único se existir
+                const semVeiculo = registros[editIndex].semVeiculo; // Preservar flag se existir
+                const ultimaTrocaOleo = registros[editIndex].ultimaTrocaOleo; // Preservar a última troca de óleo
+                
+                registros[editIndex] = { 
+                    cidade, tecnico, auxiliar, placa, modelo, operacao, equipes, 
+                    kmAtual, ultimaTrocaOleo, renavam, lat, lng, observacoes, dataInicioContrato,
+                    manutencoes, // Manter o histórico de manutenções existente
+                    placaOuId, // Restaurar ID único se existir
+                    semVeiculo // Restaurar flag se existir
+                };
+                editIndex = null;
+                document.getElementById("btnSalvar").textContent = "Adicionar";
+            }
+            this.reset();
+            salvarRegistros();
+            renderTabela();
+        };
+
+        window.editarRegistro = function(idx) {
+            const reg = registros[idx];
+            document.getElementById("cidade").value = reg.cidade;
+            document.getElementById("tecnico").value = reg.tecnico;
+            document.getElementById("auxiliar").value = reg.auxiliar || '';
+            document.getElementById("placa").value = reg.placa;
+            document.getElementById("modelo").value = reg.modelo;
+            document.getElementById("operacao").value = reg.operacao || '';
+            document.getElementById("equipes").value = reg.equipes || '';
+            document.getElementById("kmAtual").value = reg.kmAtual || '';
+            document.getElementById("ultimaTrocaOleoInfo").value = reg.ultimaTrocaOleo || '';
+            document.getElementById("renavam").value = reg.renavam || '';
+            document.getElementById("lat").value = reg.lat || '';
+            document.getElementById("lng").value = reg.lng || '';
+            document.getElementById("observacoes").value = reg.observacoes || '';
+            document.getElementById("dataInicioContrato").value = reg.dataInicioContrato || '';
+            editIndex = idx;
+            document.getElementById("btnSalvar").textContent = "Salvar";
+        };
+
+        window.removerRegistro = function(idx) {
+            if (confirm("Tem certeza que deseja remover este registro?")) {
+                registros.splice(idx, 1);
+                salvarRegistros();
+                renderTabela();
+            }
+        };
+
+        // Adicionar função para importar CSV
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const text = e.target.result;
+                    const lines = text.split('\n');
+                    let importCount = 0;
+                    let duplicateCount = 0;
+                    let tecnicosSemVeiculoCount = 0;
+                    console.log("Iniciando importação CSV...");
+                    
+                    // Pular a linha de cabeçalho
+                    for (let i = 1; i < lines.length; i++) {
+                        if (lines[i].trim()) {
+                            // Dividir a linha usando ponto e vírgula como separador
+                            const values = lines[i].split(';').map(v => v.trim());
+                            
+                            // Verificar se tem técnico e cidade
+                            const temTecnico = values[1] && values[1].trim();
+                            const temCidade = values[0] && values[0].trim();
+                            
+                            // Se não tem nem técnico nem cidade, pular
+                            if (!temTecnico && !temCidade) continue;
+                            
+                            // Extrair latitude e longitude do formato atual
+                            let lat = '';
+                            let lng = '';
+                            
+                            if (values[9] && values[10]) {
+                                if (values[5] === "BJ Fibra") {
+                                    // Formato BJ Fibra: lat: -6.4037;"""lng"": -41.7382}"
+                                    lat = values[9].replace('lat:', '').replace(/"/g, '').trim();
+                                    lng = values[10].replace('"""lng"":', '').replace(/"/g, '').replace('}', '').trim();
+                                } else {
+                                    // Formato Megalink: lat: -5.890250;" ""lng"": -42.636018}"
+                                    lat = values[9].replace('lat:', '').trim();
+                                    lng = values[10].replace('" ""lng"":', '').replace('}"', '').trim();
+                                }
+
+                                // Garantir que as coordenadas estejam no formato correto
+                                lat = lat.replace(/,/g, '.').replace(/[^0-9.-]/g, '');
+                                lng = lng.replace(/,/g, '.').replace(/[^0-9.-]/g, '');
+                            }
+
+                            // Verificar se a placa existe
+                            const placa = values[3] ? values[3].trim() : '';
+                            
+                            // Se não tem placa mas tem técnico, criar um ID único
+                            let placaOuId = placa;
+                            if (!placa && temTecnico) {
+                                // Criar um ID baseado na cidade e no nome do técnico
+                                placaOuId = `SEM_PLACA_${values[0]}_${values[1]}`.toUpperCase().replace(/\s+/g, '_');
+                                tecnicosSemVeiculoCount++;
+                                console.log(`Técnico sem veículo: ${values[1]} (${values[0]}), ID gerado: ${placaOuId}`);
+                            }
+                            
+                            // Debug: imprimir linha que contém Guadalupe
+                            if (values[0] && values[0].includes('GUADALUPE')) {
+                                console.log('Encontrou registro de Guadalupe:', values);
+                            }
+
+                            const registro = {
+                                cidade: values[0] || '',
+                                tecnico: values[1] || '',
+                                auxiliar: values[2] || '',
+                                placa: placa,
+                                placaOuId: placaOuId,
+                                modelo: values[4] || '',
+                                operacao: values[5] || '',
+                                equipes: values[6] || '',
+                                ultimaTrocaOleo: values[7] || '',
+                                renavam: values[8] || '',
+                                lat: lat,
+                                lng: lng,
+                                observacoes: values[11] || '',
+                                semVeiculo: !placa && temTecnico,
+                                dataInicioContrato: values[12] ? values[12].trim() : null
+                            };
+
+                            // Se não tem placa nem técnico, pular
+                            if (!placaOuId) continue;
+
+                            // Verificar se o registro já existe (baseado na placa ou ID)
+                            const registroExistente = registros.findIndex(r => 
+                                r.placaOuId && r.placaOuId.toUpperCase() === registro.placaOuId.toUpperCase()
+                            );
+                            
+                            if (registroExistente >= 0) {
+                                duplicateCount++;
+                                
+                                // Preservar o histórico de manutenções do registro existente
+                                const manutencoesExistentes = registros[registroExistente].manutencoes || [];
+                                
+                                // Se for Guadalupe, ou se a cidade atual estiver preenchida e a existente não, atualize o registro
+                                if (registro.cidade.includes('GUADALUPE') || 
+                                    (registro.cidade && !registros[registroExistente].cidade)) {
+                                    console.log(`Atualizando registro existente para ID ${registro.placaOuId} da cidade ${registro.cidade}`);
+                                    // Adicionar as manutenções existentes ao registro atualizado
+                                    registro.manutencoes = manutencoesExistentes;
+                                    registros[registroExistente] = registro;
+                                } else {
+                                    // Mesmo que não atualize outros campos, garantir que as manutenções são preservadas
+                                    registros[registroExistente].manutencoes = manutencoesExistentes;
+                                }
+                            } else {
+                                // Novo registro, inicializar o array de manutenções vazio
+                                registro.manutencoes = [];
+                                registros.push(registro);
+                                importCount++;
+                            }
+                        }
+                    }
+                    salvarRegistros();
+                    renderTabela();
+                    console.log(`Importação concluída. ${importCount} registros importados, ${duplicateCount} duplicados tratados, ${tecnicosSemVeiculoCount} técnicos sem veículo.`);
+                    alert(`Planilha importada com sucesso! Foram importados ${importCount} novos registros, ${tecnicosSemVeiculoCount} técnicos sem veículo e ${duplicateCount} registros existentes foram verificados.`);
+                };
+                reader.readAsText(file, 'ISO-8859-1');
+            }
+        });
+
+        // Adicionar função para excluir todos os registros
+        window.excluirTodosRegistros = function() {
+            if (confirm("Tem certeza que deseja excluir TODOS os registros? Esta ação não pode ser desfeita.")) {
+                registros = [];
+                salvarRegistros();
+                renderTabela();
+                alert("Todos os registros foram excluídos com sucesso!");
+            }
+        };
+
+        // Inicializa a tabela com dados do localStorage
+        carregarRegistros();
+        
+        // Verificar e corrigir problemas automicamente
+        setTimeout(() => {
+            const duplicadosRemovidos = limparRegistrosDuplicados();
+            const guadalupeAdicionado = adicionarRegistroGuadalupe();
+            
+            if (duplicadosRemovidos > 0 || guadalupeAdicionado) {
+                console.log(`Correção automática: ${duplicadosRemovidos} duplicados removidos, Guadalupe ${guadalupeAdicionado ? 'adicionado' : 'já existente'}`);
+            }
+            
+        renderTabela();
+            
+            // Verificar alertas de contratos e manutenções frequentes após carregar a tabela
+            verificarAlertasContratos();
+            verificarAlertasManutencoesFrequentes();
+            verificarAlertasTrocaOleo();
+        }, 500);
+        
+        // Adicionar um botão para corrigir registros
+        const divBotoes = document.querySelector('div[style="margin: 20px 0;"]');
+        const btnCorrigir = document.createElement('button');
+        btnCorrigir.textContent = 'Corrigir Registros';
+        btnCorrigir.style.background = '#3498db';
+        btnCorrigir.style.marginLeft = '10px';
+        btnCorrigir.onclick = function() {
+            const duplicadosRemovidos = limparRegistrosDuplicados();
+            const guadalupeAdicionado = adicionarRegistroGuadalupe();
+            
+            let mensagem = 'Correções aplicadas: ';
+            if (duplicadosRemovidos > 0) {
+                mensagem += `${duplicadosRemovidos} registros duplicados removidos. `;
+            }
+            if (guadalupeAdicionado) {
+                mensagem += 'Registro de Guadalupe corrigido/adicionado.';
+            }
+            
+            if (duplicadosRemovidos === 0 && !guadalupeAdicionado) {
+                mensagem = 'Nenhuma correção necessária. Registros já estão corretos.';
+            }
+            
+            alert(mensagem);
+        };
+        divBotoes.appendChild(btnCorrigir);
+
+        // Adicionar funcionalidade de toggle para as estatísticas
+        // document.getElementById('toggleEstatisticas').addEventListener('click', function() {
+        //     const estatisticasCidade = document.getElementById('estatisticasCidade');
+        //     const botao = this;
+            
+        //     if (estatisticasCidade.style.display === 'none') {
+        //         estatisticasCidade.style.display = 'grid';
+        //         botao.textContent = 'Ocultar Estatísticas';
+        //     } else {
+        //         estatisticasCidade.style.display = 'none';
+        //         botao.textContent = 'Mostrar Estatísticas';
+        //     }
+        // });
+
+        // Dicionário de coordenadas das cidades
+        const CIDADES_COORDENADAS = {
+            "Água Branca": {"lat": -5.890250, "lng": -42.636018},
+            "Alagoinha Do Piauí": {"lat": -7.7034, "lng": -41.1470},
+            "Amarante": {"lat": -6.2433, "lng": -42.8433},
+            "Angical Do Piauí": {"lat": -6.0847, "lng": -42.7400},
+            "Aroazes": {"lat": -6.110532072594805, "lng": -41.789924993255},
+            "Balsas": {"lat": -7.5328, "lng": -46.0358},
+            "Barão De Grajaú": {"lat": -6.7469, "lng": -43.0286},
+            "Batalha": {"lat": -4.0247, "lng": -42.1350},
+            "Bom Jesus": {"lat": -9.0744, "lng": -44.3586},
+            "Caridade Do Piauí": {"lat": -7.7358, "lng": -40.8431},
+            "Caxias": {"lat": -4.8589, "lng": -43.3558},
+            "Cocal": {"lat": -3.4728, "lng": -41.5542},
+            "Colinas": {"lat": -6.0258, "lng": -44.2492},
+            "Colônia Do Gurguéia": {"lat": -8.1833, "lng": -43.8000},
+            "Corrente": {"lat": -10.4433, "lng": -45.1628},
+            "Cristino Castro": {"lat": -8.815289716872442, "lng": -44.21511715975416},
+            "Currais": {"lat": -9.0111, "lng": -44.4061},
+            "Eliseu Martins": {"lat": -8.0969, "lng": -43.6669},
+            "Floriano": {"lat": -6.7669, "lng": -43.0211},
+            "Formosa Do Rio Preto": {"lat": -11.0478, "lng": -45.1931},
+            "Fronteiras": {"lat": -7.0889, "lng": -40.6169},
+            "Geminiano": {"lat": -7.1558, "lng": -41.3578},
+            "Gilbués": {"lat": -9.8319, "lng": -45.3433},
+            "Guadalupe": {"lat": -6.7858, "lng": -43.5589},
+            "Imperatriz": {"lat": -5.5258, "lng": -47.4758},
+            "Ipiranga Do Piauí": {"lat": -6.8250, "lng": -41.7378},
+            "Isaías Coelho": {"lat": -7.7358, "lng": -41.6733},
+            "Itainópolis": {"lat": -7.4489, "lng": -41.4778},
+            "Itapecuru Mirim": {"lat": -3.3928, "lng": -44.3586},
+            "Landri Sales": {"lat": -7.2589, "lng": -43.9319},
+            "Matões": {"lat": -5.5219, "lng": -43.2019},
+            "Monsenhor Gil": {"lat": -5.5628, "lng": -42.6075},
+            "Monte Alegre Do Piauí": {"lat": -9.7558, "lng": -45.3031},
+            "Nazaré Do Piauí": {"lat": -6.9708, "lng": -42.6739},
+            "Nazária": {"lat": -5.3517, "lng": -42.8158},
+            "Oeiras": {"lat": -7.0158, "lng": -42.1283},
+            "Parnarama": {"lat": -5.6808, "lng": -43.0939},
+            "Paulistana": {"lat": -8.1439, "lng": -41.1508},
+            "Picos": {"lat": -7.0769, "lng": -41.4669},
+            "Pimenteiras": {"lat": -6.2389, "lng": -41.4169},
+            "Piripiri": {"lat": -4.2736, "lng": -41.7769},
+            "Presidente Dutra": {"lat": -5.2900, "lng": -44.4900},
+            "Regeneração": {"lat": -6.2389, "lng": -42.6869},
+            "Redenção Do Gurguéia": {"lat": -9.4833, "lng": -44.5833},
+            "Santa Luz": {"lat": -8.9489, "lng": -44.1292},
+            "Santana Do Maranhão": {"lat": -3.1097, "lng": -42.4078},
+            "São Francisco Do Piauí": {"lat": -7.2489, "lng": -42.5419},
+            "São Gonçalo Do Gurguéia": {"lat": -9.9833, "lng": -45.3000},
+            "São Gonçalo Do Piauí": {"lat": -5.9939, "lng": -42.7000},
+            "São João Do Piauí": {"lat": -8.3489, "lng": -42.2558},
+            "São Luís": {"lat": -2.5300, "lng": -44.3028},
+            "São Pedro Do Piauí": {"lat": -5.9289, "lng": -42.7189},
+            "Simplício Mendes": {"lat": -7.8558, "lng": -41.9078},
+            "Sussuapara": {"lat": -7.2000, "lng": -41.6669},
+            "Teresina": {"lat": -5.0950, "lng": -42.8042},
+            "Tutóia": {"lat": -2.7619, "lng": -42.2744},
+            "Urbano Santos": {"lat": -3.2067, "lng": -43.4058},
+            "Valença Do Piauí": {"lat": -6.3789, "lng": -41.7378},
+            "Vera Mendes": {"lat": -7.6000, "lng": -41.4669},
+            "Parnaíba": {"lat": -2.9102786674619714, "lng": -41.75425213603615},
+            "Paraibano": {"lat": -6.431902599526348, "lng": -43.988166344014985},
+            "Piritoró": {"lat": -4.37293138053947, "lng": -44.34183072987808},
+            "Palmeira do Piauí": {"lat": -8.722678610849579, "lng": -44.23630399911177}
+        };
+
+        let mapa = null;
+
+        // Função para mostrar o mapa
+        function mostrarMapa() {
+            document.getElementById('mapaContainer').style.display = 'block';
+            
+            if (!mapa) {
+                mapa = L.map('mapa').setView([-6.0, -42.0], 7);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(mapa);
+
+                // Adicionar botão de fechar
+                const fecharButton = document.createElement('button');
+                fecharButton.className = 'fecharMapa';
+                fecharButton.innerHTML = '✕ Fechar Mapa';
+                fecharButton.onclick = fecharMapa;
+                document.getElementById('mapa').appendChild(fecharButton);
+
+                // Adicionar controle de filtro de operação
+                const filtroContainer = L.control({position: 'topleft'});
+                filtroContainer.onAdd = function (map) {
+                    const div = L.DomUtil.create('div', 'info legend');
+                    div.style.backgroundColor = 'white';
+                    div.style.padding = '10px';
+                    div.style.borderRadius = '5px';
+                    div.style.boxShadow = '0 0 10px rgba(0,0,0,0.2)';
+                    div.style.marginTop = '10px';
+                    div.innerHTML = `
+                        <div style="margin-bottom: 5px;"><strong>Filtrar por Operação:</strong></div>
+                        <div style="display: flex; flex-direction: column; gap: 5px;">
+                            <label style="display: flex; align-items: center; cursor: pointer;">
+                                <input type="checkbox" id="filtroMegalink" checked onchange="atualizarMarcadores()">
+                                <span style="margin-left: 5px;">Megalink</span>
+                            </label>
+                            <label style="display: flex; align-items: center; cursor: pointer;">
+                                <input type="checkbox" id="filtroBJFibra" checked onchange="atualizarMarcadores()">
+                                <span style="margin-left: 5px;">BJ Fibra</span>
+                            </label>
+                        </div>
+                    `;
+                    return div;
+                };
+                filtroContainer.addTo(mapa);
+
+                // Adicionar legenda
+                const legend = L.control({position: 'bottomright'});
+                legend.onAdd = function (map) {
+                    const div = L.DomUtil.create('div', 'info legend');
+                    div.style.backgroundColor = 'white';
+                    div.style.padding = '10px';
+                    div.style.borderRadius = '5px';
+                    div.style.boxShadow = '0 0 10px rgba(0,0,0,0.2)';
+                    div.innerHTML = `
+                        <div style="margin-bottom: 5px;"><strong>Legenda:</strong></div>
+                        <div style="display: flex; align-items: center; margin-bottom: 5px;">
+                            <div style="width: 20px; height: 20px; background-color: #FF6B00; border-radius: 50%; margin-right: 10px;"></div>
+                            <span>BJ Fibra</span>
+                        </div>
+                        <div style="display: flex; align-items: center;">
+                            <div style="width: 20px; height: 20px; background-color: #000033; border-radius: 50%; margin-right: 10px;"></div>
+                            <span>Megalink</span>
+                        </div>
+                    `;
+                    return div;
+                };
+                legend.addTo(mapa);
+
+                // Adicionar estilo para o ícone personalizado
+                const style = document.createElement('style');
+                style.textContent = `
+                    .custom-div-icon {
+                        background: none;
+                        border: none;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+
+            // Atualizar os marcadores
+            atualizarMarcadores();
+        }
+
+        // Função para atualizar os marcadores com base nos filtros
+        function atualizarMarcadores() {
+            // Remover todos os marcadores existentes
+            if (mapa) {
+                mapa.eachLayer((layer) => {
+                    if (layer instanceof L.Marker) {
+                        mapa.removeLayer(layer);
+                    }
+                });
+
+                const mostrarMegalink = document.getElementById('filtroMegalink').checked;
+                const mostrarBJFibra = document.getElementById('filtroBJFibra').checked;
+
+                // Agrupar registros por cidade
+                const registrosPorCidade = {};
+                registros.forEach(reg => {
+                    if (!reg.cidade) return;
+                    
+                    const cidade = reg.cidade.trim();
+                    if (!registrosPorCidade[cidade]) {
+                        registrosPorCidade[cidade] = {
+                            registros: [],
+                            tecnicos: new Set(),
+                            auxiliares: new Set()
+                        };
+                    }
+                    registrosPorCidade[cidade].registros.push(reg);
+                    
+                    if (reg.tecnico) {
+                        registrosPorCidade[cidade].tecnicos.add(reg.tecnico.toLowerCase().trim());
+                    }
+                    if (reg.auxiliar && reg.auxiliar.trim()) {
+                        registrosPorCidade[cidade].auxiliares.add(reg.auxiliar.toLowerCase().trim());
+                    }
+                });
+
+                // Adicionar marcadores para cada cidade
+                Object.entries(registrosPorCidade).forEach(([cidade, dadosCidade]) => {
+                    const registrosCidade = dadosCidade.registros;
+                    const totalTecnicos = dadosCidade.tecnicos.size;
+                    const totalAuxiliares = dadosCidade.auxiliares.size;
+                    
+                    // Tentar encontrar um registro com coordenadas para esta cidade
+                    const registroComCoordenadas = registrosCidade.find(reg => {
+                        // Verificar filtros de operação
+                        if ((reg.operacao === "Megalink" && !mostrarMegalink) || 
+                            (reg.operacao === "BJ Fibra" && !mostrarBJFibra)) {
+                            return false;
+                        }
+
+                        let lat = reg.lat;
+                        let lng = reg.lng;
+
+                        if (lat && lng) {
+                            lat = parseFloat(lat);
+                            lng = parseFloat(lng);
+                            return !isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0;
+                        }
+                        return false;
+                    });
+
+                    if (registroComCoordenadas) {
+                        let lat = parseFloat(registroComCoordenadas.lat);
+                        let lng = parseFloat(registroComCoordenadas.lng);
+
+                            const popupContent = `
+                                <div style="max-width: 350px;">
+                                    <h3 style="margin: 0 0 10px 0; color: #2a3d66;">${cidade}</h3>
+                                    <div style="max-height: 400px; overflow-y: auto;">
+                                        ${registrosCidade.map(reg => {
+                                        const temAuxiliar = reg.auxiliar && reg.auxiliar.trim() !== '';
+                                        const temVeiculo = reg.placa && reg.placa.trim();
+                                        
+                                            return `
+                                        <div style="margin-bottom: 15px; padding: 10px; background: white; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); ${!temVeiculo ? 'font-style: italic; background: #f9f9f9;' : ''}">
+                                                <div style="font-weight: bold; color: #2a3d66; margin-bottom: 5px;">${reg.tecnico || 'Não informado'}</div>
+                                                ${temAuxiliar ? '<div style="color: #27ae60; font-size: 0.9em; margin-bottom: 5px;">⚠️ Este veículo possui técnico e auxiliar</div>' : ''}
+                                            ${!temVeiculo ? '<div style="color: #888; font-size: 0.9em; margin-bottom: 5px;">👤 Técnico sem veículo atribuído</div>' : ''}
+                                                <table style="width: 100%; border-collapse: collapse; font-size: 0.85em;">
+                                                <tr>
+                                                    <td style="padding: 3px; color: #666; width: 40%;">Auxiliar:</td>
+                                                    <td style="padding: 3px;">${reg.auxiliar || 'Não informado'}</td>
+                                                </tr>
+                                                ${temVeiculo ? `
+                                                    <tr>
+                                                        <td style="padding: 3px; color: #666; width: 40%;">Placa:</td>
+                                                    <td style="padding: 3px;">${reg.placa}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td style="padding: 3px; color: #666;">Modelo:</td>
+                                                        <td style="padding: 3px;">${reg.modelo || 'Não informado'}</td>
+                                                </tr>` : ''}
+                                                    <tr>
+                                                        <td style="padding: 3px; color: #666;">Operação:</td>
+                                                        <td style="padding: 3px;">${reg.operacao || 'Não informada'}</td>
+                                                    </tr>
+                                                ${temVeiculo ? `
+                                                    <tr>
+                                                        <td style="padding: 3px; color: #666;">Equipes:</td>
+                                                        <td style="padding: 3px;">${reg.equipes || 'Não informado'}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td style="padding: 3px; color: #666;">Última Troca de Óleo:</td>
+                                                        <td style="padding: 3px;">${reg.ultimaTrocaOleo || 'Não informado'}</td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td style="padding: 3px; color: #666;">RENAVAM:</td>
+                                                        <td style="padding: 3px;">${reg.renavam || 'Não informado'}</td>
+                                                </tr>` : ''}
+                                                    <tr>
+                                                        <td style="padding: 3px; color: #666;">Observações:</td>
+                                                        <td style="padding: 3px;">${reg.observacoes || 'Não informado'}</td>
+                                                    </tr>
+                                                </table>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                    </div>
+                                <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee; font-size: 0.9em; color: #2a3d66;">
+                                    <div style="display: grid; grid-template-columns: auto auto; gap: 10px;">
+                                        <div style="font-weight: bold;">Técnicos:</div>
+                                        <div>${totalTecnicos}</div>
+                                        <div style="font-weight: bold;">Auxiliares:</div>
+                                        <div>${totalAuxiliares}</div>
+                                    </div>
+                                    </div>
+                                </div>
+                            `;
+                            
+                        // Determinar a cor do marcador com base na operação predominante
+                        const countBJFibra = registrosCidade.filter(r => r.operacao === "BJ Fibra").length;
+                        const countMegalink = registrosCidade.filter(r => r.operacao === "Megalink").length;
+                        const cor = countBJFibra > countMegalink ? "#FF6B00" : "#000033";
+                        
+                            const icone = L.divIcon({
+                                className: 'custom-div-icon',
+                                html: `
+                                    <div style="position: relative;">
+                                        <div style="position: absolute; top: -15px; right: 0; width: 25px; display: flex; align-items: center; justify-content: center;">
+                                            <div style="color: ${cor}; font-weight: bold; font-size: 12px;">
+                                            ${totalTecnicos}
+                                            </div>
+                                        </div>
+                                        <svg width="25" height="41" viewBox="0 0 25 41" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12.5 0C5.59644 0 0 5.59644 0 12.5C0 21.875 12.5 41 12.5 41C12.5 41 25 21.875 25 12.5C25 5.59644 19.4036 0 12.5 0Z" fill="${cor}"/>
+                                            <circle cx="12.5" cy="12.5" r="5" fill="white"/>
+                                        </svg>
+                                    </div>
+                                `,
+                                iconSize: [25, 41],
+                                iconAnchor: [12, 41],
+                                popupAnchor: [1, -34]
+                            });
+
+                            L.marker([lat, lng], {icon: icone})
+                                .bindPopup(popupContent, {
+                                    maxWidth: 350,
+                                    maxHeight: 400
+                                })
+                                .addTo(mapa);
+                        }
+                });
+            }
+        }
+
+        // Função para fechar o mapa
+        function fecharMapa() {
+            document.getElementById('mapaContainer').style.display = 'none';
+        }
+
+        // Adicionar evento de clique ao botão do mapa
+        document.getElementById('verMapa').addEventListener('click', mostrarMapa);
+
+        // Adicionar funções de filtro
+        function filtrarRegistros() {
+            const filtroCidade = document.getElementById('filtroCidade').value.toLowerCase();
+            const filtroTecnico = document.getElementById('filtroTecnico').value.toLowerCase();
+            const filtroAuxiliar = document.getElementById('filtroAuxiliar').value.toLowerCase();
+            const filtroPlaca = document.getElementById('filtroPlaca').value.toUpperCase();
+            const filtroModelo = document.getElementById('filtroModelo').value.toUpperCase();
+            const filtroOperacao = document.getElementById('filtroOperacao').value;
+
+            const registrosFiltrados = registros.filter(reg => {
+                const cidadeMatch = !filtroCidade || (reg.cidade && reg.cidade.toLowerCase().includes(filtroCidade));
+                const tecnicoMatch = !filtroTecnico || (reg.tecnico && reg.tecnico.toLowerCase().includes(filtroTecnico));
+                const auxiliarMatch = !filtroAuxiliar || (reg.auxiliar && reg.auxiliar.toLowerCase().includes(filtroAuxiliar));
+                
+                // Se não tiver placa, só filtrar se o filtro de placa estiver vazio
+                const placaMatch = !filtroPlaca || 
+                    (reg.placa ? reg.placa.toUpperCase().includes(filtroPlaca) : false);
+                
+                // Se não tiver modelo, só filtrar se o filtro de modelo estiver vazio
+                const modeloMatch = !filtroModelo || 
+                    (reg.modelo ? reg.modelo.toUpperCase().includes(filtroModelo) : false);
+                
+                const operacaoMatch = !filtroOperacao || reg.operacao === filtroOperacao;
+
+                return cidadeMatch && tecnicoMatch && auxiliarMatch && 
+                    (placaMatch || !reg.placa) && (modeloMatch || !reg.modelo) && operacaoMatch;
+            });
+
+            renderTabelaFiltrada(registrosFiltrados);
+        }
+
+        function renderTabelaFiltrada(registrosFiltrados) {
+            const tbody = document.querySelector("#tabelaRegistros tbody");
+            tbody.innerHTML = "";
+            registrosFiltrados.forEach((reg, idx) => {
+                const tr = document.createElement("tr");
+                const temVeiculo = reg.placa && reg.placa.trim();
+                
+                // Adicionar class para estilizar os técnicos sem veículo
+                if (!temVeiculo) {
+                    tr.className = "tecnico-sem-veiculo";
+                    tr.style.backgroundColor = "#f9f9f9";
+                    tr.style.fontStyle = "italic";
+                }
+                
+                // Verificar se tem manutenções frequentes (menos de 30 dias entre manutenções)
+                const temManutencaoFrequente = verificarManutencoesFrequentes(reg.manutencoes);
+                if (temManutencaoFrequente && temVeiculo) {
+                    tr.style.backgroundColor = "#fff5f5";
+                }
+                
+                // Verificar se precisa de troca de óleo
+                let precisaTrocaOleo = false;
+                let tipoAlertaTrocaOleo = null;
+                if (temVeiculo && reg.manutencoes && reg.manutencoes.length > 0) {
+                    // Ordenar manutenções por data (mais recente primeiro)
+                    const manutencoesOrdenadas = [...reg.manutencoes].sort((a, b) => {
+                        return new Date(b.data) - new Date(a.data);
+                    });
+                    
+                    // Encontrar a última troca de óleo
+                    const ultimaTrocaOleo = manutencoesOrdenadas.find(m => m.tipo === 'Troca de Óleo');
+                    
+                    // Verificar se precisa de troca de óleo
+                    if (ultimaTrocaOleo) {
+                        const alerta = verificarNecessidadeTrocaOleo(ultimaTrocaOleo, reg);
+                        precisaTrocaOleo = alerta.status;
+                        tipoAlertaTrocaOleo = alerta.tipoAlerta;
+                        
+                        // Log para debug
+                        if (precisaTrocaOleo) {
+                            console.log(`[Tabela] Veículo em alerta: ${reg.placa} (${reg.modelo || "?"}) - Tipo: ${tipoAlertaTrocaOleo || "desconhecido"}`);
+                            
+                            // Mostrar detalhes do KM
+                            if (reg.kmAtual && ultimaTrocaOleo.km) {
+                                const kmAtualStr = reg.kmAtual.toString().replace(/\D/g, '');
+                                const kmUltimaTrocaStr = ultimaTrocaOleo.km.toString().replace(/\D/g, '');
+                                
+                                const kmAtual = parseInt(kmAtualStr);
+                                const kmUltimaTroca = parseInt(kmUltimaTrocaStr);
+                                
+                                if (!isNaN(kmAtual) && !isNaN(kmUltimaTroca)) {
+                                    const kmRodados = kmAtual - kmUltimaTroca;
+                                    console.log(`  KM Atual: ${kmAtual}, KM Última Troca: ${kmUltimaTroca}, Diferença: ${kmRodados} km`);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Se precisar de troca de óleo, modificar a aparência da linha
+                if (precisaTrocaOleo && temVeiculo) {
+                    // Se já tem alerta de manutenção frequente, manter esse estilo, senão usar estilo de troca de óleo
+                    if (!temManutencaoFrequente) {
+                        // Usar cor vermelha para alertas vencidos e laranja para alertas próximos
+                        if (tipoAlertaTrocaOleo && tipoAlertaTrocaOleo.includes('vencido')) {
+                            tr.style.backgroundColor = "#ffecec"; // Vermelho claro
+                        } else {
+                            tr.style.backgroundColor = "#fff9e6"; // Laranja claro
+                        }
+                    }
+                }
+                
+                // Verificar status do contrato
+                let statusContrato = '';
+                if (reg.dataInicioContrato) {
+                    const dataInicio = new Date(reg.dataInicioContrato);
+                    const dataVencimento = new Date(dataInicio);
+                    dataVencimento.setFullYear(dataVencimento.getFullYear() + 2); // Contrato de 2 anos
+                    
+                    const hoje = new Date();
+                    const diasRestantes = Math.floor((dataVencimento - hoje) / (1000 * 60 * 60 * 24));
+                    
+                    if (diasRestantes < 0) {
+                        statusContrato = `<span style="color: #e74c3c; font-weight: bold;">${new Date(reg.dataInicioContrato).toLocaleDateString('pt-BR')} (VENCIDO)</span>`;
+                    } else if (diasRestantes <= 30) {
+                        statusContrato = `<span style="color: #f39c12; font-weight: bold;">${new Date(reg.dataInicioContrato).toLocaleDateString('pt-BR')} (${diasRestantes} dias)</span>`;
+                    } else {
+                        statusContrato = `<span style="color: #27ae60;">${new Date(reg.dataInicioContrato).toLocaleDateString('pt-BR')}</span>`;
+                    }
+                }
+                
+                // Informação da última troca de óleo formatada
+                let ultimaTrocaOleoFormatada = '';
+                if (reg.ultimaTrocaOleo) {
+                    if (reg.ultimaTrocaOleo.includes('km') || reg.ultimaTrocaOleo.includes('KM')) {
+                        ultimaTrocaOleoFormatada = reg.ultimaTrocaOleo;
+                    } else {
+                        // Tentar encontrar a última manutenção de troca de óleo
+                        if (reg.manutencoes && reg.manutencoes.length > 0) {
+                            const manutencoesOrdenadas = [...reg.manutencoes].sort((a, b) => {
+                                return new Date(b.data) - new Date(a.data);
+                            });
+                            
+                            const ultimaTrocaOleo = manutencoesOrdenadas.find(m => m.tipo === 'Troca de Óleo');
+                            if (ultimaTrocaOleo) {
+                                const dataFormatada = new Date(ultimaTrocaOleo.data).toLocaleDateString('pt-BR');
+                                ultimaTrocaOleoFormatada = `${dataFormatada} - ${ultimaTrocaOleo.km} km`;
+                            } else {
+                                ultimaTrocaOleoFormatada = reg.ultimaTrocaOleo;
+                            }
+                        } else {
+                            ultimaTrocaOleoFormatada = reg.ultimaTrocaOleo;
+                        }
+                    }
+                }
+                
+                tr.innerHTML = `
+                    <td>${reg.cidade}</td>
+                    <td>${reg.tecnico}</td>
+                    <td>${reg.auxiliar || 'Não informado'}</td>
+                    <td>
+                        ${temManutencaoFrequente && temVeiculo ? 
+                            `<span class="alerta-manutencao"><i>⚠️</i></span>` : 
+                            ''}
+                        ${precisaTrocaOleo && temVeiculo ? 
+                            `<span class="alerta-troca-oleo" style="background-color: ${tipoAlertaTrocaOleo && tipoAlertaTrocaOleo.includes('vencido') ? '#e74c3c' : '#f39c12'};"><i>🔧</i>${tipoAlertaTrocaOleo && tipoAlertaTrocaOleo.includes('vencido') ? '!' : ''}</span>` : 
+                            ''}
+                        ${reg.placa || '<span style="color:#888; font-style:italic;">Sem veículo</span>'}
+                    </td>
+                    <td>${reg.modelo || ''}</td>
+                    <td>${reg.operacao || ''}</td>
+                    <td>${reg.equipes || ''}</td>
+                    <td>${reg.kmAtual || ''}</td>
+                    <td>${ultimaTrocaOleoFormatada || ''}</td>
+                    <td>${reg.renavam || ''}</td>
+                    <td>${reg.lat || ''}</td>
+                    <td>${reg.lng || ''}</td>
+                    <td>${reg.observacoes || ''}</td>
+                    <td>${statusContrato || ''}</td>
+                    <td class="actions">
+                        <button onclick="editarRegistro(${registros.indexOf(reg)})">Editar</button>
+                        <button onclick="removerRegistro(${registros.indexOf(reg)})" style="background:#c0392b;">Remover</button>
+                        ${temVeiculo ? `<button onclick="registrarManutencao(${registros.indexOf(reg)})" style="background:#2980b9;">Manutenção</button>` : ''}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function limparFiltros() {
+            document.getElementById('filtroCidade').value = '';
+            document.getElementById('filtroTecnico').value = '';
+            document.getElementById('filtroAuxiliar').value = '';
+            document.getElementById('filtroPlaca').value = '';
+            document.getElementById('filtroModelo').value = '';
+            document.getElementById('filtroOperacao').value = '';
+            renderTabela();
+        }
+
+        // Função para mostrar o popup de veículos com auxiliar
+        window.showVeiculosAuxiliarPopup = function(element, encodedContent) {
+            const content = decodeURIComponent(encodedContent);
+            
+            // Criar popup
+            const popup = document.createElement('div');
+            popup.style.position = 'fixed';
+            popup.style.top = '50%';
+            popup.style.left = '50%';
+            popup.style.transform = 'translate(-50%, -50%)';
+            popup.style.backgroundColor = 'white';
+            popup.style.padding = '20px';
+            popup.style.borderRadius = '8px';
+            popup.style.boxShadow = '0 0 20px rgba(0,0,0,0.3)';
+            popup.style.zIndex = '1000';
+            popup.style.maxHeight = '80vh';
+            popup.style.overflowY = 'auto';
+            popup.innerHTML = content;
+            
+            // Criar overlay
+            const overlay = document.createElement('div');
+            overlay.style.position = 'fixed';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100%';
+            overlay.style.height = '100%';
+            overlay.style.backgroundColor = 'rgba(0,0,0,0.5)';
+            overlay.style.zIndex = '999';
+            
+            // Função para fechar o popup
+            function fecharPopup() {
+                document.body.removeChild(popup);
+                document.body.removeChild(overlay);
+            }
+
+            // Adicionar botão de fechar
+            const closeButton = document.createElement('button');
+            closeButton.textContent = '✕';
+            closeButton.style.position = 'absolute';
+            closeButton.style.top = '10px';
+            closeButton.style.right = '10px';
+            closeButton.style.background = '#c0392b';
+            closeButton.style.color = 'white';
+            closeButton.style.border = 'none';
+            closeButton.style.borderRadius = '50%';
+            closeButton.style.width = '25px';
+            closeButton.style.height = '25px';
+            closeButton.style.cursor = 'pointer';
+            closeButton.style.fontSize = '14px';
+            closeButton.style.display = 'flex';
+            closeButton.style.alignItems = 'center';
+            closeButton.style.justifyContent = 'center';
+            closeButton.onclick = fecharPopup;
+            popup.appendChild(closeButton);
+
+            // Adicionar evento ao overlay
+            overlay.onclick = fecharPopup;
+            
+            // Adicionar à página
+            document.body.appendChild(overlay);
+            document.body.appendChild(popup);
+        };
+
+        // Função para limpar registros duplicados
+        function limparRegistrosDuplicados() {
+            const registrosUnicos = [];
+            const idsVistos = new Set();
+            
+            registros.forEach(reg => {
+                // Usar placaOuId para identificar registros
+                const id = reg.placaOuId ? reg.placaOuId.toUpperCase() : 
+                         (reg.placa ? reg.placa.toUpperCase() : null);
+                
+                if (id && !idsVistos.has(id)) {
+                    idsVistos.add(id);
+                    registrosUnicos.push(reg);
+                }
+            });
+            
+            const removidos = registros.length - registrosUnicos.length;
+            registros = registrosUnicos;
+            salvarRegistros();
+            renderTabela();
+            return removidos;
+        }
+        
+        // Função para adicionar manualmente o registro de Guadalupe
+        function adicionarRegistroGuadalupe() {
+            // Verificar se já existe um registro de Guadalupe com esta placa
+            const existeGuadalupe = registros.some(r => 
+                r.cidade.includes('GUADALUPE') && r.placa === 'QRS-4J09');
+            
+            if (!existeGuadalupe) {
+                const registro = {
+                    cidade: 'GUADALUPE',
+                    tecnico: 'LAYLSON DA SILVA',
+                    auxiliar: 'LUCAS DA SILVA SOUSA',
+                    placa: 'QRS-4J09',
+                    modelo: 'Gol',
+                    operacao: 'Megalink',
+                    equipes: 'Sim',
+                    ultimaTrocaOleo: '95000',
+                    renavam: '1215373497',
+                    lat: '-6.7858',
+                    lng: '-43.5589',
+                    observacoes: ''
+                };
+                
+                // Encontrar se já existe um registro com essa placa
+                const indiceExistente = registros.findIndex(r => r.placa === 'QRS-4J09');
+                
+                if (indiceExistente >= 0) {
+                    registros[indiceExistente] = registro;
+                    console.log('Registro de Guadalupe atualizado.');
+                } else {
+                    registros.push(registro);
+                    console.log('Registro de Guadalupe adicionado.');
+                }
+                
+                salvarRegistros();
+                renderTabela();
+                return true;
+            }
+            
+            return false;
+        }
+
+        // Função para abrir o modal de manutenção sem um veículo específico
+        window.abrirManutencaoGeral = function() {
+            // Redirecionar para a página de manutenção
+            window.location.href = "manutencao.html";
+        };
+        
+        window.fecharModalManutencao = function() {
+            document.getElementById('manutencaoModal').style.display = 'none';
+        };
+        
+        // Função para carregar histórico de manutenções
+        function atualizarHistoricoManutencao(registro) {
+            const historicoDiv = document.getElementById('historicoManutencao');
+            historicoDiv.innerHTML = '';
+            
+            // Verificar se o registro tem histórico de manutenções
+            if (!registro.manutencoes || registro.manutencoes.length === 0) {
+                historicoDiv.innerHTML = '<p style="color: #7f8c8d; font-style: italic;">Nenhuma manutenção registrada.</p>';
+                return;
+            }
+            
+            // Ordenar manutenções por data (mais recente primeiro)
+            const manutencoes = [...registro.manutencoes].sort((a, b) => {
+                return new Date(b.data) - new Date(a.data);
+            });
+            
+            // Criar elementos para cada manutenção
+            manutencoes.forEach(manutencao => {
+                const manutencaoItem = document.createElement('div');
+                manutencaoItem.style.padding = '10px';
+                manutencaoItem.style.marginBottom = '10px';
+                manutencaoItem.style.background = '#f9f9f9';
+                manutencaoItem.style.borderRadius = '5px';
+                manutencaoItem.style.borderLeft = '3px solid #2980b9';
+                
+                const dataFormatada = new Date(manutencao.data).toLocaleDateString('pt-BR');
+                
+                manutencaoItem.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <strong style="color: #2a3d66;">${manutencao.tipo}</strong>
+                        <span style="color: #7f8c8d;">${dataFormatada}</span>
+                    </div>
+                    <div style="margin-bottom: 3px; font-size: 0.9em;">
+                        <span style="color: #7f8c8d;">Quilometragem:</span> ${manutencao.km} km
+                    </div>
+                    <div style="margin-bottom: 3px; font-size: 0.9em;">
+                        <span style="color: #7f8c8d;">Valor:</span> R$ ${parseFloat(manutencao.valor).toFixed(2)}
+                    </div>
+                    ${manutencao.observacoes ? `
+                        <div style="margin-top: 5px; font-size: 0.9em;">
+                            <span style="color: #7f8c8d;">Observações:</span> ${manutencao.observacoes}
+                        </div>
+                    ` : ''}
+                `;
+                
+                historicoDiv.appendChild(manutencaoItem);
+            });
+        }
+        
+        // Formulário de manutenção
+        document.getElementById('manutencaoForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const idx = document.getElementById('manutencaoVeiculoId').value;
+            const tipo = document.getElementById('tipoManutencao').value;
+            const data = document.getElementById('dataManutencao').value;
+            const km = document.getElementById('kmManutencao').value;
+            const valor = document.getElementById('valorManutencao').value;
+            const observacoes = document.getElementById('observacoesManutencao').value;
+            
+            if (!tipo || !data || !km) {
+                alert('Por favor, preencha o tipo, data e quilometragem.');
+                return;
+            }
+            
+            const registro = registros[idx];
+            
+            if (!registro.manutencoes) {
+                registro.manutencoes = [];
+            }
+            
+            // Adicionar nova manutenção
+            registro.manutencoes.push({
+                tipo,
+                data,
+                km,
+                valor: valor || '0',
+                observacoes,
+                dataRegistro: new Date().toISOString()
+            });
+            
+            // Se for troca de óleo, atualizar o campo de última troca de óleo
+            if (tipo === 'Troca de Óleo') {
+                const dataFormatada = new Date(data).toLocaleDateString('pt-BR');
+                registro.ultimaTrocaOleo = `${dataFormatada} - ${km} km`;
+            }
+            
+            // Sempre atualizar o KM atual com o valor mais recente
+            registro.kmAtual = km;
+            
+            // Salvar registros e atualizar interface
+            salvarRegistros();
+            atualizarHistoricoManutencao(registro);
+            renderTabela();
+            
+            alert('Manutenção registrada com sucesso!');
+        });
+
+        // Funções para gerenciar o registro de manutenções
+        window.registrarManutencao = function(idx) {
+            // Redirecionar para a página de manutenção com o ID do veículo
+            window.open(`manutencao.html?veiculo=${idx}`, '_blank');
+        };
+
+        // Função para verificar o status do contrato
+        function verificarStatusContrato(dataInicioContrato) {
+            if (!dataInicioContrato) return { status: 'sem-contrato', dias: null };
+            
+            const dataInicio = new Date(dataInicioContrato);
+            const dataVencimento = new Date(dataInicio);
+            dataVencimento.setFullYear(dataVencimento.getFullYear() + 2); // Contrato de 2 anos
+            
+            const hoje = new Date();
+            const diasRestantes = Math.floor((dataVencimento - hoje) / (1000 * 60 * 60 * 24));
+            
+            if (diasRestantes < 0) {
+                return { status: 'vencido', dias: Math.abs(diasRestantes) };
+            } else if (diasRestantes <= 30) {
+                return { status: 'alerta', dias: diasRestantes };
+            } else {
+                return { status: 'vigente', dias: diasRestantes };
+            }
+        }
+        
+        // Função para verificar alertas de contratos
+        function verificarAlertasContratos() {
+            // Filtrar veículos com contratos vencidos ou próximos do vencimento
+            const alertas = registros.filter(reg => {
+                if (!reg.dataInicioContrato || !reg.placa || !reg.placa.trim()) return false;
+                
+                const status = verificarStatusContrato(reg.dataInicioContrato);
+                return status.status === 'vencido' || status.status === 'alerta';
+            });
+            
+            // Se não houver alertas, não mostrar notificação
+            if (alertas.length === 0) return;
+            
+            // Separar por tipo
+            const vencidos = alertas.filter(reg => verificarStatusContrato(reg.dataInicioContrato).status === 'vencido');
+            const alertasProximos = alertas.filter(reg => verificarStatusContrato(reg.dataInicioContrato).status === 'alerta');
+            
+            // Atualizar o conteúdo da notificação
+            const conteudoDiv = document.getElementById('alertaContratosConteudo');
+            conteudoDiv.innerHTML = '';
+            
+            // Mostrar resumo dos alertas
+            const resumoDiv = document.createElement('div');
+            resumoDiv.style.marginBottom = '10px';
+            resumoDiv.style.fontSize = '1.1em';
+            resumoDiv.style.fontWeight = 'bold';
+            resumoDiv.innerHTML = `
+                ${vencidos.length > 0 ? `<div style="color: #e74c3c; margin-bottom: 5px;">${vencidos.length} contratos vencidos</div>` : ''}
+                ${alertasProximos.length > 0 ? `<div style="color: #f39c12;">${alertasProximos.length} contratos vencem em breve</div>` : ''}
+            `;
+            conteudoDiv.appendChild(resumoDiv);
+            
+            // Adicionar os primeiros 5 alertas mais críticos
+            const alertasMostrar = [...vencidos, ...alertasProximos].slice(0, 5);
+            
+            alertasMostrar.forEach(reg => {
+                const status = verificarStatusContrato(reg.dataInicioContrato);
+                const color = status.status === 'vencido' ? '#e74c3c' : '#f39c12';
+                
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'alerta-item';
+                
+                let statusText = '';
+                if (status.status === 'vencido') {
+                    statusText = `Vencido há ${status.dias} dias`;
+                } else {
+                    statusText = `Vence em ${status.dias} dias`;
+                }
+                
+                itemDiv.innerHTML = `
+                    <div style="font-weight: bold;">${reg.placa} - ${reg.modelo}</div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 3px;">
+                        <span style="color: #7f8c8d;">${reg.cidade}</span>
+                        <span style="color: ${color}; font-weight: bold;">${statusText}</span>
+                    </div>
+                `;
+                
+                conteudoDiv.appendChild(itemDiv);
+            });
+            
+            // Se houver mais alertas do que os mostrados
+            if (alertas.length > 5) {
+                const maisDiv = document.createElement('div');
+                maisDiv.className = 'alerta-item';
+                maisDiv.style.textAlign = 'center';
+                maisDiv.style.fontStyle = 'italic';
+                maisDiv.textContent = `+ ${alertas.length - 5} outros alertas`;
+                conteudoDiv.appendChild(maisDiv);
+            }
+            
+            // Exibir a notificação
+            document.getElementById('alertaContratosNotificacao').style.display = 'block';
+        }
+        
+        // Função para fechar a notificação de alerta
+        function fecharAlertaNotificacao() {
+            document.getElementById('alertaContratosNotificacao').style.display = 'none';
+        }
+        
+        // Função para mostrar todos os alertas de contratos (na página separada de manutenção)
+        function verTodosAlertas() {
+            window.location.href = "manutencao.html?alertas=1";
+            // A página de manutenção agora já tem a funcionalidade para ver todos os alertas
+            fecharAlertaNotificacao();
+        }
+
+        // Função para verificar se um veículo teve mais de uma manutenção em menos de 30 dias
+        function verificarManutencoesFrequentes(manutencoes) {
+            if (!manutencoes || manutencoes.length < 2) return false;
+            
+            // Ordenar manutenções por data (mais recente primeiro)
+            const manutencoesOrdenadas = [...manutencoes].sort((a, b) => {
+                return new Date(b.data) - new Date(a.data);
+            });
+            
+            // Verificar se existe pelo menos um par de manutenções com menos de 30 dias de diferença
+            for (let i = 0; i < manutencoesOrdenadas.length - 1; i++) {
+                const dataAtual = new Date(manutencoesOrdenadas[i].data);
+                const dataSeguinte = new Date(manutencoesOrdenadas[i + 1].data);
+                
+                // Calcular a diferença em dias
+                const diferencaDias = Math.floor((dataAtual - dataSeguinte) / (1000 * 60 * 60 * 24));
+                
+                if (diferencaDias < 30) {
+                    return true;
+                }
+            }
+            
+            return false;
+        }
+
+        // Função para verificar alertas de manutenções frequentes
+        function verificarAlertasManutencoesFrequentes() {
+            // Filtrar veículos com manutenções frequentes
+            const alertas = registros.filter(reg => {
+                if (!reg.manutencoes || !reg.placa || !reg.placa.trim()) return false;
+                
+                return verificarManutencoesFrequentes(reg.manutencoes);
+            });
+            
+            // Se não houver alertas, não mostrar notificação
+            if (alertas.length === 0) return;
+            
+            // Atualizar o conteúdo da notificação
+            const conteudoDiv = document.getElementById('alertaManutencoesConteudo');
+            conteudoDiv.innerHTML = '';
+            
+            // Mostrar resumo dos alertas
+            const resumoDiv = document.createElement('div');
+            resumoDiv.style.marginBottom = '10px';
+            resumoDiv.style.fontSize = '1.1em';
+            resumoDiv.style.fontWeight = 'bold';
+            resumoDiv.innerHTML = `
+                <div style="color: #e74c3c; margin-bottom: 5px;">${alertas.length} veículos com manutenções frequentes</div>
+                <p style="color: #666; font-size: 0.85em; font-weight: normal; margin-top: 5px;">
+                    Veículos com mais de uma manutenção em menos de 30 dias
+                </p>
+            `;
+            conteudoDiv.appendChild(resumoDiv);
+            
+            // Adicionar os primeiros 5 alertas
+            const alertasMostrar = alertas.slice(0, 5);
+            
+            alertasMostrar.forEach(reg => {
+                // Obter as manutenções recentes
+                const manutencoesRecentes = obterManutencoesRecentes(reg.manutencoes);
+                
+                // Calcular a diferença de dias entre as duas manutenções mais recentes
+                let diferencaDias = 0;
+                if (manutencoesRecentes.length >= 2) {
+                    const data1 = new Date(manutencoesRecentes[0].data);
+                    const data2 = new Date(manutencoesRecentes[1].data);
+                    diferencaDias = Math.abs(Math.floor((data1 - data2) / (1000 * 60 * 60 * 24)));
+                }
+                
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'alerta-item';
+                
+                itemDiv.innerHTML = `
+                    <div style="font-weight: bold;">${reg.placa} - ${reg.modelo}</div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 3px;">
+                        <span style="color: #7f8c8d;">${reg.cidade}</span>
+                        <span style="color: #e74c3c; font-weight: bold;">Intervalo: ${diferencaDias} dias</span>
+                    </div>
+                `;
+                
+                conteudoDiv.appendChild(itemDiv);
+            });
+            
+            // Se houver mais alertas do que os mostrados
+            if (alertas.length > 5) {
+                const maisDiv = document.createElement('div');
+                maisDiv.className = 'alerta-item';
+                maisDiv.style.textAlign = 'center';
+                maisDiv.style.fontStyle = 'italic';
+                maisDiv.textContent = `+ ${alertas.length - 5} outros veículos`;
+                conteudoDiv.appendChild(maisDiv);
+            }
+            
+            // Exibir a notificação
+            document.getElementById('alertaManutencoesNotificacao').style.display = 'block';
+        }
+        
+        // Função para fechar a notificação de manutenções frequentes
+        function fecharAlertaManutencoesNotificacao() {
+            document.getElementById('alertaManutencoesNotificacao').style.display = 'none';
+        }
+        
+        // Função para redirecionar para a tela de manutenções frequentes
+        function verTodosManutencoesFrequentes() {
+            window.location.href = "manutencao.html?veiculos_alerta=1";
+            fecharAlertaManutencoesNotificacao();
+        }
+        
+        // Função para obter manutenções recentes (menos de 30 dias de diferença)
+        function obterManutencoesRecentes(manutencoes) {
+            if (!manutencoes || manutencoes.length < 2) return [];
+            
+            // Ordenar manutenções por data (mais recente primeiro)
+            const manutencoesOrdenadas = [...manutencoes].sort((a, b) => {
+                return new Date(b.data) - new Date(a.data);
+            });
+            
+            const manutencoesRecentes = [];
+            
+            // Identificar pares de manutenções com menos de 30 dias de diferença
+            for (let i = 0; i < manutencoesOrdenadas.length - 1; i++) {
+                const dataAtual = new Date(manutencoesOrdenadas[i].data);
+                const dataSeguinte = new Date(manutencoesOrdenadas[i + 1].data);
+                
+                // Calcular a diferença em dias
+                const diferencaDias = Math.floor((dataAtual - dataSeguinte) / (1000 * 60 * 60 * 24));
+                
+                if (diferencaDias < 30) {
+                    // Adicionar ao array, evitando duplicatas
+                    if (!manutencoesRecentes.includes(manutencoesOrdenadas[i])) {
+                        manutencoesRecentes.push(manutencoesOrdenadas[i]);
+                    }
+                    if (!manutencoesRecentes.includes(manutencoesOrdenadas[i + 1])) {
+                        manutencoesRecentes.push(manutencoesOrdenadas[i + 1]);
+                    }
+                }
+            }
+            
+            return manutencoesRecentes;
+        }
+
+        // Verificar e corrigir problemas automicamente
+        setTimeout(() => {
+            const duplicadosRemovidos = limparRegistrosDuplicados();
+            const guadalupeAdicionado = adicionarRegistroGuadalupe();
+            
+            if (duplicadosRemovidos > 0 || guadalupeAdicionado) {
+                console.log(`Correção automática: ${duplicadosRemovidos} duplicados removidos, Guadalupe ${guadalupeAdicionado ? 'adicionado' : 'já existente'}`);
+            }
+            
+            renderTabela();
+            
+            // Verificar alertas de contratos e manutenções frequentes após carregar a tabela
+            verificarAlertasContratos();
+            verificarAlertasManutencoesFrequentes();
+            verificarAlertasTrocaOleo();
+        }, 500);
+
+        // Adicionar função para verificar alertas de troca de óleo
+        function verificarAlertasTrocaOleo() {
+            console.log("Iniciando verificação de alertas de troca de óleo...");
+            
+            // Filtrar veículos que precisam de troca de óleo
+            const alertas = registros.filter(reg => {
+                if (!reg.manutencoes || !reg.placa || !reg.placa.trim() || reg.manutencoes.length === 0) {
+                    return false;
+                }
+                
+                // Ordenar manutenções por data (mais recente primeiro)
+                const manutencoesOrdenadas = [...reg.manutencoes].sort((a, b) => {
+                    return new Date(b.data) - new Date(a.data);
+                });
+                
+                // Encontrar a última troca de óleo
+                const ultimaTrocaOleo = manutencoesOrdenadas.find(m => m.tipo === 'Troca de Óleo');
+                
+                if (!ultimaTrocaOleo) return false;
+                
+                const resultado = verificarNecessidadeTrocaOleo(ultimaTrocaOleo, reg);
+                
+                // Log para debug
+                if (resultado.status) {
+                    console.log(`Veículo em alerta: ${reg.placa} (${reg.modelo || "?"}) - Tipo: ${resultado.tipoAlerta || "desconhecido"}`);
+                }
+                
+                return resultado.status;
+            });
+            
+            // Se não houver alertas, não mostrar notificação
+            if (alertas.length === 0) {
+                console.log("Nenhum veículo em alerta de troca de óleo");
+                return;
+            }
+            
+            console.log(`Total de veículos em alerta: ${alertas.length}`);
+            
+            // Separar veículos por estado do alerta
+            const alertasVencidos = alertas.filter(veiculo => {
+                const manutencoesOrdenadas = [...veiculo.manutencoes].sort((a, b) => {
+                    return new Date(b.data) - new Date(a.data);
+                });
+                const ultimaTrocaOleo = manutencoesOrdenadas.find(m => m.tipo === 'Troca de Óleo');
+                const alerta = verificarNecessidadeTrocaOleo(ultimaTrocaOleo, veiculo);
+                return alerta.tipoAlerta && alerta.tipoAlerta.includes('vencido');
+            });
+            
+            const alertasProximos = alertas.filter(veiculo => {
+                const manutencoesOrdenadas = [...veiculo.manutencoes].sort((a, b) => {
+                    return new Date(b.data) - new Date(a.data);
+                });
+                const ultimaTrocaOleo = manutencoesOrdenadas.find(m => m.tipo === 'Troca de Óleo');
+                const alerta = verificarNecessidadeTrocaOleo(ultimaTrocaOleo, veiculo);
+                return alerta.tipoAlerta && alerta.tipoAlerta.includes('proximo');
+            });
+            
+            console.log(`Veículos com troca vencida: ${alertasVencidos.length}`);
+            console.log(`Veículos próximos do vencimento: ${alertasProximos.length}`);
+            
+            // Atualizar o conteúdo da notificação
+            const conteudoDiv = document.getElementById('alertaTrocaOleoConteudo');
+            conteudoDiv.innerHTML = '';
+            
+            // Mostrar resumo dos alertas
+            const resumoDiv = document.createElement('div');
+            resumoDiv.style.marginBottom = '10px';
+            resumoDiv.style.fontSize = '1.1em';
+            resumoDiv.style.fontWeight = 'bold';
+            resumoDiv.innerHTML = `
+                <div style="display: flex; gap: 10px; margin-bottom: 5px;">
+                    <div style="color: #e74c3c; flex: 1; text-align: center; padding: 5px; border-radius: 3px; background: #ffecec;">
+                        ${alertasVencidos.length} trocas vencidas
+                    </div>
+                    <div style="color: #f39c12; flex: 1; text-align: center; padding: 5px; border-radius: 3px; background: #fff9e6;">
+                        ${alertasProximos.length} trocas próximas
+                    </div>
+                </div>
+                <p style="color: #666; font-size: 0.85em; font-weight: normal; margin-top: 5px;">
+                    Critérios: 10.000 km ou 30 dias (alerta 1.000 km ou 5 dias antes)
+                </p>
+            `;
+            conteudoDiv.appendChild(resumoDiv);
+            
+            // Mostrar primeiro os vencidos
+            if (alertasVencidos.length > 0) {
+                const tituloVencidos = document.createElement('div');
+                tituloVencidos.style.fontWeight = 'bold';
+                tituloVencidos.style.color = '#e74c3c';
+                tituloVencidos.style.borderBottom = '1px solid #e74c3c';
+                tituloVencidos.style.marginBottom = '8px';
+                tituloVencidos.style.paddingBottom = '3px';
+                tituloVencidos.textContent = 'Trocas Vencidas (URGENTE)';
+                conteudoDiv.appendChild(tituloVencidos);
+                
+                // Adicionar até 3 alertas vencidos
+                const alertasVencidosMostrar = alertasVencidos.slice(0, 3);
+                adicionarItensAlerta(alertasVencidosMostrar, conteudoDiv, '#e74c3c');
+                
+                if (alertasVencidos.length > 3) {
+                    const maisVencidos = document.createElement('div');
+                    maisVencidos.className = 'alerta-item';
+                    maisVencidos.style.textAlign = 'center';
+                    maisVencidos.style.fontStyle = 'italic';
+                    maisVencidos.style.fontSize = '0.9em';
+                    maisVencidos.style.color = '#e74c3c';
+                    maisVencidos.textContent = `+ ${alertasVencidos.length - 3} outras trocas vencidas`;
+                    conteudoDiv.appendChild(maisVencidos);
+                }
+            }
+            
+            // Em seguida mostrar os próximos
+            if (alertasProximos.length > 0) {
+                const tituloProximos = document.createElement('div');
+                tituloProximos.style.fontWeight = 'bold';
+                tituloProximos.style.color = '#f39c12';
+                tituloProximos.style.borderBottom = '1px solid #f39c12';
+                tituloProximos.style.marginTop = '12px';
+                tituloProximos.style.marginBottom = '8px';
+                tituloProximos.style.paddingBottom = '3px';
+                tituloProximos.textContent = 'Próximas da Troca';
+                conteudoDiv.appendChild(tituloProximos);
+                
+                // Adicionar até 2 alertas próximos (para dar prioridade aos vencidos)
+                const alertasProximosMostrar = alertasProximos.slice(0, 2);
+                adicionarItensAlerta(alertasProximosMostrar, conteudoDiv, '#f39c12');
+                
+                if (alertasProximos.length > 2) {
+                    const maisProximos = document.createElement('div');
+                    maisProximos.className = 'alerta-item';
+                    maisProximos.style.textAlign = 'center';
+                    maisProximos.style.fontStyle = 'italic';
+                    maisProximos.style.fontSize = '0.9em';
+                    maisProximos.style.color = '#f39c12';
+                    maisProximos.textContent = `+ ${alertasProximos.length - 2} outras trocas próximas`;
+                    conteudoDiv.appendChild(maisProximos);
+                }
+            }
+            
+            // Exibir a notificação
+            document.getElementById('alertaTrocaOleoNotificacao').style.display = 'block';
+            
+            console.log("Verificação de alertas de troca de óleo concluída.");
+        }
+        
+        // Função auxiliar para adicionar itens de alerta
+        function adicionarItensAlerta(veiculos, container, cor) {
+            veiculos.forEach(reg => {
+                // Encontrar a última troca de óleo
+                const manutencoesOrdenadas = [...reg.manutencoes].sort((a, b) => {
+                    return new Date(b.data) - new Date(a.data);
+                });
+                const ultimaTrocaOleo = manutencoesOrdenadas.find(m => m.tipo === 'Troca de Óleo');
+                
+                if (!ultimaTrocaOleo) return; // Pular se não houver troca de óleo
+                
+                // Calcular informações de alerta
+                const dataUltimaTroca = new Date(ultimaTrocaOleo.data);
+                const hoje = new Date();
+                const diferencaDias = Math.floor((hoje - dataUltimaTroca) / (1000 * 60 * 60 * 24));
+                
+                // Determinar o motivo do alerta
+                let motivoAlerta = '';
+                let kmDiferenca = 0;
+                let icone = cor === '#e74c3c' ? '⚠️' : '🔧';
+                let estilo = cor === '#e74c3c' ? 'font-weight: bold;' : '';
+                
+                // Calcular quilometragem para a exibição de alertas
+                if (reg.kmAtual && ultimaTrocaOleo.km) {
+                    // Limpar possíveis textos da string e converter para número
+                    const kmAtualStr = reg.kmAtual.toString().replace(/\D/g, '');
+                    const kmUltimaTrocaStr = ultimaTrocaOleo.km.toString().replace(/\D/g, '');
+                    
+                    const kmAtual = parseInt(kmAtualStr);
+                    const kmUltimaTroca = parseInt(kmUltimaTrocaStr);
+                    
+                    if (!isNaN(kmAtual) && !isNaN(kmUltimaTroca) && kmAtual > kmUltimaTroca) {
+                        kmDiferenca = kmAtual - kmUltimaTroca;
+                        
+                        if (kmDiferenca >= 10000) {
+                            motivoAlerta = `<strong>+${kmDiferenca - 10000} km</strong>`;
+                        } else if (kmDiferenca >= 9000) {
+                            motivoAlerta = `Faltam ${10000 - kmDiferenca} km`;
+                        }
+                    }
+                } else {
+                    // Verificar usando a última manutenção
+                    if (manutencoesOrdenadas.length > 0 && manutencoesOrdenadas[0].km && ultimaTrocaOleo.km) {
+                        const ultimaKmStr = manutencoesOrdenadas[0].km.toString().replace(/\D/g, '');
+                        const trocaOleoKmStr = ultimaTrocaOleo.km.toString().replace(/\D/g, '');
+                        
+                        const ultimaKm = parseInt(ultimaKmStr);
+                        const trocaOleoKm = parseInt(trocaOleoKmStr);
+                        
+                        if (!isNaN(ultimaKm) && !isNaN(trocaOleoKm) && ultimaKm > trocaOleoKm) {
+                            kmDiferenca = ultimaKm - trocaOleoKm;
+                            
+                            if (kmDiferenca >= 10000) {
+                                motivoAlerta = `<strong>+${kmDiferenca - 10000} km</strong>`;
+                            } else if (kmDiferenca >= 9000) {
+                                motivoAlerta = `Faltam ${10000 - kmDiferenca} km`;
+                            }
+                        }
+                    }
+                }
+                
+                // Adicionar informação de dias
+                if (diferencaDias > 30) {
+                    if (motivoAlerta) {
+                        motivoAlerta += ` • <strong>+${diferencaDias - 30} dias</strong>`;
+                    } else {
+                        motivoAlerta = `<strong>+${diferencaDias - 30} dias</strong>`;
+                    }
+                } else if (diferencaDias > 25) {
+                    if (motivoAlerta) {
+                        motivoAlerta += ` • Faltam ${30 - diferencaDias} dias`;
+                    } else {
+                        motivoAlerta = `Faltam ${30 - diferencaDias} dias`;
+                    }
+                }
+                
+                // Se não houver motivo de alerta, não mostrar o item
+                if (!motivoAlerta) return;
+                
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'alerta-item';
+                itemDiv.style.border = `1px solid ${cor}`;
+                itemDiv.style.borderRadius = '4px';
+                itemDiv.style.padding = '8px';
+                itemDiv.style.marginBottom = '8px';
+                itemDiv.style.backgroundColor = cor === '#e74c3c' ? '#fff5f5' : '#fff9e6';
+                
+                // Formatar a data da última troca
+                const dataFormatada = dataUltimaTroca.toLocaleDateString('pt-BR');
+                
+                // Formatar a quilometragem
+                const kmUltimaTrocaFormatado = ultimaTrocaOleo.km.toString().replace(/\D/g, '');
+                
+                itemDiv.innerHTML = `
+                    <div style="font-weight: bold; display: flex; justify-content: space-between;">
+                        <span>${reg.placa} - ${reg.modelo || ''}</span>
+                        <span style="color: ${cor};">${icone}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+                        <span style="color: #7f8c8d; font-size: 0.9em;">${reg.cidade || ''}</span>
+                        <span style="color: ${cor}; ${estilo} font-size: 0.9em;">${motivoAlerta}</span>
+                    </div>
+                    <div style="color: #666; font-size: 0.8em; margin-top: 5px;">
+                        Última troca: ${dataFormatada} (${kmUltimaTrocaFormatado} km)
+                    </div>
+                    <div style="color: #666; font-size: 0.8em; margin-top: 3px;">
+                        KM Atual: ${reg.kmAtual || 'Não informado'}
+                    </div>
+                `;
+                
+                container.appendChild(itemDiv);
+            });
+        }
+
+        // Função para verificar se um veículo precisa de troca de óleo
+        function verificarNecessidadeTrocaOleo(ultimaTrocaOleo, veiculo) {
+            if (!ultimaTrocaOleo) return { status: false, tipoAlerta: null };
+            
+            const dataUltimaTroca = new Date(ultimaTrocaOleo.data);
+            const hoje = new Date();
+            
+            // Calcular diferença em dias
+            const diferencaDias = Math.floor((hoje - dataUltimaTroca) / (1000 * 60 * 60 * 24));
+            
+            let status = false;
+            let tipoAlerta = null;
+            
+            // Verificar dias
+            if (diferencaDias > 30) {
+                // Passou do prazo de 30 dias
+                status = true;
+                tipoAlerta = "vencido_dias";
+            } else if (diferencaDias > 25) {
+                // Faltam menos de 5 dias para vencer
+                status = true;
+                tipoAlerta = "proximo_dias";
+            }
+            
+            // Verificar quilometragem apenas se tivermos km atual
+            if (veiculo.kmAtual && ultimaTrocaOleo.km) {
+                // Limpar possíveis textos da string e converter para número
+                const kmAtualStr = veiculo.kmAtual.toString().replace(/\D/g, '');
+                const kmUltimaTrocaStr = ultimaTrocaOleo.km.toString().replace(/\D/g, '');
+                
+                const kmAtual = parseInt(kmAtualStr);
+                const kmUltimaTroca = parseInt(kmUltimaTrocaStr);
+                
+                if (!isNaN(kmAtual) && !isNaN(kmUltimaTroca)) {
+                    const kmRodados = kmAtual - kmUltimaTroca;
+                    
+                    // Comparar apenas se a diferença for positiva (para evitar dados incorretos)
+                    if (kmRodados > 0) {
+                        if (kmRodados >= 10000) {
+                            // Passou dos 10.000 km
+                            status = true;
+                            tipoAlerta = tipoAlerta ? tipoAlerta : "vencido_km";
+                        } else if (kmRodados >= 9000) {
+                            // Faltam menos de 1.000 km para vencer
+                            status = true;
+                            tipoAlerta = tipoAlerta ? tipoAlerta : "proximo_km";
+                        }
+                    }
+                }
+            } else {
+                // Verificar usando a última manutenção se não tiver KM atual
+                if (veiculo.manutencoes && veiculo.manutencoes.length > 0) {
+                    // Ordenar manutenções por data (mais recente primeiro)
+                    const manutencoesOrdenadas = [...veiculo.manutencoes].sort((a, b) => {
+                        return new Date(b.data) - new Date(a.data);
+                    });
+                    
+                    // Verificar se a última manutenção tem quilometragem
+                    if (manutencoesOrdenadas[0].km && ultimaTrocaOleo.km) {
+                        // Limpar possíveis textos da string e converter para número
+                        const ultimaKmStr = manutencoesOrdenadas[0].km.toString().replace(/\D/g, '');
+                        const trocaOleoKmStr = ultimaTrocaOleo.km.toString().replace(/\D/g, '');
+                        
+                        const ultimaKm = parseInt(ultimaKmStr);
+                        const trocaOleoKm = parseInt(trocaOleoKmStr);
+                        
+                        if (!isNaN(ultimaKm) && !isNaN(trocaOleoKm)) {
+                            const kmRodados = ultimaKm - trocaOleoKm;
+                            
+                            // Comparar apenas se a diferença for positiva (para evitar dados incorretos)
+                            if (kmRodados > 0) {
+                                if (kmRodados >= 10000) {
+                                    // Passou dos 10.000 km
+                                    status = true;
+                                    tipoAlerta = tipoAlerta ? tipoAlerta : "vencido_km";
+                                } else if (kmRodados >= 9000) {
+                                    // Faltam menos de 1.000 km para vencer
+                                    status = true;
+                                    tipoAlerta = tipoAlerta ? tipoAlerta : "proximo_km";
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return { status, tipoAlerta };
+        }
+
+        // Função para fechar a notificação de troca de óleo
+        function fecharAlertaTrocaOleoNotificacao() {
+            document.getElementById('alertaTrocaOleoNotificacao').style.display = 'none';
+        }
+        
+        // Função para redirecionar para a tela de alertas de troca de óleo
+        function verTodosTrocaOleo() {
+            window.location.href = "manutencao.html?troca_oleo_alerta=1";
+            fecharAlertaTrocaOleoNotificacao();
+        }
+
+        // Função para verificar informações de quilometragem
+        function diagnosticarQuilometragem() {
+            console.log("=== DIAGNÓSTICO DE QUILOMETRAGEM ===");
+            
+            registros.forEach(reg => {
+                if (!reg.placa || !reg.placa.trim()) return;
+                
+                // Verificar se existe kmAtual
+                if (!reg.kmAtual || reg.kmAtual.trim() === '') {
+                    console.log(`${reg.placa} (${reg.modelo}): KM Atual não informado`);
+                    return;
+                }
+                
+                // Verificar se tem manutenções
+                if (!reg.manutencoes || reg.manutencoes.length === 0) {
+                    console.log(`${reg.placa} (${reg.modelo}): Sem histórico de manutenções`);
+                    return;
+                }
+                
+                // Ordenar manutenções por data (mais recente primeiro)
+                const manutencoesOrdenadas = [...reg.manutencoes].sort((a, b) => {
+                    return new Date(b.data) - new Date(a.data);
+                });
+                
+                // Encontrar a última troca de óleo
+                const ultimaTrocaOleo = manutencoesOrdenadas.find(m => m.tipo === 'Troca de Óleo');
+                if (!ultimaTrocaOleo) {
+                    console.log(`${reg.placa} (${reg.modelo}): Sem registro de troca de óleo`);
+                    return;
+                }
+                
+                // Comparar quilometragens
+                let kmAtual = parseInt(reg.kmAtual.toString().replace(/\D/g, ''));
+                let kmUltimaTroca = parseInt(ultimaTrocaOleo.km.toString().replace(/\D/g, ''));
+                
+                if (isNaN(kmAtual)) {
+                    console.log(`${reg.placa}: KM Atual inválido: "${reg.kmAtual}"`);
+                    return;
+                }
+                
+                if (isNaN(kmUltimaTroca)) {
+                    console.log(`${reg.placa}: KM Última Troca inválido: "${ultimaTrocaOleo.km}"`);
+                    return;
+                }
+                
+                const kmRodados = kmAtual - kmUltimaTroca;
+                
+                console.log(`${reg.placa} (${reg.modelo}): KM Atual = ${kmAtual}, KM Última Troca = ${kmUltimaTroca}`);
+                console.log(`Diferença: ${kmRodados} km, Data Última Troca: ${new Date(ultimaTrocaOleo.data).toLocaleDateString('pt-BR')}`);
+                
+                // Verificar se há alerta
+                if (kmRodados >= 10000) {
+                    console.log(`ALERTA: Excedeu limite de 10.000 km (+${kmRodados - 10000} km)`);
+                } else if (kmRodados >= 9000) {
+                    console.log(`ALERTA PRÓXIMO: Faltam ${10000 - kmRodados} km para o limite`);
+                } else {
+                    console.log(`Situação normal: Faltam ${10000 - kmRodados} km para o limite`);
+                }
+                
+                console.log("-----------------------------------");
+            });
+            
+            console.log("=== FIM DO DIAGNÓSTICO ===");
+        }
+        
+        // Adicionar botão de diagnóstico (para uso durante manutenção do sistema)
+        document.addEventListener('DOMContentLoaded', function() {
+            const btnDiagnostico = document.createElement('button');
+            btnDiagnostico.textContent = 'Diagnosticar Alertas';
+            btnDiagnostico.style.background = '#8e44ad';
+            btnDiagnostico.style.marginLeft = '10px';
+            btnDiagnostico.onclick = function() {
+                diagnosticarQuilometragem();
+                logVeiculosTrocaOleo();
+                verificarAlertasTrocaOleo();
+                alert('Diagnóstico executado! Verifique o console do navegador (F12) para ver os detalhes completos.');
+            };
+            
+            const divBotoes = document.querySelector('div[style="margin: 20px 0;"]');
+            if (divBotoes) {
+                divBotoes.appendChild(btnDiagnostico);
+            }
+        });
+
+        // Função para exibir diagnóstico detalhado de troca de óleo
+        function logVeiculosTrocaOleo() {
+            console.log("=== DIAGNÓSTICO DETALHADO: VEÍCULOS E TROCA DE ÓLEO ===");
+            
+            registros.forEach(reg => {
+                if (!reg.placa || !reg.placa.trim()) return;
+                
+                console.log(`\nVeículo: ${reg.placa} (${reg.modelo || "?"})`);
+                console.log(`KM Atual: ${reg.kmAtual || "Não informado"}`);
+                
+                // Verificar se tem manutenções
+                if (!reg.manutencoes || reg.manutencoes.length === 0) {
+                    console.log("Status: Sem histórico de manutenções");
+                    return;
+                }
+                
+                // Ordenar manutenções por data (mais recente primeiro)
+                const manutencoesOrdenadas = [...reg.manutencoes].sort((a, b) => {
+                    return new Date(b.data) - new Date(a.data);
+                });
+                
+                console.log(`Total de manutenções: ${manutencoesOrdenadas.length}`);
+                
+                // Encontrar a última troca de óleo
+                const ultimaTrocaOleo = manutencoesOrdenadas.find(m => m.tipo === 'Troca de Óleo');
+                
+                if (!ultimaTrocaOleo) {
+                    console.log("Status: Sem registro de troca de óleo");
+                    return;
+                }
+                
+                // Data da última troca
+                const dataUltimaTroca = new Date(ultimaTrocaOleo.data);
+                const hoje = new Date();
+                const diferencaDias = Math.floor((hoje - dataUltimaTroca) / (1000 * 60 * 60 * 24));
+                
+                console.log(`Última troca: ${dataUltimaTroca.toLocaleDateString('pt-BR')}`);
+                console.log(`KM na última troca: ${ultimaTrocaOleo.km}`);
+                console.log(`Dias desde a troca: ${diferencaDias}`);
+                
+                // Verificar quilometragem
+                if (reg.kmAtual && ultimaTrocaOleo.km) {
+                    const kmAtualStr = reg.kmAtual.toString().replace(/\D/g, '');
+                    const kmUltimaTrocaStr = ultimaTrocaOleo.km.toString().replace(/\D/g, '');
+                    
+                    const kmAtual = parseInt(kmAtualStr);
+                    const kmUltimaTroca = parseInt(kmUltimaTrocaStr);
+                    
+                    console.log(`KM Atual (limpo): ${kmAtual}`);
+                    console.log(`KM Última Troca (limpo): ${kmUltimaTroca}`);
+                    
+                    if (!isNaN(kmAtual) && !isNaN(kmUltimaTroca)) {
+                        const kmRodados = kmAtual - kmUltimaTroca;
+                        console.log(`KM Rodados: ${kmRodados}`);
+                        
+                        if (kmRodados < 0) {
+                            console.log(`ERRO: KM atual (${kmAtual}) menor que KM da última troca (${kmUltimaTroca})`);
+                        } else if (kmRodados >= 10000) {
+                            console.log(`ALERTA: Troca vencida por quilometragem (+${kmRodados - 10000} km)`);
+                        } else if (kmRodados >= 9000) {
+                            console.log(`ALERTA PRÓXIMO: Faltam ${10000 - kmRodados} km para o limite`);
+                        } else {
+                            console.log(`KM OK: Faltam ${10000 - kmRodados} km para o limite`);
+                        }
+                    } else {
+                        console.log(`ERRO de conversão: KM Atual = ${reg.kmAtual}, KM Última Troca = ${ultimaTrocaOleo.km}`);
+                    }
+                } else {
+                    console.log("KM Atual não informado, usando última manutenção como referência");
+                    
+                    if (manutencoesOrdenadas.length > 0 && manutencoesOrdenadas[0].km) {
+                        const ultimaKmStr = manutencoesOrdenadas[0].km.toString().replace(/\D/g, '');
+                        const trocaOleoKmStr = ultimaTrocaOleo.km.toString().replace(/\D/g, '');
+                        
+                        const ultimaKm = parseInt(ultimaKmStr);
+                        const trocaOleoKm = parseInt(trocaOleoKmStr);
+                        
+                        console.log(`KM Última manutenção (${manutencoesOrdenadas[0].tipo}): ${ultimaKm}`);
+                        console.log(`KM Última Troca óleo: ${trocaOleoKm}`);
+                        
+                        if (!isNaN(ultimaKm) && !isNaN(trocaOleoKm)) {
+                            const kmRodados = ultimaKm - trocaOleoKm;
+                            console.log(`KM Rodados desde troca: ${kmRodados}`);
+                            
+                            if (kmRodados < 0) {
+                                console.log(`ERRO: KM última manutenção (${ultimaKm}) menor que KM da última troca (${trocaOleoKm})`);
+                            } else if (kmRodados >= 10000) {
+                                console.log(`ALERTA: Troca vencida por quilometragem (+${kmRodados - 10000} km)`);
+                            } else if (kmRodados >= 9000) {
+                                console.log(`ALERTA PRÓXIMO: Faltam ${10000 - kmRodados} km para o limite`);
+                            } else {
+                                console.log(`KM OK: Faltam ${10000 - kmRodados} km para o limite`);
+                            }
+                        } else {
+                            console.log(`ERRO de conversão: KM última manutenção = ${manutencoesOrdenadas[0].km}, KM Última Troca = ${ultimaTrocaOleo.km}`);
+                        }
+                    } else {
+                        console.log("Sem dados de KM para comparação");
+                    }
+                }
+                
+                // Verificar dias
+                if (diferencaDias > 30) {
+                    console.log(`ALERTA: Troca vencida por tempo (+${diferencaDias - 30} dias)`);
+                } else if (diferencaDias > 25) {
+                    console.log(`ALERTA PRÓXIMO: Faltam ${30 - diferencaDias} dias para o limite`);
+                } else {
+                    console.log(`Dias OK: Faltam ${30 - diferencaDias} dias para o limite`);
+                }
+                
+                // Status final
+                const alerta = verificarNecessidadeTrocaOleo(ultimaTrocaOleo, reg);
+                console.log(`Status Final: ${alerta.status ? "PRECISA TROCAR ÓLEO" : "OK"}`);
+                if (alerta.tipoAlerta) {
+                    console.log(`Tipo de Alerta: ${alerta.tipoAlerta}`);
+                }
+                
+                console.log("-----------------------------------");
+            });
+            
+            console.log("=== FIM DO DIAGNÓSTICO ===");
+        }
+
+        // Função para mostrar estatísticas por cidade
+        function mostrarEstatisticasPorCidade() {
+            const tooltip = document.getElementById('estatisticasTooltip');
+            
+            // Se o tooltip já estiver visível, apenas esconda-o
+            if (tooltip.style.display === 'block') {
+                tooltip.style.display = 'none';
+                return;
+            }
+            
+            const estatisticas = {};
+            
+            // Coletar dados diretamente dos registros em vez da tabela
+            registros.forEach(reg => {
+                const cidade = reg.cidade.trim();
+                if (!cidade) return;
+                
+                if (!estatisticas[cidade]) {
+                    estatisticas[cidade] = {
+                        total: 0,
+                        tecnicos: new Set(),
+                        auxiliares: new Set(),
+                        veiculos: new Set()
+                    };
+                }
+                
+                estatisticas[cidade].total++;
+                
+                if (reg.tecnico) {
+                    estatisticas[cidade].tecnicos.add(reg.tecnico.toLowerCase().trim());
+                }
+                
+                if (reg.auxiliar && reg.auxiliar.trim()) {
+                    estatisticas[cidade].auxiliares.add(reg.auxiliar.toLowerCase().trim());
+                }
+                
+                if (reg.placa && reg.placa.trim()) {
+                    estatisticas[cidade].veiculos.add(reg.placa.toUpperCase().trim());
+                }
+            });
+
+            // Criar conteúdo do tooltip
+            const conteudo = document.getElementById('estatisticasConteudo');
+            conteudo.innerHTML = '';
+            
+            Object.entries(estatisticas)
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .forEach(([cidade, dados]) => {
+                    const item = document.createElement('div');
+                    item.className = 'estatistica-item';
+                    item.innerHTML = `
+                        <span class="estatistica-label">${cidade}</span>
+                        <span class="estatistica-valor">
+                            Técnicos: ${dados.tecnicos.size} | Auxiliares: ${dados.auxiliares.size} | Veículos: ${dados.veiculos.size}
+                        </span>
+                    `;
+                    conteudo.appendChild(item);
+                });
+
+            // Mostrar tooltip
+            tooltip.style.display = 'block';
+            
+            // Garantir que o tooltip apareça no lugar certo
+            const botaoEstatisticas = document.getElementById('mostrarEstatisticas');
+            const rect = botaoEstatisticas.getBoundingClientRect();
+            const painelEstatisticas = document.getElementById('painelEstatisticasCidade');
+            const painelRect = painelEstatisticas.getBoundingClientRect();
+            
+            // Posicionamento relativo ao painel
+            tooltip.style.top = (rect.bottom - painelRect.top + 10) + 'px';
+            tooltip.style.left = (rect.left - painelRect.left) + 'px';
+
+            // Fechar tooltip ao clicar fora
+            document.addEventListener('click', function fecharTooltip(e) {
+                if (!tooltip.contains(e.target) && e.target !== document.getElementById('mostrarEstatisticas')) {
+                    tooltip.style.display = 'none';
+                    document.removeEventListener('click', fecharTooltip);
+                }
+            });
+        }
+
+        // Inicialização da página
+        document.addEventListener('DOMContentLoaded', function() {
+            // Adicionar evento ao botão de estatísticas
+            document.getElementById('mostrarEstatisticas').addEventListener('click', mostrarEstatisticasPorCidade);
+            
+            // Adicionar evento ao botão do mapa
+            document.getElementById('verMapa').addEventListener('click', mostrarMapa);
+            
+            // Adicionar evento ao botão de manutenção
+            // O botão agora usa onclick diretamente no HTML
+            /* 
+            document.getElementById('btnManutencao').addEventListener('click', function() {
+                window.location.href = "manutencao.html";
+            });
+            */
+            
+            // Adicionar botão de diagnóstico (para uso durante manutenção do sistema)
+            const btnDiagnostico = document.createElement('button');
+            btnDiagnostico.textContent = 'Diagnosticar Alertas';
+            btnDiagnostico.style.background = '#8e44ad';
+            btnDiagnostico.style.marginLeft = '10px';
+            btnDiagnostico.onclick = function() {
+                diagnosticarQuilometragem();
+                logVeiculosTrocaOleo();
+                verificarAlertasTrocaOleo();
+                alert('Diagnóstico executado! Verifique o console do navegador (F12) para ver os detalhes completos.');
+            };
+            
+            const divBotoes = document.querySelector('div[style="margin: 20px 0;"]');
+            if (divBotoes) {
+                divBotoes.appendChild(btnDiagnostico);
+            }
+        });
+    </script>
+</body>
+</html>
