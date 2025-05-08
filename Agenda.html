@@ -14,6 +14,12 @@
 
         // Obter usuário atual
         const currentUser = Auth.getCurrentUser();
+        
+        // Verificar permissão para visualizar tarefas
+        if (!Auth.hasPermission(currentUser, Auth.PERMISSIONS.VIEW_TASKS)) {
+            alert('Você não tem permissão para acessar esta página.');
+            window.location.href = 'login.html';
+        }
     </script>
     <style>
         :root {
@@ -701,6 +707,24 @@
             margin-top: 0;
         }
         
+        /* Garante que o menu de navegação esteja visível */
+        .main-menu {
+            position: relative;
+            z-index: 100;
+            display: block !important;
+            width: 100%;
+        }
+        
+        .main-menu ul {
+            display: flex !important;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            gap: 5px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
         /* Estilos para o sistema de notificações */
         @keyframes bellRing {
             0% { transform: rotate(0); }
@@ -1030,6 +1054,34 @@
             </button>
         </div>
     </header>
+
+    <!-- Menu de navegação intuitivo -->
+    <nav class="main-menu" style="background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1); padding: 10px 20px; margin-bottom: 20px; position: relative; z-index: 500; display: block !important;">
+        <ul style="display: flex !important; list-style: none; margin: 0; padding: 0; gap: 5px; flex-wrap: wrap; justify-content: center;">
+            <li class="menu-item" style="position: relative;">
+                <a href="Pagina1 (1).html" style="display: flex; align-items: center; padding: 10px 15px; color: var(--text-color); text-decoration: none; font-weight: bold; border-radius: 5px; transition: all 0.2s ease; background: transparent;">
+                    <i class="fas fa-home" style="margin-right: 8px;"></i>
+                    <span>Principal</span>
+                </a>
+                <div class="menu-hover-indicator" style="position: absolute; bottom: -2px; left: 0; width: 0; height: 3px; background: var(--primary-color); border-radius: 3px; transition: width 0.2s ease;"></div>
+            </li>
+            <li class="menu-item active" style="position: relative;">
+                <a href="agenda.html" style="display: flex; align-items: center; padding: 10px 15px; color: var(--primary-color); text-decoration: none; font-weight: bold; border-radius: 5px; transition: all 0.2s ease; background: var(--secondary-color);">
+                    <i class="fas fa-calendar-alt" style="margin-right: 8px;"></i>
+                    <span>Agenda</span>
+                </a>
+                <div class="menu-hover-indicator" style="position: absolute; bottom: -2px; left: 0; width: 100%; height: 3px; background: var(--primary-color); border-radius: 3px;"></div>
+            </li>
+            <li class="menu-item" style="position: relative;">
+                <a href="manutencao.html" style="display: flex; align-items: center; padding: 10px 15px; color: var(--text-color); text-decoration: none; font-weight: bold; border-radius: 5px; transition: all 0.2s ease; background: transparent;">
+                    <i class="fas fa-tools" style="margin-right: 8px;"></i>
+                    <span>Manutenção de Veículos</span>
+                </a>
+                <div class="menu-hover-indicator" style="position: absolute; bottom: -2px; left: 0; width: 0; height: 3px; background: var(--primary-color); border-radius: 3px; transition: width 0.2s ease;"></div>
+            </li>
+        </ul>
+    </nav>
+
     <div class="container">
         <div class="sidebar">
             <div style="padding: 10px 0; border-bottom: 1px solid var(--border-color); cursor: pointer;" id="formToggler">
@@ -1069,10 +1121,10 @@
                     
                     <div class="form-group">
                         <label for="taskPriority">Prioridade</label>
-                        <select id="taskPriority">
-                            <option value="baixa">Baixa</option>
-                            <option value="media">Média</option>
+                        <select id="taskPriority" required>
                             <option value="alta">Alta</option>
+                            <option value="media" selected>Média</option>
+                            <option value="baixa">Baixa</option>
                         </select>
                     </div>
                     
@@ -1088,8 +1140,8 @@
                     
                     <div class="form-group">
                         <label for="taskAssignedTo">Atribuir para</label>
-                        <select id="taskAssignedTo" multiple size="5" required>
-                            <!-- Será preenchido dinamicamente -->
+                        <select id="taskAssignedTo" multiple size="3" required>
+                            <!-- Opções de usuários serão carregadas dinamicamente -->
                         </select>
                         <small style="color: var(--light-text); font-size: 12px;">Segure Ctrl (Windows) ou Command (Mac) para selecionar múltiplos usuários</small>
                     </div>
@@ -1219,6 +1271,23 @@
                         </div>
                     </div>
                     
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="taskOperacao">Operação</label>
+                            <select id="taskOperacao" required>
+                                <option value="BJ Fibra">BJ Fibra</option>
+                                <option value="Megalink">Megalink</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="taskAssignedTo">Atribuir para</label>
+                            <select id="taskAssignedTo" multiple size="3" required>
+                                <!-- Opções de usuários serão carregadas dinamicamente -->
+                            </select>
+                            <small style="color: var(--light-text); font-size: 12px;">Segure Ctrl (Windows) ou Command (Mac) para selecionar múltiplos usuários</small>
+                        </div>
+                    </div>
+                    
                     <button type="submit" class="btn-primary">Adicionar Tarefa</button>
                 </form>
             </div>
@@ -1339,6 +1408,8 @@
             if (Auth.hasPermission(currentUser, Auth.PERMISSIONS.MANAGE_USERS)) {
                 adminButton.style.display = 'block';
                 adminButton.addEventListener('click', () => {
+                    // Armazenar a página de origem antes de redirecionar
+                    localStorage.setItem('adminOriginPage', 'Agenda.html');
                     window.location.href = 'admin.html';
                 });
                 
@@ -1373,6 +1444,11 @@
             startNotificationCheck();
             startAutoRefresh();
             loadUsersForAssignment(); // Garantir que os usuários sejam carregados
+            
+            // Remove o evento de clique para o botão Voltar que não existe
+            // document.getElementById('btnVoltar').addEventListener('click', () => {
+            //     window.location.href = 'Pagina1 (1).html';
+            // });
             
             // Inicializar estado do seletor de cor personalizada
             // Não é necessário inicializar aqui pois já foi feito anteriormente
@@ -2684,13 +2760,24 @@
 
         // Renderização das tarefas do dia
         function renderDailyTasks() {
+            // Verificar permissão para visualizar todas operações
+            const podeVerTodasOperacoes = Auth.hasPermission(currentUser, Auth.PERMISSIONS.VIEW_BY_OPERATION);
+            
             const tasksForDay = tasks.filter(task => {
                 // Criar as datas com horário meio-dia para evitar problemas de fuso horário
                 const taskDate = new Date(task.date + 'T12:00:00');
                 const compareDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 12, 0, 0);
+                
+                // Verificar se o usuário tem permissão para ver a operação
+                const operacaoMatch = podeVerTodasOperacoes || 
+                                     !currentUser.operacao || 
+                                     !task.operacao || 
+                                     task.operacao === currentUser.operacao;
+                
                 // Filtrar por data, verificar se estamos mostrando ou não tarefas concluídas e se o usuário tem permissão
                 return taskDate.toDateString() === compareDate.toDateString() && 
                        !task.completed && 
+                       operacaoMatch &&
                        (currentUser.accessLevel === 'ADMIN' || task.assignedTo.includes(currentUser.id));
             }).sort((a, b) => a.startTime.localeCompare(b.startTime));
 
@@ -2838,6 +2925,9 @@
         function renderCompletedTasks() {
             completedTasks.innerHTML = '';
             
+            // Verificar permissão para visualizar todas operações
+            const podeVerTodasOperacoes = Auth.hasPermission(currentUser, Auth.PERMISSIONS.VIEW_BY_OPERATION);
+            
             // Filtrar tarefas concluídas para o dia selecionado
             const completedTasksForDay = tasks.filter(task => {
                 // Criar as datas com horário meio-dia para evitar problemas de fuso horário
@@ -2848,11 +2938,17 @@
                     return false;
                 }
                 
+                // Verificar se o usuário tem permissão para ver a operação
+                const operacaoMatch = podeVerTodasOperacoes || 
+                                     !currentUser.operacao || 
+                                     !task.operacao || 
+                                     task.operacao === currentUser.operacao;
+                
                 // Verificar se o usuário tem permissão para ver esta tarefa
                 if (currentUser.accessLevel === 'ADMIN') {
-                    return true;
+                    return operacaoMatch;
                 } else {
-                    return task.assignedTo.includes(currentUser.id);
+                    return task.assignedTo.includes(currentUser.id) && operacaoMatch;
                 }
             }).sort((a, b) => {
                 const timeA = new Date('1970-01-01T' + a.startTime + ':00');
@@ -3033,6 +3129,7 @@
                 const taskCategory = document.getElementById('taskCategory').value;
                 const taskColor = document.getElementById('taskColor').value;
                 const taskRepeat = document.getElementById('taskRepeat').value;
+                const taskOperacao = document.getElementById('taskOperacao').value;
                 
                 // Obter usuários selecionados
                 const taskAssignedTo = Array.from(document.getElementById('taskAssignedTo').selectedOptions).map(option => parseInt(option.value));
@@ -3063,6 +3160,7 @@
                     priority: taskPriority,
                     category: taskCategory,
                     color: taskColor,
+                    operacao: taskOperacao, // Adicionando a operação à tarefa
                     completed: false,
                     assignedTo: taskAssignedTo,
                     createdBy: currentUser.id,
@@ -3347,6 +3445,7 @@
             const taskPriority = document.getElementById('taskPriority').value;
             const taskCategory = document.getElementById('taskCategory').value;
             const taskColor = document.getElementById('taskColor').value;
+            const taskOperacao = document.getElementById('taskOperacao').value;
             
             const task = {
                 id: editingTaskId ? parseInt(editingTaskId) : Date.now(),
@@ -3358,6 +3457,7 @@
                 priority: taskPriority,
                 category: taskCategory,
                 color: taskColor,
+                operacao: taskOperacao, // Adicionando a operação à tarefa
                 notified: false,
                 completed: false, // Agora indica se a tarefa está totalmente concluída
                 completedDate: null,
@@ -3398,6 +3498,9 @@
                         
                     if (originalTask.color !== taskColor)
                         changes.push(`Cor alterada`);
+                        
+                    if (originalTask.operacao !== taskOperacao)
+                        changes.push(`Operação alterada de ${originalTask.operacao || 'Não definida'} para ${taskOperacao}`);
                         
                     // Verificar mudanças nos usuários atribuídos
                     const originalUsers = originalTask.assignedTo || [];
@@ -3654,80 +3757,31 @@
 
         // Edição de tarefa
         function editTask(task) {
-            // Verificar se a tarefa está concluída e se o usuário é administrador
-            if (task.completed && currentUser.accessLevel !== 'ADMIN') {
-                alert('Apenas administradores podem editar tarefas concluídas.');
-                return;
-            }
-
+            // Atualizar o ID da tarefa que está sendo editada
+            taskForm.dataset.editingTaskId = task.id;
+            
             // Preencher o formulário com os dados da tarefa
             document.getElementById('taskTitle').value = task.title;
-            document.getElementById('taskDescription').value = task.description;
+            document.getElementById('taskDescription').value = task.description || '';
             document.getElementById('taskDate').value = task.date;
             document.getElementById('taskStartTime').value = task.startTime;
             document.getElementById('taskEndTime').value = task.endTime;
             document.getElementById('taskPriority').value = task.priority;
             document.getElementById('taskCategory').value = task.category;
+            document.getElementById('taskColor').value = task.color || '#2a3d66';
+            document.getElementById('taskOperacao').value = task.operacao || (currentUser.operacao || 'BJ Fibra');
             
-            // Definir a cor da tarefa
-            const taskColor = task.color || '#1a2540';
-            document.getElementById('taskColor').value = taskColor;
+            // Atualizar a visualização da cor
+            updateColorValue(task.color || '#2a3d66');
             
-            // Tentar encontrar a cor nas opções predefinidas
-            const colorOptions = document.querySelectorAll('input[name="taskColorOption"]');
-            let colorFound = false;
-            
-            // Procurar pela cor exata nas cores predefinidas
-            colorOptions.forEach(option => {
-                if (option.value === taskColor) {
-                    option.checked = true;
-                    colorFound = true;
-                } else {
-                    option.checked = false;
-                }
-            });
-            
-            // Se não encontrar uma cor predefinida, usar a cor personalizada
-            if (!colorFound) {
-                // Desmarcar todas as opções
-                colorOptions.forEach(option => {
-                    option.checked = false;
-                });
-                
-                // Mostrar a seção de cor personalizada
-                const customColorContainer = document.getElementById('customColorContainer');
-                customColorContainer.style.display = 'block';
-                
-                // Definir a cor no seletor personalizado
-                const customColorPicker = document.getElementById('customColorPicker');
-                customColorPicker.value = taskColor;
-            } else {
-                // Ocultar a seção de cor personalizada
-                const customColorContainer = document.getElementById('customColorContainer');
-                customColorContainer.style.display = 'none';
-            }
-            
-            // Selecionar os usuários atribuídos
-            const select = document.getElementById('taskAssignedTo');
-            Array.from(select.options).forEach(option => {
+            // Verificar se todos os usuários atribuídos estão no seletor
+            document.getElementById('taskAssignedTo').querySelectorAll('option').forEach(option => {
                 option.selected = task.assignedTo.includes(parseInt(option.value));
             });
-
-            // Remover a tarefa atual da lista
-            tasks = tasks.filter(t => t.id !== task.id);
             
-            // Manter o ID da tarefa para facilitar a identificação mais tarde
-            document.getElementById('taskForm').dataset.editingTaskId = task.id;
-            
-            // Alterar o texto do botão para indicar que está editando
-            const submitButton = document.querySelector('#taskForm button[type="submit"]');
-            submitButton.textContent = 'Atualizar Tarefa';
-            
-            // Fechar o modal
-            taskModal.style.display = 'none';
-            
-            // Scrollar para o formulário para que o usuário possa ver as mudanças
-            document.querySelector('.task-form').scrollIntoView({ behavior: 'smooth' });
+            // Mostrar o formulário e atualizar o título
+            document.querySelector('#taskFormHeader h3').textContent = 'Editar Tarefa';
+            document.getElementById('taskFormContainer').style.display = 'flex';
         }
 
         // Exclusão de tarefa
@@ -4233,6 +4287,88 @@
             
             return tasks;
         }
+
+        // Adicionar um aviso visual se o usuário não puder ver todas as operações
+        window.addEventListener('load', function() {
+            // Verificar se o usuário pode ver todas as operações
+            const podeVerTodasOperacoes = Auth.hasPermission(currentUser, Auth.PERMISSIONS.VIEW_BY_OPERATION);
+            
+            if (!podeVerTodasOperacoes && currentUser.operacao) {
+                // Definir a operação padrão no formulário
+                if (document.getElementById('taskOperacao')) {
+                    document.getElementById('taskOperacao').value = currentUser.operacao;
+                }
+            }
+            
+            // Se o usuário não tem permissão, desabilitar seleção de operação no formulário
+            if (!podeVerTodasOperacoes && currentUser.operacao && document.getElementById('taskOperacao')) {
+                document.getElementById('taskOperacao').value = currentUser.operacao;
+                document.getElementById('taskOperacao').disabled = true;
+                document.getElementById('taskOperacao').style.backgroundColor = '#f0f0f0';
+            }
+        });
+        
+        // Atualizar a visão do calendário quando a janela for redimensionada
+        window.addEventListener('resize', ajustarCalendario);
+        
+        // Menu interativo - efeito de hover
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Configurando comportamento do menu');
+            const menuItems = document.querySelectorAll('.menu-item');
+            
+            if (menuItems.length === 0) {
+                console.error('Nenhum item de menu encontrado!');
+            } else {
+                console.log(`${menuItems.length} itens de menu encontrados`);
+            }
+            
+            menuItems.forEach(item => {
+                const indicator = item.querySelector('.menu-hover-indicator');
+                
+                // Certifica que o menu esteja visível
+                const menuNav = document.querySelector('.main-menu');
+                if (menuNav) {
+                    menuNav.style.display = 'block';
+                    menuNav.style.visibility = 'visible';
+                }
+                
+                // Efeito hover
+                item.addEventListener('mouseenter', function() {
+                    if (!item.classList.contains('active')) {
+                        indicator.style.width = '100%';
+                    }
+                });
+                
+                item.addEventListener('mouseleave', function() {
+                    if (!item.classList.contains('active')) {
+                        indicator.style.width = '0';
+                    }
+                });
+                
+                // Efeito de clique
+                item.addEventListener('click', function() {
+                    // Remove a classe active de todos os itens
+                    menuItems.forEach(mi => {
+                        mi.classList.remove('active');
+                        mi.querySelector('.menu-hover-indicator').style.width = '0';
+                        mi.querySelector('a').style.background = 'transparent';
+                        mi.querySelector('a').style.color = 'var(--text-color)';
+                    });
+                    
+                    // Adiciona a classe active ao item clicado
+                    item.classList.add('active');
+                    indicator.style.width = '100%';
+                    item.querySelector('a').style.background = 'var(--secondary-color)';
+                    item.querySelector('a').style.color = 'var(--primary-color)';
+                });
+            });
+            
+            // Remova o comportamento do botão voltar se ainda existir
+            const btnVoltar = document.getElementById('btnVoltar');
+            if (btnVoltar) {
+                btnVoltar.remove();
+            }
+        });
     </script>
 </body>
 </html>

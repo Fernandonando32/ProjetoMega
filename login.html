@@ -158,7 +158,7 @@
 
         // Verificar se já está logado
         if (Auth.isAuthenticated()) {
-            window.location.href = 'Agenda.html';
+            window.location.href = 'Pagina1 (1).html';
         }
 
         // Manipular o formulário de login
@@ -169,7 +169,7 @@
             const password = document.getElementById('password').value;
             
             if (Auth.login(username, password)) {
-                window.location.href = 'Agenda.html';
+                window.location.href = 'Pagina1 (1).html';
             } else {
                 document.getElementById('errorMessage').style.display = 'block';
             }

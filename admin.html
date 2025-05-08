@@ -52,6 +52,68 @@
             padding: 20px;
         }
 
+        header {
+            background: var(--primary-color);
+            color: white;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow);
+        }
+
+        .main-menu {
+            background: #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            padding: 10px 20px;
+            margin-bottom: 20px;
+        }
+
+        .main-menu ul {
+            display: flex;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            gap: 5px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .main-menu .menu-item {
+            position: relative;
+        }
+
+        .main-menu .menu-item a {
+            display: flex;
+            align-items: center;
+            padding: 10px 15px;
+            color: var(--text-color);
+            text-decoration: none;
+            font-weight: bold;
+            border-radius: 5px;
+            transition: all 0.2s ease;
+        }
+
+        .main-menu .menu-item.active a {
+            background: var(--secondary-color);
+            color: var(--primary-color);
+        }
+
+        .main-menu .menu-hover-indicator {
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 0;
+            height: 3px;
+            background: var(--primary-color);
+            border-radius: 3px;
+            transition: width 0.2s ease;
+        }
+
+        .main-menu .menu-item.active .menu-hover-indicator {
+            width: 100%;
+        }
+
         .header {
             display: flex;
             justify-content: space-between;
@@ -198,11 +260,13 @@
             position: relative;
             background: white;
             width: 90%;
-            max-width: 500px;
-            margin: 50px auto;
+            max-width: 550px;
+            margin: 30px auto;
             padding: 20px;
             border-radius: 8px;
             box-shadow: var(--shadow);
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
         .close {
@@ -315,26 +379,110 @@
         .links a:hover {
             text-decoration: underline;
         }
+
+        /* Estilo para a barra de rolagem do container de permissões */
+        #permissionsContainer::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        #permissionsContainer::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        #permissionsContainer::-webkit-scrollbar-thumb {
+            background: #c1c9d9;
+            border-radius: 4px;
+        }
+        
+        #permissionsContainer::-webkit-scrollbar-thumb:hover {
+            background: #a1afc9;
+        }
+
+        /* Estilo para as seções de permissões */
+        #permissionsContainer section {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 15px;
+        }
+        
+        #permissionsContainer h4 {
+            margin-top: 0;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e0e6f0;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="logo">
-                <i class="fas fa-users-cog"></i>
-                <h1>Administração de Usuários</h1>
-            </div>
-            <div class="user-info">
-                <span id="currentUserName"></span>
-                <button class="button btn-primary" id="backButton">
-                    <i class="fas fa-calendar-alt"></i> Voltar para Agenda
-                </button>
-                <button class="button btn-danger" id="logoutButton">
-                    <i class="fas fa-sign-out-alt"></i> Sair
-                </button>
-            </div>
+    <header>
+        <div style="display: flex; align-items: center;">
+            <i class="fas fa-users-cog" style="font-size: 24px; margin-right: 10px; color: white;"></i>
+            <h1 style="font-size: 20px; margin: 0; color: white;">Administração de Usuários</h1>
         </div>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <div id="currentUserName" style="font-size: 14px;"></div>
+            
+            <!-- Sistema de notificação para administradores -->
+            <div id="notificationSystem" style="display: none; position: relative;">
+                <button id="notificationButton" style="background: none; border: none; color: white; position: relative; padding: 5px; cursor: pointer;" title="Notificações">
+                    <i class="fas fa-bell"></i>
+                    <span id="notificationCount" style="position: absolute; top: -5px; right: -5px; background: var(--danger-color); color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: flex; align-items: center; justify-content: center; font-weight: bold;">0</span>
+                </button>
+                <div id="notificationDropdown" style="display: none; position: absolute; right: 0; top: 100%; width: 300px; max-height: 400px; overflow-y: auto; background: white; border-radius: 5px; box-shadow: 0 3px 10px rgba(0,0,0,0.2); color: var(--text-color); z-index: 1000;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; border-bottom: 1px solid var(--border-color);">
+                        <h3 style="margin: 0; font-size: 16px;">Notificações</h3>
+                        <button id="markAllReadButton" style="font-size: 12px; padding: 3px 8px; background: var(--secondary-color); color: var(--text-color); border: none; border-radius: 3px; cursor: pointer;">Marcar todas como lidas</button>
+                    </div>
+                    <div id="notificationList" style="padding: 0;">
+                        <div style="padding: 20px; text-align: center; color: var(--light-text);">
+                            Nenhuma notificação
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="logout-button" id="logoutButton" style="padding: 5px 10px; font-size: 12px; background: var(--danger-color); color: white; border: none; border-radius: 3px; cursor: pointer;">
+                <i class="fas fa-sign-out-alt"></i> Sair
+            </button>
+        </div>
+    </header>
 
+    <!-- Menu de navegação intuitivo -->
+    <nav class="main-menu">
+        <ul>
+            <li class="menu-item">
+                <a href="Pagina1 (1).html">
+                    <i class="fas fa-home" style="margin-right: 8px;"></i>
+                    <span>Principal</span>
+                </a>
+                <div class="menu-hover-indicator"></div>
+            </li>
+            <li class="menu-item">
+                <a href="agenda.html">
+                    <i class="fas fa-calendar-alt" style="margin-right: 8px;"></i>
+                    <span>Agenda</span>
+                </a>
+                <div class="menu-hover-indicator"></div>
+            </li>
+            <li class="menu-item">
+                <a href="manutencao.html">
+                    <i class="fas fa-tools" style="margin-right: 8px;"></i>
+                    <span>Manutenção de Veículos</span>
+                </a>
+                <div class="menu-hover-indicator"></div>
+            </li>
+            <li class="menu-item active">
+                <a href="admin.html">
+                    <i class="fas fa-users-cog" style="margin-right: 8px;"></i>
+                    <span>Administrar Usuários</span>
+                </a>
+                <div class="menu-hover-indicator" style="width: 100%;"></div>
+            </li>
+        </ul>
+    </nav>
+    
+    <div class="container">
         <div class="panel">
             <div class="panel-header">
                 <h2>Lista de Usuários</h2>
@@ -351,6 +499,7 @@
                             <th>Usuário</th>
                             <th>E-mail</th>
                             <th>Nível de Acesso</th>
+                            <th>Operação</th>
                             <th>Ações</th>
                         </tr>
                     </thead>
@@ -390,9 +539,23 @@
                     <label for="accessLevel">Nível de Acesso <span class="required">*</span></label>
                     <select id="accessLevel">
                         <option value="ADMIN">Administrador</option>
+                        <option value="TECH_MANAGER">Gestor de Técnicos</option>
+                        <option value="MAINTENANCE_MANAGER">Gestor de Manutenção</option>
                         <option value="USER">Usuário Padrão</option>
                         <option value="VIEWER">Visualizador</option>
                     </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="operacao">Operação</label>
+                    <select id="operacao">
+                        <option value="">Selecione uma operação</option>
+                        <option value="BJ Fibra">BJ Fibra</option>
+                        <option value="Megalink">Megalink</option>
+                    </select>
+                    <div style="font-size: 12px; color: var(--light-text); margin-top: 5px;">
+                        Associa o usuário a uma operação específica. Usuários sem a permissão "Visualizar por Operação" só poderão ver registros de sua própria operação.
+                    </div>
                 </div>
 
                 <div class="permission-group">
@@ -404,55 +567,148 @@
                         <label for="customPermissions">Usar permissões personalizadas</label>
                     </div>
 
-                    <div id="permissionsContainer" style="display: none; margin-top: 15px;">
-                        <!-- VIEW_TASKS -->
-                        <div class="permission-checkbox">
-                            <input type="checkbox" id="perm_view_tasks" value="view_tasks">
-                            <label for="perm_view_tasks">Visualizar Tarefas</label>
-                        </div>
-                        <div class="permission-description">Permite visualizar o calendário e as tarefas</div>
+                    <div id="permissionsContainer" style="display: none; margin-top: 15px; max-height: 350px; overflow-y: auto; padding-right: 10px;">
+                        <section>
+                            <h4 style="color: #2a3d66;">Permissões da Agenda</h4>
+                            
+                            <!-- VIEW_TASKS -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_view_tasks" value="view_tasks">
+                                <label for="perm_view_tasks">Visualizar Tarefas</label>
+                            </div>
+                            <div class="permission-description">Permite visualizar o calendário e as tarefas</div>
 
-                        <!-- CREATE_TASKS -->
-                        <div class="permission-checkbox">
-                            <input type="checkbox" id="perm_create_tasks" value="create_tasks">
-                            <label for="perm_create_tasks">Criar Tarefas</label>
-                        </div>
-                        <div class="permission-description">Permite adicionar novas tarefas no sistema</div>
+                            <!-- CREATE_TASKS -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_create_tasks" value="create_tasks">
+                                <label for="perm_create_tasks">Criar Tarefas</label>
+                            </div>
+                            <div class="permission-description">Permite adicionar novas tarefas no sistema</div>
 
-                        <!-- EDIT_TASKS -->
-                        <div class="permission-checkbox">
-                            <input type="checkbox" id="perm_edit_tasks" value="edit_tasks">
-                            <label for="perm_edit_tasks">Editar Tarefas</label>
-                        </div>
-                        <div class="permission-description">Permite modificar tarefas existentes</div>
+                            <!-- EDIT_TASKS -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_edit_tasks" value="edit_tasks">
+                                <label for="perm_edit_tasks">Editar Tarefas</label>
+                            </div>
+                            <div class="permission-description">Permite modificar tarefas existentes</div>
 
-                        <!-- DELETE_TASKS -->
-                        <div class="permission-checkbox">
-                            <input type="checkbox" id="perm_delete_tasks" value="delete_tasks">
-                            <label for="perm_delete_tasks">Excluir Tarefas</label>
-                        </div>
-                        <div class="permission-description">Permite remover tarefas do sistema</div>
+                            <!-- DELETE_TASKS -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_delete_tasks" value="delete_tasks">
+                                <label for="perm_delete_tasks">Excluir Tarefas</label>
+                            </div>
+                            <div class="permission-description">Permite remover tarefas do sistema</div>
 
-                        <!-- COMPLETE_TASKS -->
-                        <div class="permission-checkbox">
-                            <input type="checkbox" id="perm_complete_tasks" value="complete_tasks">
-                            <label for="perm_complete_tasks">Concluir Tarefas</label>
-                        </div>
-                        <div class="permission-description">Permite marcar tarefas como concluídas</div>
+                            <!-- COMPLETE_TASKS -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_complete_tasks" value="complete_tasks">
+                                <label for="perm_complete_tasks">Concluir Tarefas</label>
+                            </div>
+                            <div class="permission-description">Permite marcar tarefas como concluídas</div>
 
-                        <!-- VIEW_COMPLETED -->
-                        <div class="permission-checkbox">
-                            <input type="checkbox" id="perm_view_completed" value="view_completed">
-                            <label for="perm_view_completed">Ver Tarefas Concluídas</label>
-                        </div>
-                        <div class="permission-description">Permite acessar a visualização de tarefas concluídas</div>
+                            <!-- VIEW_COMPLETED -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_view_completed" value="view_completed">
+                                <label for="perm_view_completed">Ver Tarefas Concluídas</label>
+                            </div>
+                            <div class="permission-description">Permite acessar a visualização de tarefas concluídas</div>
+                        </section>
+                        
+                        <section>
+                            <h4 style="color: #2a3d66;">Permissões de Acompanhamento de Técnicos e Veículos</h4>
+                            
+                            <!-- VIEW_TECHNICIANS -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_view_technicians" value="view_technicians">
+                                <label for="perm_view_technicians">Visualizar Técnicos</label>
+                            </div>
+                            <div class="permission-description">Permite visualizar os dados dos técnicos e veículos</div>
+                            
+                            <!-- ADD_TECHNICIAN -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_add_technician" value="add_technician">
+                                <label for="perm_add_technician">Adicionar Técnicos</label>
+                            </div>
+                            <div class="permission-description">Permite adicionar novos registros de técnicos e veículos</div>
+                            
+                            <!-- EDIT_TECHNICIAN -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_edit_technician" value="edit_technician">
+                                <label for="perm_edit_technician">Editar Técnicos</label>
+                            </div>
+                            <div class="permission-description">Permite modificar registros de técnicos e veículos existentes</div>
+                            
+                            <!-- DELETE_TECHNICIAN -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_delete_technician" value="delete_technician">
+                                <label for="perm_delete_technician">Excluir Técnicos</label>
+                            </div>
+                            <div class="permission-description">Permite remover registros de técnicos e veículos</div>
+                            
+                            <!-- VIEW_STATISTICS -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_view_statistics" value="view_statistics">
+                                <label for="perm_view_statistics">Ver Estatísticas</label>
+                            </div>
+                            <div class="permission-description">Permite visualizar estatísticas e gráficos de desempenho</div>
+                            
+                            <!-- VIEW_MAP -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_view_map" value="view_map">
+                                <label for="perm_view_map">Ver Mapa</label>
+                            </div>
+                            <div class="permission-description">Permite visualizar o mapa com a localização dos técnicos</div>
+                            
+                            <!-- VIEW_BY_OPERATION -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_view_by_operation" value="view_by_operation">
+                                <label for="perm_view_by_operation">Visualizar por Operação</label>
+                            </div>
+                            <div class="permission-description">Permite visualizar registros de todas as operações (BJ Fibra e Megalink). Sem esta permissão, o usuário só vê registros da sua própria operação</div>
+                        </section>
+                        
+                        <section>
+                            <h4 style="color: #2a3d66;">Permissões de Manutenção de Veículos</h4>
+                            
+                            <!-- VIEW_MAINTENANCE -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_view_maintenance" value="view_maintenance">
+                                <label for="perm_view_maintenance">Visualizar Manutenções</label>
+                            </div>
+                            <div class="permission-description">Permite visualizar os registros de manutenção de veículos</div>
+                            
+                            <!-- ADD_MAINTENANCE -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_add_maintenance" value="add_maintenance">
+                                <label for="perm_add_maintenance">Adicionar Manutenções</label>
+                            </div>
+                            <div class="permission-description">Permite adicionar novos registros de manutenção</div>
+                            
+                            <!-- EDIT_MAINTENANCE -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_edit_maintenance" value="edit_maintenance">
+                                <label for="perm_edit_maintenance">Editar Manutenções</label>
+                            </div>
+                            <div class="permission-description">Permite modificar registros de manutenção existentes</div>
+                            
+                            <!-- DELETE_MAINTENANCE -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_delete_maintenance" value="delete_maintenance">
+                                <label for="perm_delete_maintenance">Excluir Manutenções</label>
+                            </div>
+                            <div class="permission-description">Permite remover registros de manutenção de veículos</div>
+                        </section>
 
-                        <!-- MANAGE_USERS -->
-                        <div class="permission-checkbox">
-                            <input type="checkbox" id="perm_manage_users" value="manage_users">
-                            <label for="perm_manage_users">Gerenciar Usuários</label>
-                        </div>
-                        <div class="permission-description">Permite adicionar, editar e remover usuários do sistema</div>
+                        <section>
+                            <h4 style="color: #2a3d66;">Permissões de Administração</h4>
+                            
+                            <!-- MANAGE_USERS -->
+                            <div class="permission-checkbox">
+                                <input type="checkbox" id="perm_manage_users" value="manage_users">
+                                <label for="perm_manage_users">Gerenciar Usuários</label>
+                            </div>
+                            <div class="permission-description">Permite adicionar, editar e remover usuários do sistema</div>
+                        </section>
                     </div>
                 </div>
 
@@ -480,10 +736,10 @@
         // Variáveis Globais
         let users = [];
         let currentEditingUserId = null;
+        let originPage = localStorage.getItem('adminOriginPage') || 'Agenda.html';
 
         // Elementos do DOM
         const currentUserNameElement = document.getElementById('currentUserName');
-        const backButton = document.getElementById('backButton');
         const logoutButton = document.getElementById('logoutButton');
         const addUserButton = document.getElementById('addUserButton');
         const userTableBody = document.getElementById('userTableBody');
@@ -498,8 +754,8 @@
         const cancelDeleteButton = document.getElementById('cancelDeleteButton');
         const confirmDeleteButton = document.getElementById('confirmDeleteButton');
 
-        // Carregar dados ao iniciar
-        document.addEventListener('DOMContentLoaded', () => {
+        // Evento ao carregar a página - Consolidando todos os event listeners de DOMContentLoaded
+        document.addEventListener('DOMContentLoaded', function() {
             // Mostrar informações do usuário atual
             currentUserNameElement.textContent = `${currentUser.name} (${Auth.ACCESS_LEVELS[currentUser.accessLevel].name})`;
             
@@ -508,22 +764,74 @@
             
             // Configurar eventos
             setupEventListeners();
+            
+            // Menu interativo - efeito de hover
+            const menuItems = document.querySelectorAll('.menu-item');
+            
+            menuItems.forEach(item => {
+                const indicator = item.querySelector('.menu-hover-indicator');
+                
+                // Efeito hover
+                item.addEventListener('mouseenter', function() {
+                    if (!item.classList.contains('active')) {
+                        indicator.style.width = '100%';
+                    }
+                });
+                
+                item.addEventListener('mouseleave', function() {
+                    if (!item.classList.contains('active')) {
+                        indicator.style.width = '0';
+                    }
+                });
+                
+                // Efeito de clique
+                item.addEventListener('click', function() {
+                    // O clique vai seguir o link, não precisamos manipular a classe active aqui
+                });
+            });
         });
 
         // Configurar event listeners
         function setupEventListeners() {
-            backButton.addEventListener('click', () => {
-                window.location.href = 'Agenda.html';
+            console.log('Configurando event listeners');
+            
+            // Configurar botão de adicionar usuário
+            addUserButton.addEventListener('click', function() {
+                console.log('Botão Adicionar Usuário clicado');
+                openUserModal();
+                console.log('Modal de usuário aberto');
             });
             
+            // Botão logout
             logoutButton.addEventListener('click', () => {
                 Auth.logout();
                 window.location.href = 'login.html';
             });
             
-            addUserButton.addEventListener('click', () => {
-                openUserModal();
-            });
+            // Configuração do sistema de notificações
+            if (currentUser.accessLevel === 'ADMIN' || Auth.hasPermission(currentUser, Auth.PERMISSIONS.MANAGE_USERS)) {
+                document.getElementById('notificationSystem').style.display = 'block';
+                
+                // Adicionar listener para o botão de notificação
+                document.getElementById('notificationButton').addEventListener('click', function() {
+                    const dropdown = document.getElementById('notificationDropdown');
+                    dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+                });
+                
+                // Fechar dropdown ao clicar fora
+                document.addEventListener('click', function(event) {
+                    if (!event.target.closest('#notificationSystem')) {
+                        document.getElementById('notificationDropdown').style.display = 'none';
+                    }
+                });
+                
+                // Funcionalidade do botão "Marcar todas como lidas"
+                document.getElementById('markAllReadButton').addEventListener('click', function() {
+                    // Implementar lógica para marcar todas como lidas
+                    alert('Todas as notificações foram marcadas como lidas');
+                    document.getElementById('notificationDropdown').style.display = 'none';
+                });
+            }
             
             closeModalButton.addEventListener('click', () => {
                 userModal.style.display = 'none';
@@ -535,7 +843,10 @@
                 permissionsContainer.style.display = e.target.checked ? 'block' : 'none';
             });
             
-            document.getElementById('accessLevel').addEventListener('change', updatePermissionsFromAccessLevel);
+            document.getElementById('accessLevel').addEventListener('change', function() {
+                updatePermissionsFromAccessLevel();
+                suggestOperationFromAccessLevel();
+            });
             
             // Fechar modais quando clicar fora deles
             window.addEventListener('click', (e) => {
@@ -587,6 +898,7 @@
                     <td>${user.username}</td>
                     <td>${user.email || '-'}</td>
                     <td>${Auth.ACCESS_LEVELS[user.accessLevel].name} <span class="badge ${badgeClass}">${user.accessLevel}</span></td>
+                    <td>${user.operacao || '-'}</td>
                     <td class="user-actions">
                         <button class="button btn-primary edit-user" data-id="${user.id}">
                             <i class="fas fa-edit"></i>
@@ -644,6 +956,9 @@
                     document.getElementById('password').value = user.password;
                     document.getElementById('password').placeholder = '(Manter a mesma senha)';
                     document.getElementById('accessLevel').value = user.accessLevel;
+                    
+                    // Preencher o campo de operação
+                    document.getElementById('operacao').value = user.operacao || '';
                     
                     // Verificar se o usuário tem permissões personalizadas
                     if (user.customPermissions) {
@@ -748,6 +1063,22 @@
             });
         }
 
+        // Sugerir operação baseado no nível de acesso
+        function suggestOperationFromAccessLevel() {
+            const accessLevel = document.getElementById('accessLevel').value;
+            const operacao = document.getElementById('operacao');
+            
+            // Sugerir operação com base no nível de acesso
+            if (accessLevel === 'TECH_MANAGER') {
+                operacao.value = 'BJ Fibra';
+            } else if (accessLevel === 'MAINTENANCE_MANAGER') {
+                operacao.value = 'Megalink';
+            } else if (accessLevel === 'ADMIN') {
+                // Administradores não precisam de operação específica
+                operacao.value = '';
+            }
+        }
+
         // Manipular envio do formulário
         function handleUserFormSubmit(e) {
             e.preventDefault();
@@ -759,6 +1090,7 @@
             const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
             const accessLevel = document.getElementById('accessLevel').value;
+            const operacao = document.getElementById('operacao').value;
             
             // Verificar se o nome de usuário já existe (exceto para o usuário atual em edição)
             const usernameExists = users.some(user => user.username === username && user.id !== userId);
@@ -774,6 +1106,7 @@
                 username,
                 email,
                 accessLevel,
+                operacao,
             };
             
             // Adicionar senha apenas se for um novo usuário ou se a senha foi alterada
