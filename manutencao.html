@@ -419,7 +419,7 @@
     </style>
 </head>
 <body>
-    <header>
+        <header>
         <div style="display: flex; align-items: center;">
             <i class="fas fa-tools" style="font-size: 24px; margin-right: 10px; color: white;"></i>
             <h1 style="font-size: 20px; margin: 0; color: white;">Manutenção de Veículos - FTTH</h1>
@@ -432,7 +432,7 @@
                 <button id="notificationButton" style="background: none; border: none; color: white; position: relative; padding: 5px; cursor: pointer;" title="Notificações">
                     <i class="fas fa-bell"></i>
                     <span id="notificationCount" style="position: absolute; top: -5px; right: -5px; background: #c0392b; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: flex; align-items: center; justify-content: center; font-weight: bold;">0</span>
-                </button>
+                    </button>
                 <div id="notificationDropdown" style="display: none; position: absolute; right: 0; top: 100%; width: 300px; max-height: 400px; overflow-y: auto; background: white; border-radius: 5px; box-shadow: 0 3px 10px rgba(0,0,0,0.2); color: #2a3d66; z-index: 1000;">
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; border-bottom: 1px solid #e0e6f0;">
                         <h3 style="margin: 0; font-size: 16px;">Notificações</h3>
@@ -441,7 +441,7 @@
                     <div id="notificationList" style="padding: 0;">
                         <div style="padding: 20px; text-align: center; color: #666;">
                             Nenhuma notificação
-                        </div>
+                </div>
                     </div>
                 </div>
             </div>
@@ -452,8 +452,8 @@
             <button class="logout-button" id="logoutButton" style="padding: 5px 10px; font-size: 12px; background: #c0392b; color: white; border: none; border-radius: 3px; cursor: pointer;">
                 <i class="fas fa-sign-out-alt"></i> Sair
             </button>
-        </div>
-    </header>
+            </div>
+        </header>
 
     <!-- Menu de navegação intuitivo -->
     <nav class="main-menu">
@@ -484,8 +484,8 @@
 
     <div class="container">
         <div class="content-wrapper">
-            <div class="filtros">
-                <h3>Filtros</h3>
+        <div class="filtros">
+            <h3>Filtros</h3>
                 <div class="dropdown-menu" style="margin-bottom: 15px;">
                     <button id="menuDropdownBtn" class="dropdown-btn" style="background: #e67e22; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; margin-right: 10px;">
                         Menu Avançado <span style="margin-left: 5px;">▼</span>
@@ -499,31 +499,31 @@
                         <a href="#" id="btnConfiguracoes" style="color: #2a3d66; padding: 12px 16px; text-decoration: none; display: block; transition: all 0.2s ease;">Configurações</a>
                     </div>
                 </div>
-                <div class="filtros-flex">
-                    <div>
-                        <label for="filtroPlaca">Placa</label>
-                        <input type="text" id="filtroPlaca" placeholder="Filtre por placa">
-                    </div>
-                    <div>
-                        <label for="filtroModelo">Modelo</label>
-                        <input type="text" id="filtroModelo" placeholder="Filtre por modelo">
-                    </div>
-                    <div>
-                        <label for="filtroCidade">Cidade</label>
-                        <input type="text" id="filtroCidade" placeholder="Filtre por cidade">
-                    </div>
-                    <div>
-                        <label for="filtroTecnico">Técnico</label>
-                        <input type="text" id="filtroTecnico" placeholder="Filtre por técnico">
-                    </div>
-                    <div>
-                        <button id="btnLimparFiltros">Limpar Filtros</button>
-                    </div>
+            <div class="filtros-flex">
+                <div>
+                    <label for="filtroPlaca">Placa</label>
+                    <input type="text" id="filtroPlaca" placeholder="Filtre por placa">
+                </div>
+                <div>
+                    <label for="filtroModelo">Modelo</label>
+                    <input type="text" id="filtroModelo" placeholder="Filtre por modelo">
+                </div>
+                <div>
+                    <label for="filtroCidade">Cidade</label>
+                    <input type="text" id="filtroCidade" placeholder="Filtre por cidade">
+                </div>
+                <div>
+                    <label for="filtroTecnico">Técnico</label>
+                    <input type="text" id="filtroTecnico" placeholder="Filtre por técnico">
+                </div>
+                <div>
+                    <button id="btnLimparFiltros">Limpar Filtros</button>
                 </div>
             </div>
+        </div>
 
-            <div class="veiculos-lista" id="veiculosLista">
-                <!-- Os cards de veículos serão adicionados aqui via JavaScript -->
+        <div class="veiculos-lista" id="veiculosLista">
+            <!-- Os cards de veículos serão adicionados aqui via JavaScript -->
             </div>
         </div>
     </div>
@@ -1725,4 +1725,4 @@
         });
     </script>
 </body>
-</html>
+</html> 

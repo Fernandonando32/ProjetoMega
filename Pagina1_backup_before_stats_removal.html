@@ -618,122 +618,6 @@
         #alertaTrocaOleoNotificacao .alerta-header {
             background-color: #f39c12;
         }
-        
-        /* Estilo para o balão de estatísticas */
-        .estatisticas-tooltip {
-            display: none;
-            position: absolute;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-            padding: 20px;
-            z-index: 1050;
-            min-width: 400px;
-            max-width: 500px;
-            max-height: 80vh;
-            overflow-y: auto;
-            right: 0;
-            top: 100%;
-            margin-top: 10px;
-            border: 1px solid #eee;
-            animation: tooltip-fade 0.3s ease-out;
-        }
-
-        @keyframes tooltip-fade {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .estatisticas-tooltip h3 {
-            margin: 0 0 15px 0;
-            color: var(--primary-color);
-            font-size: 1.3em;
-            text-align: center;
-            padding-bottom: 10px;
-            border-bottom: 2px solid var(--secondary-color);
-        }
-
-        .estatisticas-tooltip .estatistica-item {
-            display: flex;
-            flex-wrap: wrap;
-            padding: 12px 15px;
-            border-bottom: 1px solid #eee;
-            margin-bottom: 5px;
-            border-radius: 8px;
-            transition: all 0.2s;
-            cursor: pointer;
-        }
-
-        .estatisticas-tooltip .estatistica-item:hover {
-            background: var(--secondary-color);
-            transform: translateY(-2px);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        }
-
-        .estatisticas-tooltip .estatistica-item:last-child {
-            border-bottom: none;
-            margin-bottom: 0;
-        }
-
-        .estatisticas-tooltip .estatistica-label {
-            color: var(--primary-color);
-            font-weight: bold;
-            margin-right: 15px;
-        }
-
-        .estatisticas-tooltip .estatistica-valor {
-            color: #444;
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-        
-        /* Específico para o botão de estatísticas */
-        .btn-estatisticas {
-            background: var(--primary-color);
-        }
-        
-        .btn-estatisticas:hover {
-            background: #1a2540;
-        }
-        
-        /* Estilo para a mensagem de "nenhum resultado" no tooltip */
-        .sem-resultados {
-            padding: 20px;
-            text-align: center;
-            color: var(--light-text);
-            font-style: italic;
-        }
-        
-        /* Estilo para o botão de ação */
-        .btn-acao {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 15px;
-            background: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        
-        .btn-acao:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-        }
-        
-        /* Estilo para a seção "Resumo Geral" */
-        .resumo-estatisticas {
-            background-color: var(--secondary-color);
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        }
     </style>
 </head>
 <body>
@@ -826,6 +710,14 @@
                 <div style="color:#2a3d66; margin-top:4px;">Veículos por Operação</div>
             </div>
         </div>
+        
+        <!-- Botão de Mapa -->
+        <div style="position: relative; margin: 20px 0 25px 0; display: flex; justify-content: flex-end;">
+            <button id="verMapa" class="btn-acao btn-mapa">
+                <span>🗺️</span> Ver Mapa
+            </button>
+        </div>
+        
         <!-- Novo painel de estatísticas por cidade -->
         <div id="painelEstatisticasCidade" style="position: relative; margin: 20px 0 25px 0;">
             <div style="display: flex; gap: 15px; justify-content: flex-end;">
@@ -3963,11 +3855,6 @@
             }
             
             const estatisticas = {};
-            let totalTecnicos = new Set();
-            let totalAuxiliares = new Set();
-            let totalVeiculos = new Set();
-            let totalMegalink = 0;
-            let totalBJFibra = 0;
             
             // Coletar dados diretamente dos registros em vez da tabela
             registrosFiltrados.forEach(reg => {
@@ -3979,39 +3866,22 @@
                         total: 0,
                         tecnicos: new Set(),
                         auxiliares: new Set(),
-                        veiculos: new Set(),
-                        megalink: 0,
-                        bjfibra: 0
+                        veiculos: new Set()
                     };
                 }
                 
                 estatisticas[cidade].total++;
                 
                 if (reg.tecnico) {
-                    const tecnicoNome = reg.tecnico.toLowerCase().trim();
-                    estatisticas[cidade].tecnicos.add(tecnicoNome);
-                    totalTecnicos.add(tecnicoNome);
+                    estatisticas[cidade].tecnicos.add(reg.tecnico.toLowerCase().trim());
                 }
                 
                 if (reg.auxiliar && reg.auxiliar.trim()) {
-                    const auxiliarNome = reg.auxiliar.toLowerCase().trim();
-                    estatisticas[cidade].auxiliares.add(auxiliarNome);
-                    totalAuxiliares.add(auxiliarNome);
+                    estatisticas[cidade].auxiliares.add(reg.auxiliar.toLowerCase().trim());
                 }
                 
                 if (reg.placa && reg.placa.trim()) {
-                    const placa = reg.placa.toUpperCase().trim();
-                    estatisticas[cidade].veiculos.add(placa);
-                    totalVeiculos.add(placa);
-                }
-                
-                // Contagem por operação
-                if (reg.operacao === 'Megalink') {
-                    estatisticas[cidade].megalink++;
-                    totalMegalink++;
-                } else if (reg.operacao === 'BJ Fibra') {
-                    estatisticas[cidade].bjfibra++;
-                    totalBJFibra++;
+                    estatisticas[cidade].veiculos.add(reg.placa.toUpperCase().trim());
                 }
             });
 
@@ -4019,105 +3889,44 @@
             const conteudo = document.getElementById('estatisticasConteudo');
             conteudo.innerHTML = '';
 
-            // Criar resumo geral no início
-            const resumoGeral = document.createElement('div');
-            resumoGeral.className = 'resumo-estatisticas';
+            // Adicionar total no início
+            const totalCidades = Object.keys(estatisticas).length;
+            const totalItem = document.createElement('div');
+            totalItem.style.textAlign = 'center';
+            totalItem.style.marginBottom = '15px';
+            totalItem.style.padding = '10px';
+            totalItem.style.background = '#eaf0fa';
+            totalItem.style.borderRadius = '5px';
+            totalItem.style.fontWeight = 'bold';
             
-            resumoGeral.innerHTML = `
-                <div style="text-align: center; font-weight: bold; font-size: 1.1em; margin-bottom: 10px; color: var(--primary-color);">Resumo Geral</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: var(--primary-color);">${Object.keys(estatisticas).length}</div>
-                        <div>Cidades</div>
-                    </div>
-                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: var(--primary-color);">${totalTecnicos.size}</div>
-                        <div>Técnicos</div>
-                    </div>
-                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: var(--primary-color);">${totalVeiculos.size}</div>
-                        <div>Veículos</div>
-                    </div>
-                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                        <div style="font-size: 2em; font-weight: bold; color: var(--primary-color);">${totalAuxiliares.size}</div>
-                        <div>Auxiliares</div>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 15px; display: flex; justify-content: space-around; text-align: center;">
-                    <div>
-                        <div style="color: #2980b9; font-weight: bold;">${totalMegalink}</div>
-                        <div style="font-size: 0.9em;">Megalink</div>
-                    </div>
-                    <div>
-                        <div style="color: #e67e22; font-weight: bold;">${totalBJFibra}</div>
-                        <div style="font-size: 0.9em;">BJ Fibra</div>
-                    </div>
-                </div>
-            `;
+            // Texto do total de cidades
+            let textoTotal = `Total de ${totalCidades} cidades`;
             
-            conteudo.appendChild(resumoGeral);
+            totalItem.innerHTML = textoTotal;
+            conteudo.appendChild(totalItem);
             
-            // Adicionar título para a seção de cidades
-            const tituloCidades = document.createElement('div');
-            tituloCidades.style.fontWeight = 'bold';
-            tituloCidades.style.margin = '15px 0 10px 0';
-            tituloCidades.style.padding = '8px 0';
-            tituloCidades.style.borderBottom = '2px solid var(--secondary-color)';
-            tituloCidades.innerHTML = 'Detalhes por Cidade';
-            conteudo.appendChild(tituloCidades);
-            
-            // Adicionar estatísticas por cidade
             Object.entries(estatisticas)
                 .sort((a, b) => a[0].localeCompare(b[0]))
                 .forEach(([cidade, dados]) => {
                     const item = document.createElement('div');
                     item.className = 'estatistica-item';
                     
-                    // Botão para expandir/colapsar detalhes
-                    const detalhesId = `detalhes-${cidade.replace(/\s+/g, '-').toLowerCase()}`;
-                    
-                    // Estrutura principal
+                    // Formatação mais estruturada para as informações
                     item.innerHTML = `
-                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                            <span class="estatistica-label">${cidade}</span>
-                            <span class="estatistica-valor">
-                                <span title="Técnicos" style="margin-right: 8px; color: #2a3d66;">
-                                    👤 <b>${dados.tecnicos.size}</b>
-                                </span>
-                                <span title="Veículos" style="margin-right: 8px; color: #e67e22;">
-                                    🚗 <b>${dados.veiculos.size}</b>
-                                </span>
-                                <span title="Auxiliares" style="color: #27ae60;">
-                                    👷 <b>${dados.auxiliares.size}</b>
-                                </span>
+                        <span class="estatistica-label">${cidade}</span>
+                        <span class="estatistica-valor">
+                            <span style="display: inline-block; margin-right: 8px; color: #2a3d66;">
+                                <span style="font-weight: bold;">${dados.tecnicos.size}</span> técnicos
                             </span>
-                        </div>
-                        <div id="${detalhesId}" style="display: none; width: 100%; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #eee; font-size: 0.9em;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                                <span>Operações:</span>
-                                <span>
-                                    <span style="color: #2980b9; margin-right: 8px;">Megalink: <b>${dados.megalink}</b></span>
-                                    <span style="color: #e67e22;">BJ Fibra: <b>${dados.bjfibra}</b></span>
-                                </span>
-                            </div>
-                            <div style="text-align: right; margin-top: 5px;">
-                                <span style="color: var(--light-text);">Total de registros: ${dados.total}</span>
-                            </div>
-                        </div>
+                            <span style="display: inline-block; margin-right: 8px; color: #27ae60;">
+                                <span style="font-weight: bold;">${dados.auxiliares.size}</span> auxiliares
+                            </span>
+                            <span style="display: inline-block; color: #e67e22;">
+                                <span style="font-weight: bold;">${dados.veiculos.size}</span> veículos
+                            </span>
+                        </span>
                     `;
-                    
                     conteudo.appendChild(item);
-                    
-                    // Adicionar funcionalidade de expansão
-                    item.addEventListener('click', function() {
-                        const detalhes = document.getElementById(detalhesId);
-                        if (detalhes.style.display === 'none') {
-                            detalhes.style.display = 'block';
-                        } else {
-                            detalhes.style.display = 'none';
-                        }
-                    });
                 });
 
             // Mostrar tooltip
