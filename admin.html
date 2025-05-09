@@ -422,6 +422,46 @@
             padding-bottom: 8px;
             border-bottom: 1px solid #e0e6f0;
         }
+
+        .alert-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .list-group-item {
+            padding: 10px;
+            border: 1px solid #e0e6f0;
+            margin-bottom: 5px;
+            border-radius: 4px;
+        }
+
+        .list-group-item-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .list-group-item-danger {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        #syncModal.modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
     </style>
 </head>
 <body>
@@ -758,9 +798,7 @@
             <div class="modal-body">
                 <div id="syncStatus">
                     <p>Verificando usuários locais...</p>
-                    <div class="progress mb-3" style="display: none; height: 8px; background: #eee; border-radius: 4px; margin-bottom: 15px;">
-                        <div style="height: 100%; width: 100%; background-color: #2a3d66; border-radius: 4px;"></div>
-                    </div>
+                    <div class="progress-bar" style="height: 10px; width: 100%; background-color: #2a3d66; border-radius: 5px; margin-bottom: 15px;"></div>
                 </div>
                 <div id="syncResults" style="display: none;">
                     <div class="alert" role="alert" style="padding: 10px; border-radius: 4px; margin-bottom: 15px;"></div>
@@ -1294,7 +1332,7 @@
             // Reset modal state
             document.getElementById('syncStatus').style.display = 'block';
             document.getElementById('syncResults').style.display = 'none';
-            document.querySelector('#syncStatus .progress').style.display = 'none';
+            document.querySelector('#syncStatus .progress-bar').style.display = 'none';
             document.getElementById('btnStartSync').style.display = 'none';
             
             // Verificar usuários locais
@@ -1339,61 +1377,86 @@
         document.getElementById('btnStartSync').addEventListener('click', async function() {
             try {
                 // Atualizar UI para mostrar progresso
-                document.getElementById('btnStartSync').style.display = 'none';
-                document.getElementById('syncStatus').innerHTML = `
-                    <p>Sincronizando usuários locais com o servidor...</p>
-                `;
-                document.querySelector('#syncStatus .progress').style.display = 'block';
+                const btnStartSync = document.getElementById('btnStartSync');
+                if (btnStartSync) {
+                    btnStartSync.style.display = 'none';
+                }
+                
+                const syncStatus = document.getElementById('syncStatus');
+                if (syncStatus) {
+                    syncStatus.innerHTML = `
+                        <p>Sincronizando usuários locais com o servidor...</p>
+                        <div class="progress-bar" style="height: 10px; width: 100%; background-color: #2a3d66; border-radius: 5px; margin-bottom: 15px;"></div>
+                    `;
+                }
                 
                 // Executar sincronização
                 const result = await Auth.syncLocalUsers();
                 
                 // Mostrar resultados
-                document.getElementById('syncStatus').style.display = 'none';
-                document.getElementById('syncResults').style.display = 'block';
-                
-                const alertElement = document.querySelector('#syncResults .alert');
-                if (result.success) {
-                    alertElement.classList.add('alert-success');
-                    alertElement.classList.remove('alert-danger');
-                    alertElement.textContent = result.message;
-                } else {
-                    alertElement.classList.add('alert-danger');
-                    alertElement.classList.remove('alert-success');
-                    alertElement.textContent = `Erro: ${result.message || 'Falha na sincronização'}`;
+                const syncStatusAfter = document.getElementById('syncStatus');
+                if (syncStatusAfter) {
+                    syncStatusAfter.style.display = 'none';
                 }
                 
-                // Mostrar detalhes se houver
-                const detailsList = document.querySelector('#syncResults .sync-details ul');
-                detailsList.innerHTML = '';
-                
-                if (result.details && result.details.length > 0) {
-                    result.details.forEach(item => {
-                        const li = document.createElement('li');
-                        li.className = `list-group-item ${item.success ? 'list-group-item-success' : 'list-group-item-danger'}`;
-                        li.innerHTML = `
-                            <strong>${item.username}</strong>: 
-                            ${item.success 
-                                ? `Sincronizado com sucesso (ID: ${item.serverId})` 
-                                : `Falha: ${item.error || 'Erro desconhecido'}`}
-                        `;
-                        detailsList.appendChild(li);
-                    });
-                } else {
-                    detailsList.innerHTML = '<li class="list-group-item">Nenhum detalhe disponível</li>';
+                const syncResults = document.getElementById('syncResults');
+                if (syncResults) {
+                    syncResults.style.display = 'block';
+                    
+                    const alertElement = syncResults.querySelector('.alert');
+                    if (alertElement) {
+                        if (result.success) {
+                            alertElement.className = 'alert alert-success';
+                            alertElement.textContent = result.message;
+                        } else {
+                            alertElement.className = 'alert alert-danger';
+                            alertElement.textContent = `Erro: ${result.message || 'Falha na sincronização'}`;
+                        }
+                        
+                        // Mostrar detalhes se houver
+                        const detailsList = syncResults.querySelector('.sync-details ul');
+                        if (detailsList) {
+                            detailsList.innerHTML = '';
+                            
+                            if (result.details && result.details.length > 0) {
+                                result.details.forEach(item => {
+                                    const li = document.createElement('li');
+                                    li.className = `list-group-item ${item.success ? 'list-group-item-success' : 'list-group-item-danger'}`;
+                                    li.innerHTML = `
+                                        <strong>${item.username}</strong>: 
+                                        ${item.success 
+                                            ? `Sincronizado com sucesso (ID: ${item.serverId})` 
+                                            : `Falha: ${item.error || 'Erro desconhecido'}`}
+                                    `;
+                                    detailsList.appendChild(li);
+                                });
+                            } else {
+                                detailsList.innerHTML = '<li class="list-group-item">Nenhum detalhe disponível</li>';
+                            }
+                        }
+                    }
                 }
                 
                 // Atualizar contagem de usuários locais
                 await checkForLocalUsers();
             } catch (error) {
                 console.error('Erro ao sincronizar:', error);
-                document.getElementById('syncStatus').style.display = 'none';
-                document.getElementById('syncResults').style.display = 'block';
                 
-                const alertElement = document.querySelector('#syncResults .alert');
-                alertElement.classList.add('alert-danger');
-                alertElement.classList.remove('alert-success');
-                alertElement.textContent = `Erro: ${error.message || 'Erro desconhecido durante a sincronização'}`;
+                const syncStatusError = document.getElementById('syncStatus');
+                if (syncStatusError) {
+                    syncStatusError.style.display = 'none';
+                }
+                
+                const syncResultsError = document.getElementById('syncResults');
+                if (syncResultsError) {
+                    syncResultsError.style.display = 'block';
+                    
+                    const alertElement = syncResultsError.querySelector('.alert');
+                    if (alertElement) {
+                        alertElement.className = 'alert alert-danger';
+                        alertElement.textContent = `Erro: ${error.message || 'Erro desconhecido durante a sincronização'}`;
+                    }
+                }
             }
         });
     </script>
