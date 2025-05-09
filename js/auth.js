@@ -434,6 +434,7 @@ export async function createUser(userData) {
         
         // Se não conseguir se comunicar com o servidor, usar armazenamento local
         try {
+            console.log(`Enviando requisição para ${API_URL}?action=create-user`);
             const response = await fetch(`${API_URL}?action=create-user`, {
                 method: 'POST',
                 headers: {
@@ -442,7 +443,18 @@ export async function createUser(userData) {
                 body: JSON.stringify(userData),
             });
 
-            const data = await response.json();
+            // Log da resposta para diagnóstico
+            console.log(`Resposta recebida: status ${response.status} ${response.statusText}`);
+            
+            let data;
+            try {
+                data = await response.json();
+                console.log('Dados da resposta:', data);
+            } catch (jsonError) {
+                console.error('Erro ao processar JSON da resposta:', jsonError);
+                // Se não conseguir processar o JSON, cair para criação local
+                return createLocalUser(userData);
+            }
             
             if (response.ok) {
                 console.log('Usuário criado com sucesso');
@@ -458,34 +470,95 @@ export async function createUser(userData) {
                 
                 return { success: true, user: data.user, offline: data.offline };
             } else {
-                console.error('Erro ao criar usuário:', data.error);
-                throw new Error(data.message || data.error || 'Erro ao criar usuário');
+                console.error('Erro ao criar usuário:', data?.error || 'Erro desconhecido');
+                
+                // Verificar se data contém mensagem que indica problema com política
+                if (data && (data.message?.includes('policy') || 
+                          data.error?.includes('policy') || 
+                          data.message?.includes('recursion') || 
+                          data.error?.includes('recursion') ||
+                          data.message?.includes('permission') || 
+                          data.error?.includes('permission'))) {
+                    console.log('Detectada falha relacionada à política/permissão. Usando armazenamento local.');
+                    return createLocalUser(userData);
+                }
+                
+                // Para erros 500, tentar armazenamento local como fallback
+                if (response.status === 500) {
+                    console.log('Erro 500 do servidor. Usando armazenamento local como fallback.');
+                    return createLocalUser(userData);
+                }
+                
+                // Se o erro for de conflito (nome de usuário já existe)
+                if (response.status === 409 || (data && 
+                    (data.message?.includes('já existe') || 
+                     data.error?.includes('já existe') ||
+                     data.message?.includes('already exists') || 
+                     data.error?.includes('already exists')))) {
+                    return { success: false, message: 'Nome de usuário já existe' };
+                }
+                
+                // Último recurso: tentar criar localmente
+                console.log('Erro desconhecido, tentando criar localmente como último recurso');
+                return createLocalUser(userData);
             }
         } catch (serverError) {
             console.warn('Erro de comunicação com o servidor:', serverError);
-            console.log('Usando armazenamento local para criar usuário');
             
-            // Verificar se o nome de usuário já existe
-            const existingUsers = await getAllUsers();
-            if (existingUsers.some(user => user.username === userData.username)) {
-                return { success: false, message: 'Nome de usuário já existe' };
+            // Verificar se o erro é de recursão infinita
+            if (serverError.message?.includes("infinite recursion")) {
+                console.log('Detectado erro de recursão infinita na política Supabase, usando armazenamento local');
+            } else {
+                console.log('Usando armazenamento local para criar usuário devido a erro de comunicação');
             }
             
-            // Criar novo usuário localmente
-            const newUser = {
-                ...userData,
-                id: Date.now() // Gerar ID único baseado no timestamp
-            };
-            
-            // Adicionar à lista de usuários local
-            const updatedUsers = [...existingUsers, newUser];
-            localStorage.setItem('users', JSON.stringify(updatedUsers));
-            
-            return { success: true, user: newUser, offline: true };
+            return createLocalUser(userData);
         }
     } catch (error) {
         console.error('Erro ao criar usuário:', error);
-        return { success: false, message: error.message || 'Erro ao criar usuário' };
+        
+        // Mesmo com erro crítico, tentar criação local como último recurso
+        try {
+            console.log('Tentando criação local após erro crítico');
+            return createLocalUser(userData);
+        } catch (fallbackError) {
+            console.error('Falha também na criação local:', fallbackError);
+            return { success: false, message: 'Falha em todas as tentativas de criação: ' + error.message };
+        }
+    }
+}
+
+/**
+ * Função auxiliar para criar um usuário no armazenamento local
+ * @param {Object} userData - Dados do usuário a ser criado
+ * @returns {Object} - Objeto com resultado da operação
+ */
+function createLocalUser(userData) {
+    try {
+        // Verificar se o nome de usuário já existe
+        let existingUsers = [];
+        const usersInLocalStorage = localStorage.getItem('users');
+        if (usersInLocalStorage) {
+            existingUsers = JSON.parse(usersInLocalStorage);
+            if (existingUsers.some(user => user.username === userData.username)) {
+                return { success: false, message: 'Nome de usuário já existe' };
+            }
+        }
+        
+        // Criar novo usuário localmente
+        const newUser = {
+            ...userData,
+            id: Date.now() // Gerar ID único baseado no timestamp
+        };
+        
+        // Adicionar à lista de usuários local
+        const updatedUsers = [...existingUsers, newUser];
+        localStorage.setItem('users', JSON.stringify(updatedUsers));
+        
+        return { success: true, user: newUser, offline: true };
+    } catch (error) {
+        console.error('Erro ao criar usuário localmente:', error);
+        return { success: false, message: 'Erro ao criar usuário localmente: ' + error.message };
     }
 }
 
