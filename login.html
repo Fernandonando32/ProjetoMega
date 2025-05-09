@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Sistema de Gestão FTTH</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script src="users.js" type="module"></script>
     <style>
         :root {
             --primary-color: #2a3d66;
@@ -165,21 +164,19 @@
     </div>
 
     <script type="module">
-        // Inicializar usuários padrão se necessário
-        Auth.initializeUsers();
-
+        import LoginAPI from './api/login.js';
+        
         // Verificar se já está autenticado
         async function checkExistingAuth() {
-            if (await Auth.isAuthenticated()) {
-                redirectLoggedInUser();
+            const authStatus = await LoginAPI.checkAuth();
+            if (authStatus.authenticated) {
+                redirectLoggedInUser(authStatus.data.user);
             }
         }
 
         // Redirecionar usuário com base nas permissões
-        function redirectLoggedInUser() {
-            const currentUser = Auth.getCurrentUser();
-            
-            if (Auth.hasPermission(currentUser, Auth.PERMISSIONS.MANAGE_USERS)) {
+        function redirectLoggedInUser(user) {
+            if (LoginAPI.hasPermission(user, 'manage_users')) {
                 window.location.href = 'admin.html';
             } else {
                 window.location.href = 'Pagina1 (1).html';
@@ -201,11 +198,16 @@
             loginError.style.display = 'none';
             
             try {
-                const success = await Auth.login(username, password);
+                const response = await LoginAPI.authenticate({
+                    body: { username, password }
+                });
                 
-                if (success) {
-                    redirectLoggedInUser();
+                if (response.status === 200) {
+                    // Armazenar dados do usuário na sessão
+                    sessionStorage.setItem('currentUser', JSON.stringify(response.data.user));
+                    redirectLoggedInUser(response.data.user);
                 } else {
+                    loginError.textContent = response.error || 'Usuário ou senha incorretos';
                     loginError.style.display = 'block';
                     loginButton.disabled = false;
                     loginButton.textContent = 'Entrar';
