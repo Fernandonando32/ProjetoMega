@@ -1320,4 +1320,251 @@ export async function checkLocalUsersCount() {
         console.error('Erro ao verificar usuários locais:', error);
         return { count: 0, hasLocalUsers: false, error: error.message };
     }
+}
+
+/**
+ * Realiza um diagnóstico completo da conexão com o banco de dados
+ * @returns {Promise<Object>} - Resultados detalhados do diagnóstico
+ */
+export async function runDatabaseDiagnostic() {
+    try {
+        console.log('Iniciando diagnóstico completo do banco de dados...');
+        
+        // Resultados do diagnóstico
+        const results = {
+            timestamp: new Date().toISOString(),
+            tests: [],
+            serverReachable: false,
+            apiWorking: false,
+            databaseConnected: false,
+            tablesExist: false,
+            permissionsOk: false,
+            canCreateUser: false,
+            environment: {
+                browser: navigator.userAgent,
+                platform: navigator.platform,
+                isOnline: navigator.onLine
+            }
+        };
+        
+        // Teste 1: Verificar se o servidor API está acessível
+        try {
+            console.log('Teste 1: Verificando acesso ao servidor API...');
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            
+            const response = await fetch(`${API_URL}?action=diagnose-db`, {
+                method: 'GET',
+                headers: { 'Cache-Control': 'no-cache' },
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            results.tests.push({
+                name: 'API Accessibility',
+                success: response.ok,
+                status: response.status,
+                statusText: response.statusText
+            });
+            
+            results.serverReachable = true;
+            results.apiWorking = response.ok;
+            
+            if (response.ok) {
+                try {
+                    const data = await response.json();
+                    results.tests.push({
+                        name: 'API Response',
+                        success: true,
+                        data: data.diagnostic || data
+                    });
+                    
+                    // Analisar informações do banco a partir da resposta do diagnóstico
+                    if (data.diagnostic) {
+                        results.databaseConnected = data.diagnostic.supabaseConnection === true;
+                        results.tablesExist = data.diagnostic.userTableExists === true;
+                        
+                        // Adicionar informações detalhadas
+                        results.dbDetails = {
+                            connection: data.diagnostic.supabaseConnection,
+                            tableExists: data.diagnostic.userTableExists,
+                            userCount: data.diagnostic.userCount,
+                            fields: data.diagnostic.userTableFields || [],
+                            errors: data.diagnostic.errors || []
+                        };
+                    }
+                } catch (jsonError) {
+                    results.tests.push({
+                        name: 'API Response Parsing',
+                        success: false,
+                        error: jsonError.message
+                    });
+                }
+            }
+        } catch (apiError) {
+            results.tests.push({
+                name: 'API Accessibility',
+                success: false,
+                error: apiError.message,
+                isTimeout: apiError.name === 'AbortError'
+            });
+        }
+        
+        // Teste 2: Tentativa de criar um usuário de teste (se API estiver acessível)
+        if (results.apiWorking) {
+            try {
+                console.log('Teste 2: Tentando criar usuário de teste...');
+                // Gerar nome de usuário e senha exclusivos para este teste
+                const testTimestamp = Date.now();
+                const testUser = {
+                    username: `test_${testTimestamp}`,
+                    password: `test_${testTimestamp}`,
+                    name: 'User Test',
+                    email: `test_${testTimestamp}@test.com`,
+                    accessLevel: 'VIEWER',
+                    isTestUser: true
+                };
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 8000);
+                
+                const response = await fetch(`${API_URL}?action=create-user`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(testUser),
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+                
+                results.tests.push({
+                    name: 'User Creation',
+                    success: response.ok,
+                    status: response.status,
+                    statusText: response.statusText
+                });
+                
+                if (response.ok) {
+                    results.canCreateUser = true;
+                    
+                    try {
+                        const data = await response.json();
+                        results.tests.push({
+                            name: 'User Creation Response',
+                            success: true,
+                            data: data
+                        });
+                        
+                        // Verificar se o usuário foi realmente criado no banco ou localmente
+                        if (data.offline) {
+                            results.tests.push({
+                                name: 'Database Storage',
+                                success: false,
+                                note: 'Usuário criado apenas localmente (offline). Não foi armazenado no banco.'
+                            });
+                        } else {
+                            results.tests.push({
+                                name: 'Database Storage',
+                                success: true,
+                                note: 'Usuário armazenado no banco de dados com sucesso.'
+                            });
+                        }
+                    } catch (jsonError) {
+                        results.tests.push({
+                            name: 'User Creation Response Parsing',
+                            success: false,
+                            error: jsonError.message
+                        });
+                    }
+                } else {
+                    // Analisar o erro
+                    try {
+                        const errorData = await response.json();
+                        results.tests.push({
+                            name: 'User Creation Error Details',
+                            errorData: errorData
+                        });
+                        
+                        // Verificar padrões comuns em mensagens de erro
+                        const errorMsg = errorData.message || errorData.error || '';
+                        if (errorMsg.includes('permission') || errorMsg.includes('policy')) {
+                            results.permissionsOk = false;
+                            results.permissionError = errorMsg;
+                        }
+                        if (errorMsg.includes('recursion')) {
+                            results.infiniteRecursion = true;
+                            results.recursionError = errorMsg;
+                        }
+                    } catch (jsonError) {
+                        results.tests.push({
+                            name: 'Error Parsing',
+                            success: false,
+                            error: jsonError.message
+                        });
+                    }
+                }
+            } catch (createError) {
+                results.tests.push({
+                    name: 'User Creation',
+                    success: false,
+                    error: createError.message,
+                    isTimeout: createError.name === 'AbortError'
+                });
+            }
+        }
+        
+        // Teste 3: Verificar armazenamento local
+        try {
+            console.log('Teste 3: Verificando armazenamento local...');
+            const testKey = `test_storage_${Date.now()}`;
+            localStorage.setItem(testKey, 'test');
+            const testValue = localStorage.getItem(testKey);
+            localStorage.removeItem(testKey);
+            
+            results.tests.push({
+                name: 'Local Storage',
+                success: testValue === 'test',
+                value: testValue
+            });
+            
+            results.localStorage = {
+                working: testValue === 'test',
+                usersPresent: !!localStorage.getItem('users')
+            };
+            
+            if (localStorage.getItem('users')) {
+                try {
+                    const localUsers = JSON.parse(localStorage.getItem('users'));
+                    results.localStorage.userCount = localUsers.length;
+                    results.localStorage.localOnlyCount = localUsers.filter(u => String(u.id).length >= 13).length;
+                } catch (e) {
+                    results.localStorage.parseError = e.message;
+                }
+            }
+        } catch (storageError) {
+            results.tests.push({
+                name: 'Local Storage',
+                success: false,
+                error: storageError.message
+            });
+            
+            results.localStorage = {
+                working: false,
+                error: storageError.message
+            };
+        }
+        
+        console.log('Diagnóstico completo:', results);
+        return results;
+    } catch (error) {
+        console.error('Erro no diagnóstico:', error);
+        return {
+            success: false,
+            error: error.message,
+            timestamp: new Date().toISOString()
+        };
+    }
 } 
