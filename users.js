@@ -1,3 +1,12 @@
+// Importação da biblioteca Supabase
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+import SUPABASE_CONFIG from './config.js';
+
+// Configuração do cliente Supabase
+const supabaseUrl = SUPABASE_CONFIG.url;
+const supabaseKey = SUPABASE_CONFIG.key;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 // Definição das permissões
 const PERMISSIONS = {
     // Permissões da Agenda
@@ -143,7 +152,7 @@ const ACCESS_LEVELS = {
     }
 };
 
-// Usuários padrão do sistema
+// Usuários padrão do sistema (serão usados apenas para inicialização do banco)
 const DEFAULT_USERS = [
     {
         id: 1,
@@ -201,192 +210,304 @@ function hasPermission(user, permission) {
 }
 
 // Função para verificar se o usuário está autenticado
-function isAuthenticated() {
-    const user = JSON.parse(localStorage.getItem('currentUser'));
-    return user !== null;
+async function isAuthenticated() {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session !== null;
 }
 
 // Função para fazer login
-function login(username, password) {
-    const users = JSON.parse(localStorage.getItem('users')) || DEFAULT_USERS;
-    const user = users.find(u => u.username === username && u.password === password);
-    
-    if (user) {
-        // Remover a senha antes de armazenar
-        const { password, ...userWithoutPassword } = user;
-        localStorage.setItem('currentUser', JSON.stringify(userWithoutPassword));
-        return true;
+async function login(username, password) {
+    try {
+        // Primeiro, buscar o usuário pelo nome de usuário
+        const { data: users, error: userError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('username', username)
+            .single();
+        
+        if (userError || !users) {
+            console.error('Erro ao buscar usuário:', userError);
+            return false;
+        }
+        
+        // Verificar a senha (em produção, deve usar bcrypt ou similar)
+        if (users.password === password) {
+            // Autenticar com Supabase Auth (opcional, se estiver usando)
+            // const { data, error } = await supabase.auth.signInWithPassword({
+            //     email: users.email,
+            //     password: password
+            // });
+            
+            // if (error) {
+            //     console.error('Erro de autenticação:', error);
+            //     return false;
+            // }
+            
+            // Remover a senha antes de armazenar
+            const { password: _, ...userWithoutPassword } = users;
+            sessionStorage.setItem('currentUser', JSON.stringify(userWithoutPassword));
+            return true;
+        }
+        
+        return false;
+    } catch (error) {
+        console.error('Erro no login:', error);
+        return false;
     }
-    return false;
 }
 
 // Função para fazer logout
-function logout() {
-    localStorage.removeItem('currentUser');
+async function logout() {
+    // Limpar a sessão do navegador
+    sessionStorage.removeItem('currentUser');
+    
+    // Fazer logout no Supabase Auth (se estiver usando)
+    // await supabase.auth.signOut();
 }
 
 // Função para obter o usuário atual
 function getCurrentUser() {
-    return JSON.parse(localStorage.getItem('currentUser'));
+    return JSON.parse(sessionStorage.getItem('currentUser'));
 }
 
-// Função para inicializar os usuários no localStorage
-function initializeUsers() {
-    if (!localStorage.getItem('users')) {
-        localStorage.setItem('users', JSON.stringify(DEFAULT_USERS));
+// Função para inicializar os usuários no banco de dados
+async function initializeUsers() {
+    try {
+        // Verificar se já existem usuários no banco
+        const { data: existingUsers, error: checkError } = await supabase
+            .from('users')
+            .select('id')
+            .limit(1);
+        
+        if (checkError) {
+            console.error('Erro ao verificar usuários existentes:', checkError);
+            return;
+        }
+        
+        // Se não houver usuários, adicionar os padrões
+        if (!existingUsers || existingUsers.length === 0) {
+            const { error: insertError } = await supabase
+                .from('users')
+                .insert(DEFAULT_USERS);
+            
+            if (insertError) {
+                console.error('Erro ao inserir usuários padrão:', insertError);
+            } else {
+                console.log('Usuários padrão inicializados com sucesso');
+            }
+        }
+    } catch (error) {
+        console.error('Erro ao inicializar usuários:', error);
     }
 }
 
 // Função para criar um novo usuário
-function createUser(userData) {
-    const users = JSON.parse(localStorage.getItem('users')) || DEFAULT_USERS;
-    
-    // Verificar se o nome de usuário já existe
-    if (users.some(user => user.username === userData.username)) {
-        return { success: false, message: 'Nome de usuário já existe' };
+async function createUser(userData) {
+    try {
+        // Verificar se o nome de usuário já existe
+        const { data: existingUser, error: checkError } = await supabase
+            .from('users')
+            .select('id')
+            .eq('username', userData.username)
+            .single();
+        
+        if (checkError && checkError.code !== 'PGRST116') {
+            console.error('Erro ao verificar usuário existente:', checkError);
+            return { success: false, message: 'Erro ao verificar usuário existente' };
+        }
+        
+        if (existingUser) {
+            return { success: false, message: 'Nome de usuário já existe' };
+        }
+        
+        // Inserir o novo usuário
+        const { data: newUser, error: insertError } = await supabase
+            .from('users')
+            .insert([userData])
+            .select()
+            .single();
+        
+        if (insertError) {
+            console.error('Erro ao criar usuário:', insertError);
+            return { success: false, message: insertError.message };
+        }
+        
+        return { success: true, user: newUser };
+    } catch (error) {
+        console.error('Erro ao criar usuário:', error);
+        return { success: false, message: error.message };
     }
-    
-    // Gerar ID único
-    const newId = Math.max(...users.map(user => user.id), 0) + 1;
-    
-    // Criar o novo usuário
-    const newUser = {
-        id: newId,
-        ...userData
-    };
-    
-    // Adicionar à lista
-    users.push(newUser);
-    
-    // Salvar no localStorage
-    localStorage.setItem('users', JSON.stringify(users));
-    
-    return { success: true, user: newUser };
 }
 
 // Função para atualizar um usuário existente
-function updateUser(userId, userData) {
-    const users = JSON.parse(localStorage.getItem('users')) || DEFAULT_USERS;
-    
-    // Verificar se o usuário existe
-    const userIndex = users.findIndex(user => user.id === userId);
-    if (userIndex === -1) {
-        return { success: false, message: 'Usuário não encontrado' };
+async function updateUser(userId, userData) {
+    try {
+        // Verificar se o nome de usuário já existe (exceto para o usuário atual)
+        if (userData.username) {
+            const { data: existingUser, error: checkError } = await supabase
+                .from('users')
+                .select('id')
+                .eq('username', userData.username)
+                .neq('id', userId)
+                .single();
+            
+            if (checkError && checkError.code !== 'PGRST116') {
+                console.error('Erro ao verificar usuário existente:', checkError);
+                return { success: false, message: 'Erro ao verificar usuário existente' };
+            }
+            
+            if (existingUser) {
+                return { success: false, message: 'Nome de usuário já existe' };
+            }
+        }
+        
+        // Atualizar o usuário
+        const { data: updatedUser, error: updateError } = await supabase
+            .from('users')
+            .update(userData)
+            .eq('id', userId)
+            .select()
+            .single();
+        
+        if (updateError) {
+            console.error('Erro ao atualizar usuário:', updateError);
+            return { success: false, message: updateError.message };
+        }
+        
+        // Se o usuário atual for atualizado, também atualizar na sessão
+        const currentUser = JSON.parse(sessionStorage.getItem('currentUser'));
+        if (currentUser && currentUser.id === userId) {
+            // Não incluir a senha no usuário atual
+            const { password, ...userWithoutPassword } = updatedUser;
+            sessionStorage.setItem('currentUser', JSON.stringify(userWithoutPassword));
+        }
+        
+        return { success: true, user: updatedUser };
+    } catch (error) {
+        console.error('Erro ao atualizar usuário:', error);
+        return { success: false, message: error.message };
     }
-    
-    // Verificar se o nome de usuário já existe (exceto para o usuário atual)
-    if (userData.username && users.some(user => user.username === userData.username && user.id !== userId)) {
-        return { success: false, message: 'Nome de usuário já existe' };
-    }
-    
-    // Atualizar o usuário
-    users[userIndex] = { ...users[userIndex], ...userData };
-    
-    // Salvar no localStorage
-    localStorage.setItem('users', JSON.stringify(users));
-    
-    // Se o usuário atual for atualizado, também atualizar no localStorage
-    const currentUser = JSON.parse(localStorage.getItem('currentUser'));
-    if (currentUser && currentUser.id === userId) {
-        // Não incluir a senha no usuário atual
-        const { password, ...userWithoutPassword } = users[userIndex];
-        localStorage.setItem('currentUser', JSON.stringify(userWithoutPassword));
-    }
-    
-    return { success: true, user: users[userIndex] };
 }
 
 // Função para excluir um usuário
-function deleteUser(userId) {
+async function deleteUser(userId) {
     try {
         // Converter para número se for uma string
         userId = Number(userId);
         
-        // Obter usuários
-        let users = JSON.parse(localStorage.getItem('users')) || DEFAULT_USERS;
+        // Verificar se é o último administrador
+        const { data: adminUsers, error: checkError } = await supabase
+            .from('users')
+            .select('id, accessLevel, customPermissions, permissions')
+            .or(`accessLevel.eq.ADMIN,and(customPermissions.eq.true,permissions.cs.{"${PERMISSIONS.MANAGE_USERS}"})`)
+            .neq('id', userId);
         
-        // Encontrar o índice do usuário
-        const userIndex = users.findIndex(user => user.id === userId);
+        if (checkError) {
+            console.error('Erro ao verificar administradores:', checkError);
+            return { success: false, message: 'Erro ao verificar administradores' };
+        }
         
-        // Se não encontrou o usuário
-        if (userIndex === -1) {
+        // Verificar se o usuário a ser excluído é um administrador
+        const { data: userToDelete, error: userError } = await supabase
+            .from('users')
+            .select('accessLevel, customPermissions, permissions')
+            .eq('id', userId)
+            .single();
+        
+        if (userError) {
+            console.error('Erro ao buscar usuário:', userError);
             return { success: false, message: 'Usuário não encontrado' };
         }
         
-        // Verificar se é o último administrador
-        const isAdmin = users[userIndex].accessLevel === 'ADMIN' || 
-                    (users[userIndex].customPermissions && 
-                     users[userIndex].permissions && 
-                     users[userIndex].permissions.includes(PERMISSIONS.MANAGE_USERS));
-     
-        if (isAdmin) {
-            const otherAdmins = users.filter(user => 
-                (user.id !== userId) && 
-                (user.accessLevel === 'ADMIN' || 
-                (user.customPermissions && 
-                 user.permissions && 
-                 user.permissions.includes(PERMISSIONS.MANAGE_USERS)))
-            );
-            
-            if (otherAdmins.length === 0) {
-                return { success: false, message: 'Não é possível excluir o último administrador do sistema' };
-            }
+        const isAdmin = userToDelete.accessLevel === 'ADMIN' || 
+                    (userToDelete.customPermissions && 
+                     userToDelete.permissions && 
+                     userToDelete.permissions.includes(PERMISSIONS.MANAGE_USERS));
+        
+        if (isAdmin && (!adminUsers || adminUsers.length === 0)) {
+            return { success: false, message: 'Não é possível excluir o último administrador do sistema' };
         }
         
-        // Remover o usuário
-        users.splice(userIndex, 1);
+        // Excluir o usuário
+        const { error: deleteError } = await supabase
+            .from('users')
+            .delete()
+            .eq('id', userId);
         
-        // Salvar no localStorage
-        localStorage.setItem('users', JSON.stringify(users));
+        if (deleteError) {
+            console.error('Erro ao excluir usuário:', deleteError);
+            return { success: false, message: deleteError.message };
+        }
         
         return { success: true };
-    }
-    catch (error) {
+    } catch (error) {
         console.error('Erro ao excluir usuário:', error);
         return { success: false, message: error.message };
     }
 }
 
 // Função para atualizar a senha de um usuário
-function updateUserPassword(userId, newPassword) {
+async function updateUserPassword(userId, newPassword) {
     try {
         // Converter para número se for uma string
         userId = Number(userId);
         
-        // Obter usuários
-        let users = JSON.parse(localStorage.getItem('users')) || DEFAULT_USERS;
+        // Atualizar a senha
+        const { error: updateError } = await supabase
+            .from('users')
+            .update({ password: newPassword })
+            .eq('id', userId);
         
-        // Encontrar o índice do usuário
-        const userIndex = users.findIndex(user => user.id === userId);
-        
-        // Se não encontrou o usuário
-        if (userIndex === -1) {
-            return { success: false, message: 'Usuário não encontrado' };
+        if (updateError) {
+            console.error('Erro ao atualizar senha:', updateError);
+            return { success: false, message: updateError.message };
         }
         
-        // Atualizar a senha
-        users[userIndex].password = newPassword;
-        
-        // Salvar no localStorage
-        localStorage.setItem('users', JSON.stringify(users));
-        
         return { success: true };
-    }
-    catch (error) {
+    } catch (error) {
         console.error('Erro ao atualizar senha do usuário:', error);
         return { success: false, message: error.message };
     }
 }
 
 // Função para obter todos os usuários
-function getAllUsers() {
-    return JSON.parse(localStorage.getItem('users')) || DEFAULT_USERS;
+async function getAllUsers() {
+    try {
+        const { data: users, error } = await supabase
+            .from('users')
+            .select('*');
+        
+        if (error) {
+            console.error('Erro ao buscar usuários:', error);
+            return [];
+        }
+        
+        return users;
+    } catch (error) {
+        console.error('Erro ao buscar usuários:', error);
+        return [];
+    }
 }
 
 // Função para obter um usuário pelo ID
-function getUserById(userId) {
-    const users = JSON.parse(localStorage.getItem('users')) || DEFAULT_USERS;
-    return users.find(user => user.id === userId) || null;
+async function getUserById(userId) {
+    try {
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', userId)
+            .single();
+        
+        if (error) {
+            console.error('Erro ao buscar usuário:', error);
+            return null;
+        }
+        
+        return user;
+    } catch (error) {
+        console.error('Erro ao buscar usuário:', error);
+        return null;
+    }
 }
 
 // Exportar as funções e constantes

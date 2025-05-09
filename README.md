@@ -1,5 +1,76 @@
 # Sistema de Gestão FTTH
 
+Sistema para gerenciamento de técnicos e veículos para operações de FTTH (Fiber to the Home).
+
+## Configuração do Supabase
+
+Para conectar o sistema ao banco de dados Supabase, siga os passos abaixo:
+
+1. Crie uma conta no [Supabase](https://supabase.com/) se ainda não tiver uma.
+2. Crie um novo projeto no Supabase.
+3. No painel do Supabase, vá para SQL Editor e execute o script SQL contido no arquivo `supabase-schema.sql`.
+4. Obtenha a URL e a chave anônima do seu projeto:
+   - No painel do Supabase, vá para Settings > API
+   - Copie a URL do projeto e a anon/public key
+5. Atualize o arquivo `config.js` com suas credenciais:
+   ```javascript
+   const SUPABASE_CONFIG = {
+       url: 'SUA_URL_DO_SUPABASE',
+       key: 'SUA_CHAVE_ANÔNIMA_DO_SUPABASE'
+   };
+   ```
+
+## Estrutura do Projeto
+
+- `admin.html` - Página de administração de usuários
+- `login.html` - Página de login
+- `users.js` - Módulo de autenticação e gerenciamento de usuários
+- `config.js` - Configurações do Supabase
+- `supabase-schema.sql` - Esquema do banco de dados
+
+## Usuários Padrão
+
+O sistema vem com os seguintes usuários padrão:
+
+| Usuário     | Senha     | Nível de Acesso      |
+|-------------|-----------|----------------------|
+| admin       | admin123  | Administrador        |
+| tecnico     | tech123   | Gestor de Técnicos   |
+| manutencao  | maint123  | Gestor de Manutenção |
+| usuario     | user123   | Usuário Padrão       |
+| visualizador| view123   | Visualizador         |
+
+**Importante:** Em um ambiente de produção, altere as senhas padrão imediatamente após a configuração inicial.
+
+## Funcionalidades
+
+- Autenticação de usuários
+- Gerenciamento de permissões
+- Administração de usuários
+- Acompanhamento de técnicos e veículos
+- Estatísticas de operação
+
+## Tecnologias Utilizadas
+
+- HTML, CSS e JavaScript
+- Supabase (Banco de dados PostgreSQL)
+- Font Awesome (ícones)
+
+## Desenvolvimento
+
+Para desenvolver localmente, você pode usar qualquer servidor web local como:
+- Live Server (extensão do VS Code)
+- http-server (Node.js)
+- Python SimpleHTTPServer
+
+## Segurança
+
+Em um ambiente de produção:
+1. Use HTTPS para todas as comunicações
+2. Implemente hashing de senha (bcrypt ou similar)
+3. Configure adequadamente as políticas de segurança (RLS) no Supabase
+4. Revise e atualize regularmente as permissões de usuário
+
 ## Visão Geral
 
 O Sistema de Gestão FTTH é uma aplicação web integrada para gerenciamento de técnicos, veículos e tarefas em operações de fibra óptica. O sistema consiste em três módulos principais:
@@ -50,16 +121,6 @@ O sistema possui os seguintes níveis de acesso pré-definidos:
 
 #### Permissões de Administração
 - `manage_users` - Gerenciar usuários do sistema
-
-### Usuários Padrão
-
-| Usuário | Senha | Nível de Acesso |
-|---------|-------|-----------------|
-| admin | admin123 | Administrador |
-| tecnico | tech123 | Gestor de Técnicos |
-| manutencao | maint123 | Gestor de Manutenção |
-| usuario | user123 | Usuário Padrão |
-| visualizador | view123 | Visualizador |
 
 ## Administração de Usuários
 

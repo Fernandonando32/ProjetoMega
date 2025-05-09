@@ -5,22 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Administração de Usuários</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script src="users.js"></script>
-    <script>
+    <script src="users.js" type="module"></script>
+    <script type="module">
         // Verificar autenticação
-        if (!Auth.isAuthenticated()) {
-            window.location.href = 'login.html';
-            throw new Error('Não autenticado');
-        }
+        async function checkAuth() {
+            if (!await Auth.isAuthenticated()) {
+                window.location.href = 'login.html';
+                throw new Error('Não autenticado');
+            }
 
-        // Obter usuário atual
-        const currentUser = Auth.getCurrentUser();
-        
-        // Verificar se é administrador
-        if (!Auth.hasPermission(currentUser, Auth.PERMISSIONS.MANAGE_USERS)) {
-            window.location.href = 'Agenda.html';
-            throw new Error('Sem permissão');
+            // Obter usuário atual
+            const currentUser = Auth.getCurrentUser();
+            
+            // Verificar se é administrador
+            if (!Auth.hasPermission(currentUser, Auth.PERMISSIONS.MANAGE_USERS)) {
+                window.location.href = 'Agenda.html';
+                throw new Error('Sem permissão');
+            }
         }
+        
+        // Executar verificação de autenticação
+        checkAuth();
     </script>
     <style>
         :root {
@@ -505,6 +510,12 @@
                     </thead>
                     <tbody id="userTableBody">
                         <!-- Será preenchido dinamicamente -->
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 20px;">
+                                <i class="fas fa-spinner fa-spin" style="font-size: 24px; color: #2a3d66;"></i>
+                                <p style="margin-top: 10px;">Carregando usuários...</p>
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -732,11 +743,11 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
         // Variáveis Globais
         let users = [];
         let currentEditingUserId = null;
-        let originPage = localStorage.getItem('adminOriginPage') || 'Agenda.html';
+        let originPage = sessionStorage.getItem('adminOriginPage') || 'Agenda.html';
 
         // Elementos do DOM
         const currentUserNameElement = document.getElementById('currentUserName');
@@ -755,12 +766,13 @@
         const confirmDeleteButton = document.getElementById('confirmDeleteButton');
 
         // Evento ao carregar a página - Consolidando todos os event listeners de DOMContentLoaded
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
             // Mostrar informações do usuário atual
+            const currentUser = Auth.getCurrentUser();
             currentUserNameElement.textContent = `${currentUser.name} (${Auth.ACCESS_LEVELS[currentUser.accessLevel].name})`;
             
             // Carregar lista de usuários
-            loadUsers();
+            await loadUsers();
             
             // Configurar eventos
             setupEventListeners();
@@ -783,11 +795,6 @@
                         indicator.style.width = '0';
                     }
                 });
-                
-                // Efeito de clique
-                item.addEventListener('click', function() {
-                    // O clique vai seguir o link, não precisamos manipular a classe active aqui
-                });
             });
         });
 
@@ -803,12 +810,13 @@
             });
             
             // Botão logout
-            logoutButton.addEventListener('click', () => {
-                Auth.logout();
+            logoutButton.addEventListener('click', async () => {
+                await Auth.logout();
                 window.location.href = 'login.html';
             });
             
             // Configuração do sistema de notificações
+            const currentUser = Auth.getCurrentUser();
             if (currentUser.accessLevel === 'ADMIN' || Auth.hasPermission(currentUser, Auth.PERMISSIONS.MANAGE_USERS)) {
                 document.getElementById('notificationSystem').style.display = 'block';
                 
@@ -864,16 +872,40 @@
         }
 
         // Carregar lista de usuários
-        function loadUsers() {
-            users = JSON.parse(localStorage.getItem('users')) || Auth.DEFAULT_USERS;
-            
-            // Renderizar tabela
-            renderUserTable();
+        async function loadUsers() {
+            try {
+                users = await Auth.getAllUsers();
+                
+                // Renderizar tabela
+                renderUserTable();
+            } catch (error) {
+                console.error('Erro ao carregar usuários:', error);
+                userTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 20px; color: #c0392b;">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 24px;"></i>
+                            <p style="margin-top: 10px;">Erro ao carregar usuários. Tente novamente mais tarde.</p>
+                        </td>
+                    </tr>
+                `;
+            }
         }
 
         // Renderizar tabela de usuários
         function renderUserTable() {
             userTableBody.innerHTML = '';
+            
+            if (users.length === 0) {
+                userTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align: center; padding: 20px;">
+                            <i class="fas fa-users-slash" style="font-size: 24px; color: #666;"></i>
+                            <p style="margin-top: 10px;">Nenhum usuário encontrado.</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
             
             users.forEach(user => {
                 const tr = document.createElement('tr');
@@ -891,6 +923,8 @@
                         badgeClass = 'badge-viewer';
                         break;
                 }
+                
+                const currentUser = Auth.getCurrentUser();
                 
                 tr.innerHTML = `
                     <td>${user.id}</td>
@@ -923,6 +957,7 @@
             document.querySelectorAll('.delete-user').forEach(button => {
                 button.addEventListener('click', () => {
                     const userId = parseInt(button.dataset.id);
+                    const currentUser = Auth.getCurrentUser();
                     if (userId !== currentUser.id) {
                         openDeleteConfirmation(userId);
                     }
@@ -953,7 +988,7 @@
                     document.getElementById('name').value = user.name;
                     document.getElementById('username').value = user.username;
                     document.getElementById('email').value = user.email || '';
-                    document.getElementById('password').value = user.password;
+                    document.getElementById('password').value = '';
                     document.getElementById('password').placeholder = '(Manter a mesma senha)';
                     document.getElementById('accessLevel').value = user.accessLevel;
                     
@@ -1010,8 +1045,8 @@
             confirmDeleteButton.dataset.userId = userId;
             
             // Configurar evento de confirmação
-            confirmDeleteButton.onclick = () => {
-                deleteUser(userId);
+            confirmDeleteButton.onclick = async () => {
+                await deleteUser(userId);
                 confirmModal.style.display = 'none';
             };
             
@@ -1020,24 +1055,46 @@
         }
 
         // Excluir usuário
-        function deleteUser(userId) {
+        async function deleteUser(userId) {
             // Não permitir excluir o próprio usuário
+            const currentUser = Auth.getCurrentUser();
             if (userId === currentUser.id) {
                 alert('Você não pode excluir seu próprio usuário!');
                 return;
             }
             
-            // Filtrar o usuário da lista
-            users = users.filter(user => user.id !== userId);
-            
-            // Salvar no localStorage
-            localStorage.setItem('users', JSON.stringify(users));
-            
-            // Atualizar a tabela
-            renderUserTable();
-            
-            // Mostrar mensagem de sucesso
-            alert('Usuário excluído com sucesso!');
+            try {
+                // Mostrar indicador de carregamento
+                confirmDeleteButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
+                confirmDeleteButton.disabled = true;
+                
+                // Chamar a API para excluir o usuário
+                const result = await Auth.deleteUser(userId);
+                
+                if (result.success) {
+                    // Remover o usuário da lista local
+                    users = users.filter(user => user.id !== userId);
+                    
+                    // Atualizar a tabela
+                    renderUserTable();
+                    
+                    // Mostrar mensagem de sucesso
+                    alert('Usuário excluído com sucesso!');
+                } else {
+                    // Mostrar mensagem de erro
+                    alert(`Erro ao excluir usuário: ${result.message}`);
+                }
+            } catch (error) {
+                console.error('Erro ao excluir usuário:', error);
+                alert('Erro ao excluir usuário. Tente novamente mais tarde.');
+            } finally {
+                // Restaurar o botão
+                confirmDeleteButton.innerHTML = 'Excluir';
+                confirmDeleteButton.disabled = false;
+                
+                // Fechar o modal
+                confirmModal.style.display = 'none';
+            }
         }
 
         // Atualizar permissões baseado no nível de acesso
@@ -1080,7 +1137,7 @@
         }
 
         // Manipular envio do formulário
-        function handleUserFormSubmit(e) {
+        async function handleUserFormSubmit(e) {
             e.preventDefault();
             
             // Obter valores do formulário
@@ -1092,16 +1149,8 @@
             const accessLevel = document.getElementById('accessLevel').value;
             const operacao = document.getElementById('operacao').value;
             
-            // Verificar se o nome de usuário já existe (exceto para o usuário atual em edição)
-            const usernameExists = users.some(user => user.username === username && user.id !== userId);
-            if (usernameExists) {
-                usernameError.style.display = 'block';
-                return;
-            }
-            
             // Criar objeto de usuário
-            let user = {
-                id: userId || Date.now(),
+            let userData = {
                 name,
                 username,
                 email,
@@ -1111,46 +1160,66 @@
             
             // Adicionar senha apenas se for um novo usuário ou se a senha foi alterada
             if (!userId || password.trim() !== '') {
-                user.password = password;
-            } else {
-                // Manter a senha existente
-                const existingUser = users.find(u => u.id === userId);
-                if (existingUser) {
-                    user.password = existingUser.password;
-                }
+                userData.password = password;
             }
             
             // Verificar se está usando permissões personalizadas
             if (customPermissionsCheckbox.checked) {
-                user.customPermissions = true;
-                user.permissions = [];
+                userData.customPermissions = true;
+                userData.permissions = [];
                 
                 // Coletar permissões marcadas
                 document.querySelectorAll('#permissionsContainer input[type="checkbox"]:checked').forEach(checkbox => {
-                    user.permissions.push(checkbox.value);
+                    userData.permissions.push(checkbox.value);
                 });
-            }
-            
-            // Atualizar ou adicionar usuário
-            if (userId) {
-                // Atualizar usuário existente
-                users = users.map(u => u.id === userId ? { ...u, ...user } : u);
             } else {
-                // Adicionar novo usuário
-                users.push(user);
+                userData.customPermissions = false;
+                // As permissões serão determinadas pelo nível de acesso
             }
             
-            // Salvar no localStorage
-            localStorage.setItem('users', JSON.stringify(users));
-            
-            // Atualizar a tabela
-            renderUserTable();
-            
-            // Fechar o modal
-            userModal.style.display = 'none';
-            
-            // Mostrar mensagem de sucesso
-            alert(userId ? 'Usuário atualizado com sucesso!' : 'Usuário adicionado com sucesso!');
+            try {
+                // Desabilitar o botão de envio e mostrar indicador de carregamento
+                const submitButton = userForm.querySelector('button[type="submit"]');
+                submitButton.disabled = true;
+                submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+                
+                let result;
+                
+                // Atualizar ou adicionar usuário
+                if (userId) {
+                    // Atualizar usuário existente
+                    result = await Auth.updateUser(userId, userData);
+                } else {
+                    // Adicionar novo usuário
+                    result = await Auth.createUser(userData);
+                }
+                
+                if (result.success) {
+                    // Recarregar a lista de usuários
+                    await loadUsers();
+                    
+                    // Fechar o modal
+                    userModal.style.display = 'none';
+                    
+                    // Mostrar mensagem de sucesso
+                    alert(userId ? 'Usuário atualizado com sucesso!' : 'Usuário adicionado com sucesso!');
+                } else {
+                    // Mostrar erro
+                    if (result.message === 'Nome de usuário já existe') {
+                        usernameError.style.display = 'block';
+                    } else {
+                        alert(`Erro: ${result.message}`);
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao salvar usuário:', error);
+                alert('Erro ao salvar usuário. Tente novamente mais tarde.');
+            } finally {
+                // Restaurar o botão de envio
+                const submitButton = userForm.querySelector('button[type="submit"]');
+                submitButton.disabled = false;
+                submitButton.innerHTML = 'Salvar';
+            }
         }
     </script>
 </body>
