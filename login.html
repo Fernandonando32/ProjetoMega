@@ -164,19 +164,20 @@
     </div>
 
     <script type="module">
-        import LoginAPI from './api/login.js';
+        import * as Auth from './js/auth.js';
         
         // Verificar se já está autenticado
         async function checkExistingAuth() {
-            const authStatus = await LoginAPI.checkAuth();
-            if (authStatus.authenticated) {
-                redirectLoggedInUser(authStatus.data.user);
+            if (await Auth.isAuthenticated()) {
+                redirectLoggedInUser();
             }
         }
 
         // Redirecionar usuário com base nas permissões
-        function redirectLoggedInUser(user) {
-            if (LoginAPI.hasPermission(user, 'manage_users')) {
+        function redirectLoggedInUser() {
+            const currentUser = Auth.getCurrentUser();
+            
+            if (Auth.hasPermission(currentUser, Auth.PERMISSIONS.MANAGE_USERS)) {
                 window.location.href = 'admin.html';
             } else {
                 window.location.href = 'Pagina1 (1).html';
@@ -198,16 +199,11 @@
             loginError.style.display = 'none';
             
             try {
-                const response = await LoginAPI.authenticate({
-                    body: { username, password }
-                });
+                const success = await Auth.login(username, password);
                 
-                if (response.status === 200) {
-                    // Armazenar dados do usuário na sessão
-                    sessionStorage.setItem('currentUser', JSON.stringify(response.data.user));
-                    redirectLoggedInUser(response.data.user);
+                if (success) {
+                    redirectLoggedInUser();
                 } else {
-                    loginError.textContent = response.error || 'Usuário ou senha incorretos';
                     loginError.style.display = 'block';
                     loginButton.disabled = false;
                     loginButton.textContent = 'Entrar';
