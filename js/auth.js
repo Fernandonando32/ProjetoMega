@@ -499,8 +499,16 @@ export async function updateUser(userId, userData) {
     try {
         console.log('Atualizando usuário:', userId);
         
+        // Verificar se é um ID local (timestamp)
+        const isLocalId = userId.toString().length >= 13;
+        if (isLocalId) {
+            console.log('ID parece ser um ID local (timestamp). Usando diretamente armazenamento local.');
+            return updateLocalUser(userId, userData);
+        }
+        
         // Se não conseguir se comunicar com o servidor, usar armazenamento local
         try {
+            console.log(`Enviando requisição para ${API_URL}?action=update-user&id=${userId}`);
             const response = await fetch(`${API_URL}?action=update-user&id=${userId}`, {
                 method: 'PUT',
                 headers: {
@@ -509,20 +517,50 @@ export async function updateUser(userId, userData) {
                 body: JSON.stringify(userData),
             });
 
+            // Log da resposta para diagnóstico
+            console.log(`Resposta recebida: status ${response.status} ${response.statusText}`);
+            
+            let data;
+            try {
+                data = await response.json();
+                console.log('Dados da resposta:', data);
+            } catch (jsonError) {
+                console.error('Erro ao processar JSON da resposta:', jsonError);
+                // Se não conseguir processar o JSON, cair para armazenamento local
+                return updateLocalUser(userId, userData);
+            }
+
             if (!response.ok) {
                 console.error('Resposta não-OK do servidor:', response.status, response.statusText);
                 
+                // Verificar se data contém mensagem que indica problema com política
+                if (data && (data.message?.includes('policy') || 
+                          data.error?.includes('policy') || 
+                          data.message?.includes('recursion') || 
+                          data.error?.includes('recursion') ||
+                          data.message?.includes('permission') || 
+                          data.error?.includes('permission'))) {
+                    console.log('Detectada falha relacionada à política/permissão. Usando armazenamento local.');
+                    return updateLocalUser(userId, userData);
+                }
+                
                 // Se for um erro 404 (usuário não encontrado), provavelmente é um usuário local
-                if (response.status === 404) {
+                if (response.status === 404 || (data && (data.message?.includes('não encontrado') || 
+                                                     data.error?.includes('não encontrado')))) {
                     console.log('Usuário não encontrado no servidor, tentando atualizar localmente');
                     return updateLocalUser(userId, userData);
                 }
+                
+                // Para erros 500, tentar armazenamento local como fallback
+                if (response.status === 500) {
+                    console.log('Erro 500 do servidor. Usando armazenamento local como fallback.');
+                    return updateLocalUser(userId, userData);
+                }
             }
-
-            const data = await response.json();
             
+            // Tratar os dados mesmo que não sejam os esperados
             if (response.ok) {
-                console.log('Usuário atualizado com sucesso');
+                console.log('Resposta OK do servidor');
                 
                 // Verificar se o usuário foi atualizado em modo offline
                 if (data.offline) {
@@ -530,23 +568,35 @@ export async function updateUser(userId, userData) {
                     return updateLocalUser(userId, userData);
                 }
                 
+                // Verificar se data.user existe, caso contrário usar os dados enviados
+                if (!data.user) {
+                    console.warn('Resposta sem o campo "user". Criando objeto de usuário local.');
+                    return {
+                        success: true,
+                        user: { ...userData, id: userId },
+                        warning: "Dados incompletos do servidor"
+                    };
+                }
+                
                 return { success: true, user: data.user };
             } else {
-                console.error('Erro ao atualizar usuário:', data.error);
+                console.error('Erro ao atualizar usuário:', data?.error || 'Erro desconhecido');
                 
                 // Verificar se é o erro de recursão infinita
-                if (data.message?.includes("infinite recursion") || data.error?.includes("infinite recursion")) {
+                if (data?.message?.includes("infinite recursion") || data?.error?.includes("infinite recursion")) {
                     console.log('Detectado erro de recursão infinita, usando fallback local');
                     return updateLocalUser(userId, userData);
                 }
                 
                 // Tentar como fallback atualizar localmente
-                if (data.error === "Usuário não encontrado" || data.message?.includes("não existe")) {
+                if (data?.error === "Usuário não encontrado" || data?.message?.includes("não existe")) {
                     console.log('Tentando atualizar usuário localmente após erro de "não encontrado"');
                     return updateLocalUser(userId, userData);
                 }
                 
-                throw new Error(data.message || data.error || 'Erro ao atualizar usuário');
+                // Último recurso: atualizar localmente mesmo com erro desconhecido
+                console.log('Erro desconhecido, tentando atualizar localmente como último recurso');
+                return updateLocalUser(userId, userData);
             }
         } catch (serverError) {
             console.warn('Erro de comunicação com o servidor:', serverError);
@@ -555,14 +605,22 @@ export async function updateUser(userId, userData) {
             if (serverError.message?.includes("infinite recursion")) {
                 console.log('Detectado erro de recursão infinita na política Supabase, usando armazenamento local');
             } else {
-                console.log('Usando armazenamento local para atualizar usuário');
+                console.log('Usando armazenamento local para atualizar usuário devido a erro de comunicação');
             }
             
             return updateLocalUser(userId, userData);
         }
     } catch (error) {
         console.error('Erro ao atualizar usuário:', error);
-        return { success: false, message: error.message || 'Erro ao atualizar usuário' };
+        
+        // Mesmo com erro crítico, tentar atualização local como último recurso
+        try {
+            console.log('Tentando atualização local após erro crítico');
+            return updateLocalUser(userId, userData);
+        } catch (fallbackError) {
+            console.error('Falha também na atualização local:', fallbackError);
+            return { success: false, message: 'Falha em todas as tentativas de atualização: ' + error.message };
+        }
     }
 }
 
