@@ -277,35 +277,94 @@ export default async function handler(req, res) {
     // Obter lista de usuários
     else if (req.method === 'GET' && req.query.action === 'get-users') {
       try {
-        // Obter lista de usuários do banco de dados
-        const { data, error } = await supabase
-          .from('users')
-          .select('id,username,name,email,accessLevel,operacao,customPermissions,permissions')
-          .order('id', { ascending: true });
+        console.log('[GET USERS] Início do processamento da requisição');
+        console.log('[GET USERS] URL completa:', req.url);
+        console.log('[GET USERS] Headers:', JSON.stringify(req.headers));
         
-        if (error) {
-          console.error('Erro ao obter usuários:', error);
-          return res.status(500).json({
-            error: "Erro ao obter usuários",
-            message: error.message
+        // Primeiro tentar obter do banco de dados
+        let databaseUsers = [];
+        let databaseError = null;
+        
+        try {
+          console.log('[GET USERS] Conectando ao Supabase...');
+          const supabaseRequest = supabase
+            .from('users')
+            .select('id,username,name,email,accessLevel,operacao,customPermissions,permissions')
+            .order('id', { ascending: true });
+          
+          console.log('[GET USERS] Executando consulta Supabase...');
+          const { data, error } = await supabaseRequest;
+          
+          if (error) {
+            console.error('[GET USERS] Erro do Supabase ao obter usuários:', error);
+            databaseError = error;
+          } else if (data) {
+            databaseUsers = data;
+            console.log(`[GET USERS] Obtidos ${databaseUsers.length} usuários do banco de dados`);
+          } else {
+            console.log('[GET USERS] Nenhum erro, mas também nenhum dado retornado');
+          }
+        } catch (supabaseError) {
+          console.error('[GET USERS] Exceção ao consultar o Supabase:', supabaseError);
+          databaseError = supabaseError;
+        }
+        
+        // Se não conseguiu obter do banco, usar os usuários padrão
+        if (databaseError || databaseUsers.length === 0) {
+          console.log('[GET USERS] Usando usuários padrão como fallback');
+          console.log('[GET USERS] Motivo:', databaseError ? `Erro: ${databaseError.message}` : 'Nenhum usuário encontrado');
+          
+          // Remover as senhas dos usuários padrão
+          const defaultUsersWithoutPasswords = DEFAULT_USERS.map(user => {
+            const { password, ...userWithoutPassword } = user;
+            return userWithoutPassword;
+          });
+          
+          console.log('[GET USERS] Retornando resposta com usuários padrão');
+          return res.status(200).json({
+            users: defaultUsersWithoutPasswords,
+            fromDefault: true,
+            databaseError: databaseError ? databaseError.message : 'Nenhum usuário encontrado no banco de dados'
           });
         }
         
         // Remover senhas dos dados
-        const usersWithoutPasswords = data.map(user => {
+        const usersWithoutPasswords = databaseUsers.map(user => {
           const { password, ...userWithoutPassword } = user;
           return userWithoutPassword;
         });
         
+        console.log('[GET USERS] Retornando resposta com usuários do banco');
         return res.status(200).json({
           users: usersWithoutPasswords
         });
       } catch (error) {
-        console.error('Erro ao buscar usuários:', error);
-        return res.status(500).json({
-          error: "Erro interno do servidor",
-          message: error.message
-        });
+        console.error('[GET USERS] Erro não tratado ao buscar usuários:', error);
+        console.error('[GET USERS] Stack trace:', error.stack);
+        
+        // Em caso de erro crítico, retornar usuários padrão como último recurso
+        try {
+          console.log('[GET USERS] Tentando recovery mode com usuários padrão');
+          const defaultUsersWithoutPasswords = DEFAULT_USERS.map(user => {
+            const { password, ...userWithoutPassword } = user;
+            return userWithoutPassword;
+          });
+          
+          return res.status(200).json({
+            users: defaultUsersWithoutPasswords,
+            fromDefault: true,
+            recoveryMode: true,
+            error: error.message
+          });
+        } catch (fallbackError) {
+          console.error('[GET USERS] Falha no recovery mode:', fallbackError);
+          return res.status(500).json({
+            error: "Erro interno do servidor",
+            message: error.message,
+            fallbackError: fallbackError.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+          });
+        }
       }
     }
     // Criar usuário
@@ -680,6 +739,147 @@ export default async function handler(req, res) {
         return res.status(500).json({
           error: "Erro interno do servidor",
           message: error.message
+        });
+      }
+    }
+    // Diagnóstico do Supabase e tabela de usuários
+    else if (req.method === 'GET' && req.query.action === 'diagnose-db') {
+      try {
+        console.log('[DIAGNOSE] Iniciando diagnóstico do banco de dados');
+        
+        // Verificar se consegue se conectar ao Supabase
+        console.log('[DIAGNOSE] Verificando conexão com Supabase...');
+        
+        const diagnosticResults = {
+          timestamp: new Date().toISOString(),
+          supabaseConnection: false,
+          userTableExists: false,
+          userTableFields: [],
+          firstUser: null,
+          defaultUsers: DEFAULT_USERS.length,
+          errors: []
+        };
+        
+        // Testar conexão básica
+        try {
+          const { data, error } = await supabase.from('_test').select('*').limit(1);
+          
+          if (error && error.code === '42P01') { // relação não existe
+            console.log('[DIAGNOSE] Teste de conexão bem-sucedido (tabela _test não existe, mas conexão funciona)');
+            diagnosticResults.supabaseConnection = true;
+          } else if (error) {
+            console.error('[DIAGNOSE] Erro ao verificar conexão:', error);
+            diagnosticResults.errors.push({
+              context: 'connection_test',
+              error: error.message,
+              code: error.code
+            });
+          } else {
+            console.log('[DIAGNOSE] Conexão com Supabase bem-sucedida');
+            diagnosticResults.supabaseConnection = true;
+          }
+        } catch (connectionError) {
+          console.error('[DIAGNOSE] Exceção ao testar conexão:', connectionError);
+          diagnosticResults.errors.push({
+            context: 'connection_test_exception',
+            error: connectionError.message
+          });
+        }
+        
+        // Verificar se a tabela users existe
+        if (diagnosticResults.supabaseConnection) {
+          try {
+            console.log('[DIAGNOSE] Verificando tabela users...');
+            const { data, error } = await supabase.from('users').select('count').limit(1);
+            
+            if (error) {
+              console.error('[DIAGNOSE] Erro ao verificar tabela users:', error);
+              diagnosticResults.errors.push({
+                context: 'user_table_check',
+                error: error.message,
+                code: error.code
+              });
+              
+              // Se a tabela não existir
+              if (error.code === '42P01') {
+                console.error('[DIAGNOSE] A tabela users não existe!');
+                diagnosticResults.errors.push({
+                  context: 'missing_table',
+                  error: 'A tabela users não existe no banco de dados.'
+                });
+              }
+            } else {
+              console.log('[DIAGNOSE] Tabela users verificada com sucesso');
+              diagnosticResults.userTableExists = true;
+              
+              // Verificar campos da tabela
+              try {
+                console.log('[DIAGNOSE] Obtendo estrutura da tabela users...');
+                const { data: userData, error: userError } = await supabase
+                  .from('users')
+                  .select('*')
+                  .limit(1);
+                
+                if (userError) {
+                  console.error('[DIAGNOSE] Erro ao obter campos da tabela users:', userError);
+                  diagnosticResults.errors.push({
+                    context: 'field_check',
+                    error: userError.message
+                  });
+                } else if (userData && userData.length > 0) {
+                  console.log('[DIAGNOSE] Obtidos campos da tabela users');
+                  const firstUser = userData[0];
+                  diagnosticResults.userTableFields = Object.keys(firstUser);
+                  
+                  // Remover senha para segurança
+                  const { password, ...userWithoutPassword } = firstUser;
+                  diagnosticResults.firstUser = userWithoutPassword;
+                  
+                  // Verificar campos necessários
+                  const requiredFields = ['id', 'username', 'name', 'accessLevel', 'email'];
+                  const missingFields = requiredFields.filter(field => !Object.keys(firstUser).includes(field));
+                  
+                  if (missingFields.length > 0) {
+                    console.warn(`[DIAGNOSE] Campos obrigatórios ausentes: ${missingFields.join(', ')}`);
+                    diagnosticResults.errors.push({
+                      context: 'missing_fields',
+                      fields: missingFields
+                    });
+                  }
+                } else {
+                  console.log('[DIAGNOSE] Tabela users está vazia');
+                }
+              } catch (fieldError) {
+                console.error('[DIAGNOSE] Exceção ao verificar campos:', fieldError);
+                diagnosticResults.errors.push({
+                  context: 'field_check_exception',
+                  error: fieldError.message
+                });
+              }
+            }
+          } catch (tableError) {
+            console.error('[DIAGNOSE] Exceção ao verificar tabela:', tableError);
+            diagnosticResults.errors.push({
+              context: 'table_check_exception',
+              error: tableError.message
+            });
+          }
+        }
+        
+        // Retornar resultados do diagnóstico
+        return res.status(200).json({
+          diagnostic: diagnosticResults,
+          env: {
+            NODE_ENV: process.env.NODE_ENV || 'not set',
+            VERCEL_ENV: process.env.VERCEL_ENV || 'not set'
+          }
+        });
+      } catch (error) {
+        console.error('[DIAGNOSE] Erro geral de diagnóstico:', error);
+        return res.status(500).json({
+          error: "Erro ao realizar diagnóstico",
+          message: error.message,
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
       }
     }

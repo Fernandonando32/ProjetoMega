@@ -317,6 +317,7 @@ export async function getAllUsers() {
         
         // Tentar obter usuários do servidor
         try {
+            console.log(`Fazendo requisição para ${API_URL}?action=get-users`);
             const response = await fetch(`${API_URL}?action=get-users`, {
                 method: 'GET',
                 headers: {
@@ -324,23 +325,41 @@ export async function getAllUsers() {
                 }
             });
 
-            // Se não conseguir se comunicar com o servidor, usar apenas os dados locais
+            let data;
+            try {
+                data = await response.json();
+            } catch (jsonError) {
+                console.error('Erro ao processar resposta JSON:', jsonError);
+                console.log('Resposta bruta:', await response.text());
+                return mergeDatabaseAndLocalUsers([], localUsers);
+            }
+            
+            // Mesmo em caso de erro (500), o servidor pode retornar usuários padrão
+            if (data && data.users) {
+                console.log(`Recebidos ${data.users.length} usuários do servidor`);
+                
+                if (data.fromDefault) {
+                    console.log('Usando usuários padrão fornecidos pelo servidor');
+                }
+                
+                // Se houver mensagem de erro, exibir
+                if (!response.ok) {
+                    console.warn(`API retornou erro ${response.status}, mas forneceu usuários de fallback`);
+                    if (data.error) console.error('Mensagem de erro:', data.error);
+                }
+                
+                // Mesclar usuários do servidor com usuários locais
+                return mergeDatabaseAndLocalUsers(data.users, localUsers);
+            }
+            
+            // Se não tiver usuários e não for OK, usar apenas local
             if (!response.ok) {
                 console.warn(`Erro na resposta do servidor: ${response.status} ${response.statusText}`);
                 return mergeDatabaseAndLocalUsers([], localUsers);
             }
-
-            const data = await response.json();
             
-            if (response.ok && data.users) {
-                console.log(`Recebidos ${data.users.length} usuários do servidor`);
-                
-                // Mesclar usuários do servidor com usuários locais
-                return mergeDatabaseAndLocalUsers(data.users, localUsers);
-            } else {
-                console.error('Erro ou formato inválido na resposta:', data);
-                return mergeDatabaseAndLocalUsers([], localUsers);
-            }
+            console.error('Resposta inesperada do servidor sem usuários:', data);
+            return mergeDatabaseAndLocalUsers([], localUsers);
         } catch (serverError) {
             console.warn('Erro de comunicação com o servidor:', serverError);
             return mergeDatabaseAndLocalUsers([], localUsers);
@@ -652,5 +671,123 @@ export async function deleteUser(userId) {
     } catch (error) {
         console.error('Erro ao excluir usuário:', error);
         return { success: false, message: error.message || 'Erro ao excluir usuário' };
+    }
+}
+
+/**
+ * Realiza diagnóstico da conexão com o banco de dados
+ * @returns {Promise<Object>} - Resultados do diagnóstico
+ */
+export async function diagnoseConnection() {
+    try {
+        console.log('Iniciando diagnóstico de conexão...');
+        
+        // Tentar diagnóstico com o servidor
+        try {
+            const response = await fetch(`${API_URL}?action=diagnose-db`, {
+                method: 'GET',
+                headers: { 'Cache-Control': 'no-cache' }
+            });
+            
+            // Se não conseguir se comunicar com o servidor
+            if (!response.ok) {
+                console.warn(`Erro na resposta do servidor: ${response.status} ${response.statusText}`);
+                return {
+                    success: false,
+                    serverConnection: false,
+                    error: `Erro HTTP ${response.status}: ${response.statusText}`
+                };
+            }
+            
+            const data = await response.json();
+            console.log('Resultados do diagnóstico:', data);
+            
+            return {
+                success: true,
+                ...data.diagnostic,
+                timestamp: new Date().toISOString()
+            };
+        } catch (serverError) {
+            console.warn('Erro de comunicação com o servidor:', serverError);
+            return {
+                success: false,
+                serverConnection: false,
+                error: serverError.message,
+                timestamp: new Date().toISOString()
+            };
+        }
+    } catch (error) {
+        console.error('Erro ao realizar diagnóstico:', error);
+        return {
+            success: false,
+            error: error.message,
+            timestamp: new Date().toISOString()
+        };
+    }
+}
+
+/**
+ * Realiza diagnóstico do estado atual da autenticação
+ * @returns {Object} - Informações sobre o estado de autenticação
+ */
+export function getDiagnosticInfo() {
+    try {
+        // Verificar dados no sessionStorage
+        const sessionData = {};
+        try {
+            const currentUser = sessionStorage.getItem('currentUser');
+            if (currentUser) {
+                const user = JSON.parse(currentUser);
+                sessionData.user = {
+                    id: user.id,
+                    username: user.username,
+                    name: user.name,
+                    accessLevel: user.accessLevel
+                };
+                sessionData.hasSession = true;
+            } else {
+                sessionData.hasSession = false;
+            }
+        } catch (e) {
+            sessionData.sessionError = e.message;
+        }
+        
+        // Verificar dados no localStorage
+        const storageData = {};
+        try {
+            const usersInLocalStorage = localStorage.getItem('users');
+            if (usersInLocalStorage) {
+                const users = JSON.parse(usersInLocalStorage);
+                storageData.userCount = users.length;
+                storageData.hasLocalUsers = users.length > 0;
+                
+                // Lista apenas os nomes e IDs dos usuários para segurança
+                storageData.localUsers = users.map(user => ({
+                    id: user.id,
+                    username: user.username,
+                    accessLevel: user.accessLevel
+                }));
+            } else {
+                storageData.hasLocalUsers = false;
+                storageData.userCount = 0;
+            }
+        } catch (e) {
+            storageData.storageError = e.message;
+        }
+        
+        return {
+            success: true,
+            apiUrl: API_URL,
+            session: sessionData,
+            localStorage: storageData,
+            userAgent: navigator.userAgent,
+            timestamp: new Date().toISOString()
+        };
+    } catch (error) {
+        return {
+            success: false,
+            error: error.message,
+            timestamp: new Date().toISOString()
+        };
     }
 } 
