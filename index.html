@@ -2,15 +2,15 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>FTTH - Carregando...</title>
-    <script src="js/fix-duplicate-html.js"></script>
-    <script src="js/fix-duplicate-html-injector.js"></script>
+    <title>FTTH - Carregando Sistema</title>
+    <script src="js/advanced-iframe-fix.js"></script>
     <style>
         body, html {
             margin: 0;
             padding: 0;
             height: 100%;
             overflow: hidden;
+            font-family: Arial, sans-serif;
         }
         
         iframe {
@@ -18,6 +18,7 @@
             height: 100%;
             border: none;
             display: block;
+            visibility: hidden; /* Inicialmente oculto para evitar flashes */
         }
         
         #loading {
@@ -26,12 +27,11 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.95);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            font-family: Arial, sans-serif;
             z-index: 9999;
             transition: opacity 0.5s;
         }
@@ -50,266 +50,54 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        h2 {
+            color: #2a3d66;
+            margin-bottom: 10px;
+        }
+        
+        p {
+            color: #666;
+            text-align: center;
+            max-width: 80%;
+            line-height: 1.5;
+        }
+        
+        .progress-container {
+            width: 300px;
+            height: 10px;
+            background: #eee;
+            border-radius: 5px;
+            margin-top: 20px;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: #2a3d66;
+            border-radius: 5px;
+            transition: width 0.3s ease;
+            animation: progress 4s forwards;
+        }
+        
+        @keyframes progress {
+            0% { width: 0%; }
+            50% { width: 70%; }
+            100% { width: 100%; }
+        }
     </style>
 </head>
 <body>
     <div id="loading">
         <div class="spinner"></div>
-        <h2>Corrigindo a Página</h2>
-        <p>Aguarde enquanto removemos elementos duplicados e corrigimos a exibição...</p>
+        <h2>Otimizando Exibição</h2>
+        <p>Aguarde enquanto preparamos a interface do sistema. Estamos resolvendo problemas de duplicação de elementos para garantir uma experiência perfeita.</p>
+        <div class="progress-container">
+            <div class="progress-bar"></div>
+        </div>
     </div>
     
     <iframe id="mainFrame" src="Pagina1 (1).html"></iframe>
-    
-    <script>
-        // Script para corrigir problemas de currentUser
-        window.addEventListener('load', function() {
-            // Obtém a referência ao iframe
-            const mainFrame = document.getElementById('mainFrame');
-            
-            // Aguarda o carregamento do iframe
-            mainFrame.onload = function() {
-                try {
-                    // Acessa o documento dentro do iframe
-                    const frameDoc = mainFrame.contentDocument || mainFrame.contentWindow.document;
-                    const frameWin = mainFrame.contentWindow;
-                    
-                    if (!frameWin.Auth) {
-                        console.error('Auth não disponível ainda. Aguardando...');
-                        // Aguardar um pouco mais para Auth ser carregado
-                        setTimeout(injectCorrections, 1000);
-                        return;
-                    }
-                    
-                    injectCorrections();
-                } catch (error) {
-                    console.error('Erro ao acessar iframe:', error);
-                    document.getElementById('loading').style.display = 'none';
-                }
-            };
-            
-            // Função para injetar as correções
-            function injectCorrections() {
-                try {
-                    const frameWin = mainFrame.contentWindow;
-                    const frameDoc = mainFrame.contentDocument || frameWin.document;
-                    
-                    // Substituir a função renderTabelaFiltrada
-                    frameWin.renderTabelaFiltrada = function(registrosFiltrados) {
-                        // Garantir que currentUser esteja definido
-                        const currentUser = frameWin.Auth ? frameWin.Auth.getCurrentUser() : null;
-                        
-                        // Se não tivermos um usuário autenticado, apenas mostrar uma mensagem e retornar
-                        if (!currentUser) {
-                            console.warn('Usuário não autenticado ou Auth não disponível ao renderizar tabela.');
-                            alert('Você precisa estar autenticado para visualizar os registros. Redirecionando para a página de login...');
-                            frameWin.location.href = 'login.html';
-                            return;
-                        }
-                        
-                        const tbody = frameDoc.querySelector("#tabelaRegistros tbody");
-                        if (!tbody) {
-                            console.error("Tabela não encontrada");
-                            return;
-                        }
-                        
-                        tbody.innerHTML = "";
-                        
-                        // O restante da função permanece igual
-                        const podeVerPorOperacao = frameWin.Auth.hasPermission(currentUser, frameWin.Auth.PERMISSIONS.VIEW_BY_OPERATION);
-                        let registrosPermitidos = registrosFiltrados;
-                        
-                        // Se o usuário não tem permissão para ver todas as operações e tem uma operação específica,
-                        // filtrar os registros para mostrar apenas os da sua operação
-                        if (!podeVerPorOperacao && currentUser.operacao) {
-                            registrosPermitidos = registrosFiltrados.filter(reg => reg.operacao === currentUser.operacao);
-                        }
-                        
-                        // Continuar com o código original da função
-                        if (registrosPermitidos.length === 0) {
-                            tbody.innerHTML = `<tr><td colspan="15" style="text-align: center; padding: 20px;">Nenhum registro encontrado.</td></tr>`;
-                            return;
-                        }
-                        
-                        registrosPermitidos.forEach((reg, idx) => {
-                            const tr = frameDoc.createElement("tr");
-                            
-                            // Mapear os campos para as células da tabela
-                            const fields = ["cidade", "tecnico", "auxiliar", "placa", "modelo", "operacao", "equipes", "kmAtual", "ultimaTrocaOleo", "renavam", "lat", "lng", "observacoes", "dataInicioContrato"];
-                            
-                            fields.forEach(field => {
-                                const td = frameDoc.createElement("td");
-                                if (field === 'dataInicioContrato' && reg[field]) {
-                                    const date = new Date(reg[field]);
-                                    td.textContent = date.toLocaleDateString('pt-BR');
-                                } else {
-                                    td.textContent = reg[field] || "";
-                                }
-                                tr.appendChild(td);
-                            });
-                            
-                            // Célula de ações
-                            const tdActions = frameDoc.createElement("td");
-                            tdActions.className = "actions";
-                            tdActions.innerHTML = `
-                                ${frameWin.Auth.hasPermission(currentUser, frameWin.Auth.PERMISSIONS.EDIT_TECHNICIAN) ?
-                                `<button class="btnEditar" onclick="editarRegistro(${idx})">Editar</button>` : ''}
-                                ${frameWin.Auth.hasPermission(currentUser, frameWin.Auth.PERMISSIONS.DELETE_TECHNICIAN) ?
-                                `<button class="btnExcluir" onclick="removerRegistro(${idx})">Excluir</button>` : ''}
-                                <button class="btnManutencao" onclick="abrirModalManutencao(${idx})">Manutenção</button>
-                            `;
-                            tr.appendChild(tdActions);
-                            
-                            tbody.appendChild(tr);
-                        });
-                    };
-                    
-                    // Substituir a função atualizarEstatisticas
-                    frameWin.atualizarEstatisticas = function() {
-                        // Verificar se Auth está disponível
-                        if (!frameWin.Auth) {
-                            console.error('Auth não disponível em atualizarEstatisticas');
-                            return;
-                        }
-                        
-                        // Obter usuário atual
-                        const currentUser = frameWin.Auth.getCurrentUser();
-                        if (!currentUser) {
-                            console.warn('Usuário não autenticado em atualizarEstatisticas');
-                            return;
-                        }
-                        
-                        // Verificar permissão para visualizar todas operações
-                        const podeVerTodasOperacoes = frameWin.Auth.hasPermission(currentUser, frameWin.Auth.PERMISSIONS.VIEW_BY_OPERATION);
-                        
-                        // Filtrar registros pela operação do usuário se necessário
-                        let registrosFiltrados = frameWin.registros;
-                        if (!podeVerTodasOperacoes && currentUser.operacao) {
-                            registrosFiltrados = frameWin.registros.filter(r => r.operacao === currentUser.operacao);
-                        }
-                        
-                        // O resto do código permanece igual
-                        // Chamar a função original se possível
-                        try {
-                            const originalAtualizarEstatisticas = frameWin._originalAtualizarEstatisticas;
-                            if (typeof originalAtualizarEstatisticas === 'function') {
-                                originalAtualizarEstatisticas();
-                            }
-                        } catch (error) {
-                            console.error('Erro ao chamar a função original:', error);
-                        }
-                    };
-                    
-                    // Substituir a função renderizarTabela
-                    frameWin.renderizarTabela = function() {
-                        // Verificar se Auth está disponível e se usuário está autenticado
-                        if (!frameWin.Auth) {
-                            console.error('Auth não disponível. A autenticação pode não ter sido inicializada corretamente.');
-                            setTimeout(() => {
-                                // Tentar novamente em 500ms, dando tempo para Auth carregar
-                                if (frameWin.Auth) {
-                                    frameWin.renderizarTabela();
-                                } else {
-                                    console.error('Auth ainda não disponível após aguardar. Redirecionando para login.');
-                                    frameWin.location.href = 'login.html';
-                                }
-                            }, 500);
-                            return;
-                        }
-                        
-                        // Obter usuário atual
-                        const currentUser = frameWin.Auth.getCurrentUser();
-                        if (!currentUser) {
-                            console.warn('Usuário não autenticado ao renderizar tabela.');
-                            frameWin.location.href = 'login.html';
-                            return;
-                        }
-                        
-                        frameWin.renderTabelaFiltrada(frameWin.registros);
-                        frameWin.atualizarEstatisticas();
-                        // Aplicar ajustes de permissões após renderizar a tabela
-                        setTimeout(frameWin.ajustarPermissoes, 100);
-                    };
-                    
-                    // Também atualizar a função ajustarPermissoes
-                    frameWin.ajustarPermissoes = function() {
-                        // Verificar se Auth está disponível
-                        if (!frameWin.Auth) {
-                            console.error('Auth não disponível em ajustarPermissoes');
-                            return;
-                        }
-                        
-                        // Obter usuário atual
-                        const currentUser = frameWin.Auth.getCurrentUser();
-                        if (!currentUser) {
-                            console.warn('Usuário não autenticado em ajustarPermissoes');
-                            return;
-                        }
-                        
-                        const btnAdicionar = frameDoc.getElementById('btnAdicionar');
-                        const btnLimpar = frameDoc.getElementById('btnLimpar');
-                        const table = frameDoc.getElementById('tabelaRegistros');
-                        
-                        // Permissão para adicionar técnicos
-                        if (!frameWin.Auth.hasPermission(currentUser, frameWin.Auth.PERMISSIONS.ADD_TECHNICIAN)) {
-                            if (btnAdicionar) btnAdicionar.style.display = 'none';
-                            if (btnLimpar) btnLimpar.style.display = 'none';
-                            
-                            const formRegistro = frameDoc.getElementById('formRegistro');
-                            if (formRegistro) formRegistro.style.display = 'none';
-                        }
-                        
-                        // Verificar se a tabela existe
-                        if (!table) {
-                            console.warn('Tabela de registros não encontrada em ajustarPermissoes');
-                            return;
-                        }
-                        
-                        // Esconder os botões de editar e excluir para quem não tem permissão
-                        if (!frameWin.Auth.hasPermission(currentUser, frameWin.Auth.PERMISSIONS.EDIT_TECHNICIAN) && 
-                            !frameWin.Auth.hasPermission(currentUser, frameWin.Auth.PERMISSIONS.DELETE_TECHNICIAN)) {
-                            
-                            const acoes = table.querySelectorAll('.actions');
-                            acoes.forEach(acao => {
-                                acao.style.display = 'none';
-                            });
-                        }
-                        // Esconder apenas o botão de exclusão
-                        else if (!frameWin.Auth.hasPermission(currentUser, frameWin.Auth.PERMISSIONS.DELETE_TECHNICIAN)) {
-                            const botoesExcluir = table.querySelectorAll('.btnExcluir');
-                            botoesExcluir.forEach(btn => {
-                                btn.style.display = 'none';
-                            });
-                        }
-                        // Esconder apenas o botão de edição
-                        else if (!frameWin.Auth.hasPermission(currentUser, frameWin.Auth.PERMISSIONS.EDIT_TECHNICIAN)) {
-                            const botoesEditar = table.querySelectorAll('.btnEditar');
-                            botoesEditar.forEach(btn => {
-                                btn.style.display = 'none';
-                            });
-                        }
-                    };
-                    
-                    // Também atualizar o alias
-                    frameWin.renderTabela = frameWin.renderizarTabela;
-                    
-                    console.log("Scripts corretivos carregados com sucesso para corrigir problemas com currentUser");
-                    
-                    // Esconder a tela de carregamento
-                    document.getElementById('loading').style.opacity = '0';
-                    setTimeout(() => {
-                        document.getElementById('loading').style.display = 'none';
-                    }, 500);
-                    
-                    // Atualizar o título da página
-                    document.title = frameDoc.title;
-                    
-                } catch (error) {
-                    console.error('Erro ao injetar correções:', error);
-                    document.getElementById('loading').style.display = 'none';
-                }
-            }
-        });
-    </script>
 </body>
 </html> 
