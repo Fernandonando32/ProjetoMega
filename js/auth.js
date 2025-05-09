@@ -936,6 +936,128 @@ export function getDiagnosticInfo() {
 }
 
 /**
+ * Testa a conexão com o servidor
+ * @returns {Promise<Object>} - Resultado do teste
+ */
+async function testServerConnection() {
+    try {
+        console.log('Testando conexão com o servidor...');
+        
+        // Primeiro tente um teste básico mais simples e rápido
+        try {
+            console.log('Realizando teste de diagnóstico rápido...');
+            const response = await fetch(`${API_URL}?action=diagnose-db`, {
+                method: 'GET',
+                headers: { 'Cache-Control': 'no-cache' },
+                // Adicionando timeout para evitar espera longa
+                signal: AbortSignal.timeout(5000) // 5 segundos de timeout
+            });
+            
+            if (response.ok) {
+                console.log('Teste de diagnóstico rápido bem-sucedido');
+                return {
+                    success: true,
+                    responseTimeMs: 0,
+                    method: 'diagnose'
+                };
+            } else {
+                console.log(`Teste de diagnóstico retornou ${response.status}, tentando alternativa...`);
+            }
+        } catch (quickTestError) {
+            console.warn('Teste de diagnóstico falhou, tentando alternativa:', quickTestError);
+        }
+        
+        // Teste alternativo com endpoint mais simples
+        console.log('Tentando teste alternativo com check-users...');
+        const testStartTime = Date.now();
+        
+        // Usando AbortController para implementar timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 segundos
+        
+        try {
+            const response = await fetch(`${API_URL}?action=check-users`, {
+                method: 'GET',
+                headers: { 'Cache-Control': 'no-cache' },
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId); // Limpar o timeout se a resposta chegou
+            
+            const testEndTime = Date.now();
+            const responseTimeMs = testEndTime - testStartTime;
+            
+            // Mesmo se o status não for 200, se não for 500-504, o servidor pode estar disponível
+            // para algumas operações
+            if (response.status >= 200 && response.status < 500) {
+                console.log(`Servidor respondeu com status ${response.status} em ${responseTimeMs}ms`);
+                
+                try {
+                    // Tenta ler o corpo da resposta (para diagnóstico extra)
+                    const data = await response.json();
+                    console.log('Dados de resposta:', data);
+                    
+                    // Mesmo com status de erro, se o servidor enviou resposta válida, 
+                    // ele está funcionando de alguma forma
+                    return {
+                        success: true,
+                        responseTimeMs,
+                        serverUsers: data.count,
+                        status: data.status,
+                        httpStatus: response.status
+                    };
+                } catch (jsonError) {
+                    // Se não conseguiu parsear JSON mas o status é bom, ainda assim
+                    // o servidor está respondendo de alguma forma
+                    console.warn('Erro ao analisar resposta JSON:', jsonError);
+                    if (response.status < 500) {
+                        return {
+                            success: true,
+                            responseTimeMs,
+                            httpStatus: response.status,
+                            warning: 'JSON inválido na resposta'
+                        };
+                    }
+                }
+            }
+            
+            console.warn(`Servidor respondeu com erro: ${response.status} ${response.statusText}`);
+            return {
+                success: false,
+                error: `Erro ${response.status}: ${response.statusText}`,
+                responseTimeMs,
+                httpStatus: response.status
+            };
+        } catch (fetchError) {
+            clearTimeout(timeoutId);
+            
+            if (fetchError.name === 'AbortError') {
+                console.error('Timeout ao conectar com o servidor');
+                return {
+                    success: false,
+                    error: 'Timeout: O servidor não respondeu em tempo hábil',
+                    timeout: true
+                };
+            }
+            
+            console.error('Erro ao testar conexão com o servidor:', fetchError);
+            return {
+                success: false,
+                error: fetchError.message,
+                networkError: true
+            };
+        }
+    } catch (error) {
+        console.error('Erro geral ao testar conexão com o servidor:', error);
+        return {
+            success: false,
+            error: error.message,
+            critical: true
+        };
+    }
+}
+
+/**
  * Sincroniza usuários locais com o servidor
  * @returns {Promise<Object>} - Resultado da sincronização 
  */
@@ -967,11 +1089,23 @@ export async function syncLocalUsers() {
         // Verificar conexão com o servidor antes de tentar sincronizar
         const connectionTest = await testServerConnection();
         if (!connectionTest.success) {
-            console.warn('Servidor não disponível para sincronização:', connectionTest.error);
+            const errorMsg = connectionTest.timeout 
+                ? 'Servidor não está respondendo (timeout)' 
+                : connectionTest.error || 'Erro de conexão com servidor';
+                
+            console.warn('Servidor não disponível para sincronização:', errorMsg);
+            
+            // Se for erro 500, podemos tentar continuar mesmo assim com algumas operações
+            if (connectionTest.httpStatus >= 500 && connectionTest.httpStatus < 600) {
+                console.log('Servidor retornou erro 500, tentando continuar com sincronização limitada...');
+                return syncWithServerErrors(localOnlyUsers, connectionTest);
+            }
+            
             return { 
                 success: false, 
                 message: 'Servidor não disponível para sincronização', 
-                error: connectionTest.error 
+                error: errorMsg,
+                details: connectionTest
             };
         }
         
@@ -993,16 +1127,43 @@ export async function syncLocalUsers() {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(userData),
+                    // Adicionando timeout para cada requisição
+                    signal: AbortSignal.timeout(10000) // 10 segundos de timeout
                 });
                 
+                // Tratar resposta com erro (mas com corpo válido)
                 if (!response.ok) {
-                    const errorData = await response.json();
+                    let errorData;
+                    try {
+                        errorData = await response.json();
+                    } catch (jsonError) {
+                        errorData = { error: `Erro ${response.status}` };
+                    }
+                    
+                    // Verificar se o usuário já existe (conflito)
+                    if (response.status === 409 || 
+                        (errorData.message && (
+                            errorData.message.includes('existe') || 
+                            errorData.message.includes('exists')
+                        ))) {
+                        console.log(`Usuário ${localUser.username} já existe no servidor, não precisa sincronizar`);
+                        syncResults.push({
+                            username: localUser.username,
+                            localId: localUser.id,
+                            success: true,
+                            alreadyExists: true
+                        });
+                        successCount++;
+                        continue;
+                    }
+                    
                     console.warn(`Falha ao sincronizar usuário ${localUser.username}:`, errorData);
                     syncResults.push({
                         username: localUser.username,
                         localId: localUser.id,
                         success: false,
-                        error: errorData.message || errorData.error || 'Erro desconhecido'
+                        error: errorData.message || errorData.error || 'Erro desconhecido',
+                        httpStatus: response.status
                     });
                     continue;
                 }
@@ -1011,7 +1172,7 @@ export async function syncLocalUsers() {
                 const data = await response.json();
                 console.log(`Usuário ${localUser.username} sincronizado com sucesso, novo ID: ${data.user.id}`);
                 
-                // Substituir o usuário local pelo usuário do servidor
+                // Incluir resultado de sucesso
                 syncResults.push({
                     username: localUser.username,
                     localId: localUser.id,
@@ -1021,13 +1182,24 @@ export async function syncLocalUsers() {
                 
                 successCount++;
             } catch (error) {
-                console.error(`Erro ao sincronizar usuário ${localUser.username}:`, error);
-                syncResults.push({
-                    username: localUser.username,
-                    localId: localUser.id,
-                    success: false,
-                    error: error.message
-                });
+                if (error.name === 'AbortError') {
+                    console.error(`Timeout ao sincronizar usuário ${localUser.username}`);
+                    syncResults.push({
+                        username: localUser.username,
+                        localId: localUser.id,
+                        success: false,
+                        error: 'Timeout: Servidor demorou muito para responder',
+                        timeout: true
+                    });
+                } else {
+                    console.error(`Erro ao sincronizar usuário ${localUser.username}:`, error);
+                    syncResults.push({
+                        username: localUser.username,
+                        localId: localUser.id,
+                        success: false,
+                        error: error.message
+                    });
+                }
             }
         }
         
@@ -1053,46 +1225,34 @@ export async function syncLocalUsers() {
 }
 
 /**
- * Testa a conexão com o servidor
- * @returns {Promise<Object>} - Resultado do teste
+ * Função alternativa para tentar sincronizar mesmo com erros 500 do servidor
+ * @param {Array} localOnlyUsers - Usuários locais para sincronizar 
+ * @param {Object} connectionTest - Resultado do teste de conexão
+ * @returns {Promise<Object>} - Resultado da sincronização
  */
-async function testServerConnection() {
-    try {
-        console.log('Testando conexão com o servidor...');
-        
-        const testStartTime = Date.now();
-        const response = await fetch(`${API_URL}?action=check-users`, {
-            method: 'GET',
-            headers: { 'Cache-Control': 'no-cache' }
-        });
-        
-        const testEndTime = Date.now();
-        const responseTimeMs = testEndTime - testStartTime;
-        
-        if (!response.ok) {
-            console.warn(`Servidor respondeu com erro: ${response.status} ${response.statusText}`);
-            return {
-                success: false,
-                error: `Erro ${response.status}: ${response.statusText}`,
-                responseTimeMs
-            };
-        }
-        
-        const data = await response.json();
-        
-        return {
-            success: true,
-            responseTimeMs,
-            serverUsers: data.count,
-            status: data.status
-        };
-    } catch (error) {
-        console.error('Erro ao testar conexão com o servidor:', error);
-        return {
+async function syncWithServerErrors(localOnlyUsers, connectionTest) {
+    // Informar ao usuário que estamos tentando uma sincronização limitada
+    const syncResults = [];
+    
+    // Adicionar detalhes para cada usuário sem tentar contatar o servidor
+    localOnlyUsers.forEach(user => {
+        syncResults.push({
+            username: user.username,
+            localId: user.id,
             success: false,
-            error: error.message
-        };
-    }
+            error: `Sincronização não realizada devido a erro ${connectionTest.httpStatus || 500} do servidor`,
+            serverError: true
+        });
+    });
+    
+    return {
+        success: false,
+        message: `Sincronização não realizada. Servidor respondeu com erro ${connectionTest.httpStatus || 500}.`,
+        details: syncResults,
+        synced: 0,
+        serverError: true,
+        retryLater: true
+    };
 }
 
 /**
