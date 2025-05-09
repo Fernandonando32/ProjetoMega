@@ -1,24 +1,89 @@
-# Sistema de Gestão FTTH
+# Sistema de Gestão FTTH com Supabase
 
-Sistema para gerenciamento de técnicos e veículos para operações de FTTH (Fiber to the Home).
+Este sistema de gestão para técnicos e veículos FTTH foi aprimorado para usar o Supabase como banco de dados persistente, substituindo o armazenamento local anterior (localStorage).
+
+## Funcionalidades Implementadas
+
+1. **Integração com Supabase**
+   - Armazenamento persistente em banco de dados PostgreSQL
+   - Sincronização automática dos dados
+   - Suporte a múltiplos usuários
+
+2. **Gestão de Registros**
+   - Cadastro de técnicos e veículos
+   - Filtragem e busca avançada
+   - Estatísticas em tempo real
+   - Visualização em mapa (coordenadas geográficas)
+
+3. **Importação de CSV**
+   - Importação de dados de planilhas
+   - Registro histórico de importações
+   - Validação de dados duplicados
+
+4. **Manutenção de Veículos**
+   - Registro de manutenções
+   - Alertas para trocas de óleo
+   - Histórico completo por veículo
+
+## Arquitetura do Sistema
+
+O sistema usa uma arquitetura cliente-servidor com o Supabase provendo a camada de backend:
+
+- **Frontend**: HTML, CSS e JavaScript puro
+- **Backend**: Supabase (PostgreSQL + API RESTful)
+- **Interface**: Wrapper HTML com injeção de scripts
+
+### Estrutura de Arquivos
+
+- `index.html` - Ponto de entrada do sistema com wrapper
+- `Pagina1 (1).html` - Página principal com a interface do usuário
+- `js/` - Diretório com scripts JavaScript
+  - `supabase-db.js` - Integração primária com Supabase
+  - `db-integrator.js` - Interfaces para banco de dados
+  - `supabase-integration.js` - Script de injeção dinâmica
+- `sql/` - Esquemas SQL para o Supabase
+  - `criar_tabelas_ftth.sql` - Script de criação das tabelas
 
 ## Configuração do Supabase
 
-Para conectar o sistema ao banco de dados Supabase, siga os passos abaixo:
+1. Acesse o [Supabase](https://supabase.com) e crie uma conta
+2. Crie um novo projeto
+3. Execute o script SQL em `sql/criar_tabelas_ftth.sql`
+4. Atualize as credenciais em `js/supabase-db.js`:
 
-1. Crie uma conta no [Supabase](https://supabase.com/) se ainda não tiver uma.
-2. Crie um novo projeto no Supabase.
-3. No painel do Supabase, vá para SQL Editor e execute o script SQL contido no arquivo `supabase-schema.sql`.
-4. Obtenha a URL e a chave anônima do seu projeto:
-   - No painel do Supabase, vá para Settings > API
-   - Copie a URL do projeto e a anon/public key
-5. Atualize o arquivo `config.js` com suas credenciais:
-   ```javascript
-   const SUPABASE_CONFIG = {
-       url: 'SUA_URL_DO_SUPABASE',
-       key: 'SUA_CHAVE_ANÔNIMA_DO_SUPABASE'
-   };
-   ```
+```javascript
+const SUPABASE_CONFIG = {
+    url: "SEU_URL_SUPABASE",
+    key: "SUA_CHAVE_ANON_SUPABASE"
+};
+```
+
+## Como Usar
+
+1. Abra o arquivo `index.html` no navegador
+2. Faça login com suas credenciais
+3. A sincronização com o banco de dados ocorre automaticamente
+4. Todas as operações (adicionar, editar, excluir) agora são persistentes
+
+## Solução de Problemas
+
+Se encontrar problemas ao usar o Supabase:
+
+1. Verifique as configurações de URL e chave de API
+2. Confirme que as tabelas foram criadas no Supabase
+3. Consulte o console do navegador para mensagens de erro
+4. Em caso de falha, o sistema reverte para o armazenamento local
+
+## Desenvolvimento Futuro
+
+- Autenticação direta com Supabase Auth
+- Sincronização offline
+- Melhorias na interface de importação
+- Dashboard avançado de estatísticas
+
+---
+
+Desenvolvido como parte da solução para o Sistema de Gestão FTTH.
 
 ## Estrutura do Projeto
 
