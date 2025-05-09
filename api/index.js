@@ -957,6 +957,361 @@ export default async function handler(req, res) {
         });
       }
     }
+    // Salvar registros FTTH no banco de dados
+    else if (req.method === 'POST' && req.query.action === 'salvar-ftth-registros') {
+      try {
+        console.log('Recebendo requisição para salvar registros FTTH');
+        
+        // Verificar se há dados no corpo da requisição
+        if (!req.body || !req.body.registros || !Array.isArray(req.body.registros)) {
+          return res.status(400).json({
+            success: false,
+            message: "Dados inválidos ou ausentes"
+          });
+        }
+        
+        const { registros, tipo, usuario_id, timestamp } = req.body;
+        
+        console.log(`Recebidos ${registros.length} registros FTTH para salvar, tipo: ${tipo}`);
+        
+        // Verificar se a tabela existe primeiro
+        let { error: checkError } = await supabase
+          .from('ftth_registros')
+          .select('count')
+          .limit(1)
+          .single();
+          
+        // Se tabela não existir, criar a tabela
+        if (checkError && checkError.code === '42P01') { // relação não existe
+          console.log('Tabela ftth_registros não existe. Tentando criar...');
+          
+          try {
+            // Criar a tabela usando SQL
+            const { error: createError } = await supabase.rpc('create_ftth_tables');
+            
+            if (createError) {
+              console.error('Erro ao criar tabela via RPC:', createError);
+              
+              // Inserir de qualquer forma, pois a tabela pode existir agora
+              console.log('Tentando inserir mesmo assim...');
+            } else {
+              console.log('Tabela ftth_registros criada com sucesso');
+            }
+          } catch (createTableError) {
+            console.error('Erro ao criar tabela:', createTableError);
+          }
+        }
+        
+        // Criamos um único registro de importação para agrupar todos os registros
+        const { data: importacaoData, error: importacaoError } = await supabase
+          .from('ftth_importacoes')
+          .insert([
+            {
+              tipo: tipo,
+              usuario_id: usuario_id,
+              quantidade: registros.length,
+              timestamp: timestamp || new Date().toISOString(),
+              status: 'completo'
+            }
+          ])
+          .select();
+          
+        if (importacaoError) {
+          console.error('Erro ao criar registro de importação:', importacaoError);
+          
+          // Se a tabela não existe, tentamos criá-la
+          if (importacaoError.code === '42P01') {
+            try {
+              // Criar a tabela de importações manualmente via SQL
+              const { error: createImportError } = await supabase.rpc('create_ftth_import_table');
+              
+              if (createImportError) {
+                console.error('Erro ao criar tabela de importações:', createImportError);
+              } else {
+                console.log('Tabela ftth_importacoes criada com sucesso');
+                
+                // Tentar inserir novamente
+                const { data: retryData, error: retryError } = await supabase
+                  .from('ftth_importacoes')
+                  .insert([
+                    {
+                      tipo: tipo,
+                      usuario_id: usuario_id,
+                      quantidade: registros.length,
+                      timestamp: timestamp || new Date().toISOString(),
+                      status: 'completo'
+                    }
+                  ])
+                  .select();
+                  
+                if (retryError) {
+                  console.error('Erro na segunda tentativa de criar importação:', retryError);
+                } else {
+                  console.log('Importação criada na segunda tentativa:', retryData?.[0]?.id);
+                }
+              }
+            } catch (createImportTableError) {
+              console.error('Erro ao criar tabela de importações:', createImportTableError);
+            }
+          }
+        }
+        
+        const importacaoId = importacaoData?.[0]?.id;
+        console.log('ID da importação:', importacaoId);
+        
+        // Preparar registros para inserção, incluindo o ID da importação
+        const registrosParaInserir = registros.map(registro => ({
+          ...registro,
+          importacao_id: importacaoId,
+          data_importacao: timestamp || new Date().toISOString()
+        }));
+        
+        // Inserir os registros em lotes de 100 para evitar problemas com tamanho de payload
+        const BATCH_SIZE = 100;
+        let insertedCount = 0;
+        let errorCount = 0;
+        
+        for (let i = 0; i < registrosParaInserir.length; i += BATCH_SIZE) {
+          const batch = registrosParaInserir.slice(i, i + BATCH_SIZE);
+          
+          const { data: insertedData, error: insertError } = await supabase
+            .from('ftth_registros')
+            .insert(batch);
+            
+          if (insertError) {
+            console.error(`Erro ao inserir lote ${i / BATCH_SIZE + 1}:`, insertError);
+            errorCount += batch.length;
+          } else {
+            insertedCount += batch.length;
+            console.log(`Lote ${i / BATCH_SIZE + 1} inserido com sucesso (${batch.length} registros)`);
+          }
+        }
+        
+        // Atualizar o status da importação
+        if (importacaoId) {
+          const { error: updateError } = await supabase
+            .from('ftth_importacoes')
+            .update({ 
+              sucesso: errorCount === 0,
+              registros_salvos: insertedCount,
+              registros_erro: errorCount,
+              status: errorCount === 0 ? 'completo' : 'parcial'
+            })
+            .eq('id', importacaoId);
+            
+          if (updateError) {
+            console.error('Erro ao atualizar status da importação:', updateError);
+          }
+        }
+        
+        return res.status(201).json({
+          success: true,
+          message: `${insertedCount} registros salvos com sucesso${errorCount > 0 ? `, ${errorCount} com erro` : ''}`,
+          importacao_id: importacaoId,
+          insertedCount,
+          errorCount
+        });
+      } catch (error) {
+        console.error('Erro ao processar requisição de registros FTTH:', error);
+        return res.status(500).json({
+          success: false,
+          message: "Erro interno ao processar registros",
+          error: error.message
+        });
+      }
+    }
+    // Criar tabelas FTTH no banco de dados
+    else if (req.method === 'POST' && req.query.action === 'create-ftth-tables') {
+      try {
+        console.log('Recebendo requisição para criar tabelas FTTH');
+        
+        // Criar a tabela de registros
+        const { error: createRegistrosError } = await supabase.rpc('create_ftth_tables');
+        
+        if (createRegistrosError) {
+          console.error('Erro ao criar tabela de registros:', createRegistrosError);
+          return res.status(500).json({
+            success: false,
+            message: "Erro ao criar tabela de registros",
+            error: createRegistrosError.message
+          });
+        }
+        
+        // Criar a tabela de importações
+        const { error: createImportacoesError } = await supabase.rpc('create_ftth_import_table');
+        
+        if (createImportacoesError) {
+          console.error('Erro ao criar tabela de importações:', createImportacoesError);
+          return res.status(500).json({
+            success: false,
+            message: "Erro ao criar tabela de importações",
+            error: createImportacoesError.message
+          });
+        }
+        
+        return res.status(201).json({
+          success: true,
+          message: "Tabelas FTTH criadas com sucesso"
+        });
+      } catch (error) {
+        console.error('Erro ao criar tabelas FTTH:', error);
+        return res.status(500).json({
+          success: false,
+          message: "Erro interno ao criar tabelas",
+          error: error.message
+        });
+      }
+    }
+    // Obter registros FTTH do banco de dados
+    else if (req.method === 'GET' && req.query.action === 'get-ftth-registros') {
+      try {
+        console.log('Recebendo requisição para obter registros FTTH');
+        
+        // Extrair parâmetros de filtro
+        const { cidade, tecnico, placa, operacao, limit = 1000, page = 1 } = req.query;
+        
+        // Calcular offset para paginação
+        const offset = (page - 1) * limit;
+        
+        // Construir a consulta base
+        let query = supabase
+          .from('ftth_registros')
+          .select('*')
+          .order('data_importacao', { ascending: false });
+        
+        // Aplicar filtros se fornecidos
+        if (cidade) query = query.ilike('cidade', `%${cidade}%`);
+        if (tecnico) query = query.ilike('tecnico', `%${tecnico}%`);
+        if (placa) query = query.ilike('placa', `%${placa}%`);
+        if (operacao) query = query.eq('operacao', operacao);
+        
+        // Aplicar paginação
+        query = query.range(offset, offset + limit - 1);
+        
+        // Executar consulta
+        const { data: registros, error, count } = await query;
+        
+        if (error) {
+          // Verificar se o erro é porque a tabela não existe
+          if (error.code === '42P01') { // relação não existe
+            console.log('Tabela ftth_registros não existe. Retornando registros vazios.');
+            return res.status(200).json({
+              success: true,
+              message: "Tabela de registros ainda não existe",
+              registros: [],
+              total: 0,
+              page,
+              limit,
+              fromLocal: true
+            });
+          }
+          
+          console.error('Erro ao obter registros FTTH:', error);
+          return res.status(500).json({
+            success: false,
+            message: "Erro ao obter registros FTTH",
+            error: error.message
+          });
+        }
+        
+        // Obter contagem total para a paginação
+        const { count: totalCount, error: countError } = await supabase
+          .from('ftth_registros')
+          .select('*', { count: 'exact', head: true });
+        
+        if (countError) {
+          console.error('Erro ao obter contagem de registros:', countError);
+        }
+        
+        return res.status(200).json({
+          success: true,
+          registros: registros || [],
+          total: totalCount || (registros ? registros.length : 0),
+          page: parseInt(page),
+          limit: parseInt(limit)
+        });
+      } catch (error) {
+        console.error('Erro ao processar requisição de obtenção de registros FTTH:', error);
+        return res.status(500).json({
+          success: false,
+          message: "Erro interno ao obter registros",
+          error: error.message
+        });
+      }
+    }
+    // Obter histórico de importações FTTH
+    else if (req.method === 'GET' && req.query.action === 'get-ftth-importacoes') {
+      try {
+        console.log('Recebendo requisição para obter histórico de importações FTTH');
+        
+        // Extrair parâmetros de filtro
+        const { limit = 50, page = 1, tipo } = req.query;
+        
+        // Calcular offset para paginação
+        const offset = (page - 1) * limit;
+        
+        // Construir a consulta base
+        let query = supabase
+          .from('ftth_importacoes')
+          .select('*')
+          .order('timestamp', { ascending: false });
+        
+        // Aplicar filtros se fornecidos
+        if (tipo) query = query.eq('tipo', tipo);
+        
+        // Aplicar paginação
+        query = query.range(offset, offset + limit - 1);
+        
+        // Executar consulta
+        const { data: importacoes, error } = await query;
+        
+        if (error) {
+          // Verificar se o erro é porque a tabela não existe
+          if (error.code === '42P01') { // relação não existe
+            console.log('Tabela ftth_importacoes não existe. Retornando lista vazia.');
+            return res.status(200).json({
+              success: true,
+              message: "Tabela de importações ainda não existe",
+              importacoes: [],
+              total: 0,
+              page,
+              limit
+            });
+          }
+          
+          console.error('Erro ao obter importações FTTH:', error);
+          return res.status(500).json({
+            success: false,
+            message: "Erro ao obter histórico de importações",
+            error: error.message
+          });
+        }
+        
+        // Obter contagem total para a paginação
+        const { count: totalCount, error: countError } = await supabase
+          .from('ftth_importacoes')
+          .select('*', { count: 'exact', head: true });
+        
+        if (countError) {
+          console.error('Erro ao obter contagem de importações:', countError);
+        }
+        
+        return res.status(200).json({
+          success: true,
+          importacoes: importacoes || [],
+          total: totalCount || (importacoes ? importacoes.length : 0),
+          page: parseInt(page),
+          limit: parseInt(limit)
+        });
+      } catch (error) {
+        console.error('Erro ao processar requisição de importações FTTH:', error);
+        return res.status(500).json({
+          success: false,
+          message: "Erro interno ao obter importações",
+          error: error.message
+        });
+      }
+    }
     // Método não permitido
     else {
       console.log('Requisição não reconhecida');

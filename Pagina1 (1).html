@@ -4489,5 +4489,288 @@
             });
         }
     </script>
+
+    <!-- Script para integração com o banco de dados -->
+    <script type="module">
+        import * as Auth from './js/auth.js';
+        
+        // Configuração e funções para o banco de dados
+        const API_URL = '/api';
+        
+        // Salvamento no banco de dados
+        async function salvarNoBanco(registros, tipo = 'manual') {
+            try {
+                console.log('Salvando registros no banco de dados:', registros.length);
+                
+                // Obter usuário atual
+                const currentUser = Auth.getCurrentUser();
+                const userId = currentUser ? currentUser.id : null;
+                
+                // Preparar dados para envio
+                const dadosParaSalvar = {
+                    registros: registros,
+                    tipo: tipo,
+                    usuario_id: userId,
+                    timestamp: new Date().toISOString()
+                };
+                
+                // Enviar para a API
+                const response = await fetch(`${API_URL}?action=salvar-ftth-registros`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(dadosParaSalvar),
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || `Erro ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                console.log('Dados salvos com sucesso no banco:', result);
+                return { success: true, ...result };
+                
+            } catch (error) {
+                console.error('Erro ao salvar no banco de dados:', error);
+                
+                // Salvar localmente como backup em caso de falha
+                salvarLocalBackup(registros, tipo);
+                
+                return { 
+                    success: false, 
+                    error: error.message,
+                    message: 'Os dados foram salvos localmente como backup'
+                };
+            }
+        }
+        
+        // Função para salvar localmente como backup
+        function salvarLocalBackup(registros, tipo) {
+            try {
+                // Obter backups já salvos
+                let backups = JSON.parse(localStorage.getItem('ftth_db_backups') || '[]');
+                
+                // Adicionar novo backup
+                backups.push({
+                    id: Date.now(),
+                    tipo: tipo,
+                    registros: registros,
+                    timestamp: new Date().toISOString()
+                });
+                
+                // Salvar de volta no localStorage
+                localStorage.setItem('ftth_db_backups', JSON.stringify(backups));
+                console.log('Backup salvo localmente');
+            } catch (e) {
+                console.error('Erro ao salvar backup local:', e);
+            }
+        }
+        
+        // Função para sincronizar dados locais com o banco
+        async function sincronizarComBanco() {
+            try {
+                // Verificar se há backups para sincronizar
+                const backups = JSON.parse(localStorage.getItem('ftth_db_backups') || '[]');
+                if (backups.length === 0) {
+                    return { success: true, message: 'Nenhum dado para sincronizar', synced: 0 };
+                }
+                
+                console.log(`Sincronizando ${backups.length} backups com o banco`);
+                
+                let sucessos = 0;
+                let falhas = 0;
+                const resultados = [];
+                
+                // Percorrer cada backup e tentar sincronizar
+                for (const backup of backups) {
+                    try {
+                        const result = await salvarNoBanco(backup.registros, `sync_${backup.tipo}`);
+                        if (result.success) {
+                            sucessos++;
+                            resultados.push({
+                                id: backup.id,
+                                success: true,
+                                registros: backup.registros.length,
+                                message: 'Sincronizado com sucesso'
+                            });
+                        } else {
+                            falhas++;
+                            resultados.push({
+                                id: backup.id,
+                                success: false,
+                                registros: backup.registros.length,
+                                error: result.error
+                            });
+                        }
+                    } catch (e) {
+                        falhas++;
+                        resultados.push({
+                            id: backup.id,
+                            success: false,
+                            registros: backup.registros.length,
+                            error: e.message
+                        });
+                    }
+                }
+                
+                // Remover backups sincronizados com sucesso
+                if (sucessos > 0) {
+                    const idsRemover = resultados
+                        .filter(r => r.success)
+                        .map(r => r.id);
+                    
+                    const backupsRestantes = backups.filter(b => !idsRemover.includes(b.id));
+                    localStorage.setItem('ftth_db_backups', JSON.stringify(backupsRestantes));
+                }
+                
+                return {
+                    success: true,
+                    message: `Sincronização concluída. ${sucessos} de ${backups.length} sincronizados`,
+                    synced: sucessos,
+                    falhas: falhas,
+                    resultados: resultados
+                };
+                
+            } catch (error) {
+                console.error('Erro na sincronização:', error);
+                return {
+                    success: false,
+                    message: 'Erro durante a sincronização',
+                    error: error.message
+                };
+            }
+        }
+        
+        // Sobrescrever funções existentes para salvar no banco
+        
+        // 1. Função de salvar registros
+        const salvarRegistrosOriginal = window.salvarRegistros;
+        window.salvarRegistros = async function() {
+            // Primeiro salvar localmente (função original)
+            salvarRegistrosOriginal();
+            
+            // Depois tentar salvar no banco
+            try {
+                await salvarNoBanco(registros, 'save');
+            } catch (error) {
+                console.error('Erro ao salvar registros no banco:', error);
+                // Continuar sem interromper a operação do usuário
+            }
+        };
+        
+        // 2. Interceptar a importação de CSV
+        const fileInput = document.getElementById('fileInput');
+        if (fileInput) {
+            // Salvar o evento original
+            const originalOnChange = fileInput.onchange;
+            
+            // Substituir com nossa função que também salva no banco
+            fileInput.onchange = async function(e) {
+                // Executar o comportamento original primeiro
+                if (originalOnChange) {
+                    originalOnChange.call(this, e);
+                }
+                
+                // Depois salvar no banco
+                try {
+                    // Dar tempo para que os registros sejam processados primeiro
+                    setTimeout(async () => {
+                        const result = await salvarNoBanco(registros, 'import_csv');
+                        if (!result.success) {
+                            console.warn('Os dados CSV foram importados localmente, mas ocorreu um erro ao salvá-los no banco:', result.error);
+                        }
+                    }, 1000);
+                } catch (error) {
+                    console.error('Erro ao salvar importação CSV no banco:', error);
+                }
+            };
+        }
+        
+        // 3. Adicionar botão para sincronização com o banco
+        document.addEventListener('DOMContentLoaded', function() {
+            // Adicionar botão de sincronização
+            const divBotoes = document.querySelector('div[style="margin: 20px 0;"]');
+            if (divBotoes) {
+                const btnSincronizar = document.createElement('button');
+                btnSincronizar.textContent = 'Sincronizar com Banco';
+                btnSincronizar.style.background = '#8e44ad';
+                btnSincronizar.style.color = 'white';
+                btnSincronizar.style.marginLeft = '10px';
+                
+                btnSincronizar.onclick = async function() {
+                    this.disabled = true;
+                    this.textContent = 'Sincronizando...';
+                    
+                    try {
+                        const result = await sincronizarComBanco();
+                        
+                        // Mostrar resultado da sincronização
+                        let mensagem = `
+                            <div style="margin-bottom: 15px;">
+                                <h3 style="margin-top: 0; color: #2a3d66; font-size: 1.3em;">Resultado da Sincronização</h3>
+                                <div style="margin-bottom: 10px; font-weight: bold; color: ${result.success ? '#27ae60' : '#e74c3c'};">
+                                    ${result.message}
+                                </div>
+                        `;
+                        
+                        if (result.resultados && result.resultados.length > 0) {
+                            mensagem += `
+                                <div style="max-height: 200px; overflow-y: auto; margin-bottom: 15px; background: #f9f9f9; border-radius: 5px; padding: 10px;">
+                                    <table style="width: 100%; border-collapse: collapse;">
+                                        <tr style="background: #eee; font-weight: bold;">
+                                            <th style="padding: 8px; text-align: left;">ID</th>
+                                            <th style="padding: 8px; text-align: left;">Registros</th>
+                                            <th style="padding: 8px; text-align: left;">Resultado</th>
+                                        </tr>
+                            `;
+                            
+                            result.resultados.forEach(res => {
+                                mensagem += `
+                                    <tr style="border-bottom: 1px solid #eee;">
+                                        <td style="padding: 8px;">${res.id}</td>
+                                        <td style="padding: 8px;">${res.registros}</td>
+                                        <td style="padding: 8px; color: ${res.success ? '#27ae60' : '#e74c3c'};">
+                                            ${res.success ? 'Sincronizado' : 'Falha: ' + (res.error || 'Erro desconhecido')}
+                                        </td>
+                                    </tr>
+                                `;
+                            });
+                            
+                            mensagem += `
+                                    </table>
+                                </div>
+                            `;
+                        }
+                        
+                        mensagem += `</div>`;
+                        
+                        // Mostrar modal com resultado
+                        mostrarModalResultadoImportacao(mensagem);
+                        
+                    } catch (error) {
+                        console.error('Erro durante a sincronização:', error);
+                        alert('Erro durante a sincronização: ' + error.message);
+                    } finally {
+                        this.disabled = false;
+                        this.textContent = 'Sincronizar com Banco';
+                    }
+                };
+                
+                divBotoes.appendChild(btnSincronizar);
+                
+                // Verificar backups pendentes
+                setTimeout(async () => {
+                    const backups = JSON.parse(localStorage.getItem('ftth_db_backups') || '[]');
+                    if (backups.length > 0) {
+                        btnSincronizar.textContent = `Sincronizar com Banco (${backups.length})`;
+                        btnSincronizar.style.fontWeight = 'bold';
+                    }
+                }, 1000);
+            }
+        });
+    </script>
 </body>
 </html>
