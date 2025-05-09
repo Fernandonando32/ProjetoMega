@@ -4,21 +4,44 @@
     <meta charset="UTF-8">
     <title>Manutenção de Veículos - FTTH</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script src="users.js"></script>
-    <script>
-        // Verificar autenticação
-        if (!Auth.isAuthenticated()) {
-            window.location.href = 'login.html';
-        }
-
-        // Obter usuário atual
-        const currentUser = Auth.getCurrentUser();
+    <script type="module">
+        import * as Auth from './js/auth.js';
         
-        // Verificar permissão para visualizar manutenções
-        if (!Auth.hasPermission(currentUser, Auth.PERMISSIONS.VIEW_MAINTENANCE)) {
-            alert('Você não tem permissão para acessar esta página.');
-            window.location.href = 'Pagina1 (1).html';
+        // Verificar autenticação
+        async function checkAuth() {
+            if (!await Auth.isAuthenticated()) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            // Obter usuário atual
+            const currentUser = Auth.getCurrentUser();
+            
+            // Verificar permissão para visualizar manutenções
+            if (!Auth.hasPermission(currentUser, Auth.PERMISSIONS.VIEW_MAINTENANCE)) {
+                alert('Você não tem permissão para acessar esta página.');
+                window.location.href = 'Pagina1 (1).html';
+                return;
+            }
+            
+            // Configurar elementos da interface após carregamento
+            document.addEventListener('DOMContentLoaded', setupUI);
         }
+        
+        // Iniciar verificação de autenticação
+        checkAuth();
+        
+        // Função para configurar a interface do usuário
+        function setupUI() {
+            const currentUser = Auth.getCurrentUser();
+            if (currentUser) {
+                // Configurar elementos da interface com base no usuário atual
+                // Código para atualizar a UI com informações do usuário...
+            }
+        }
+        
+        // Expor Auth globalmente para uso em outros scripts inline
+        window.Auth = Auth;
     </script>
     <style>
         body {
@@ -1650,7 +1673,7 @@
             // Configurar botão de logout
             document.getElementById('logoutButton').addEventListener('click', function() {
                 Auth.logout();
-                window.location.href = 'login.html';
+                // O redirecionamento agora é feito diretamente na função Auth.logout()
             });
             
             // Configurar botão de admin

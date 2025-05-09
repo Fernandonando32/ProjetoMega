@@ -94,7 +94,7 @@ export default async function handler(req, res) {
   // Habilitar CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST,PUT,DELETE');
   res.setHeader(
     'Access-Control-Allow-Headers',
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
@@ -271,6 +271,232 @@ export default async function handler(req, res) {
           status: 'error',
           message: 'Erro ao acessar o banco de dados',
           error: error.message
+        });
+      }
+    }
+    // Obter lista de usuários
+    else if (req.method === 'GET' && req.query.action === 'get-users') {
+      try {
+        // Obter lista de usuários do banco de dados
+        const { data, error } = await supabase
+          .from('users')
+          .select('id,username,name,email,accessLevel,operacao,customPermissions,permissions')
+          .order('id', { ascending: true });
+        
+        if (error) {
+          console.error('Erro ao obter usuários:', error);
+          return res.status(500).json({
+            error: "Erro ao obter usuários",
+            message: error.message
+          });
+        }
+        
+        // Remover senhas dos dados
+        const usersWithoutPasswords = data.map(user => {
+          const { password, ...userWithoutPassword } = user;
+          return userWithoutPassword;
+        });
+        
+        return res.status(200).json({
+          users: usersWithoutPasswords
+        });
+      } catch (error) {
+        console.error('Erro ao buscar usuários:', error);
+        return res.status(500).json({
+          error: "Erro interno do servidor",
+          message: error.message
+        });
+      }
+    }
+    // Criar usuário
+    else if (req.method === 'POST' && req.query.action === 'create-user') {
+      try {
+        const userData = req.body;
+        
+        if (!userData.username || !userData.password || !userData.name || !userData.accessLevel) {
+          return res.status(400).json({
+            error: "Dados incompletos",
+            message: "Nome de usuário, senha, nome e nível de acesso são obrigatórios"
+          });
+        }
+        
+        // Verificar se o nome de usuário já existe
+        const { data: existingUser, error: checkError } = await supabase
+          .from('users')
+          .select('username')
+          .eq('username', userData.username)
+          .maybeSingle();
+        
+        if (checkError) {
+          console.error('Erro ao verificar usuário existente:', checkError);
+          return res.status(500).json({
+            error: "Erro ao verificar usuário existente",
+            message: checkError.message
+          });
+        }
+        
+        if (existingUser) {
+          return res.status(400).json({
+            error: "Nome de usuário já existe",
+            message: "Este nome de usuário já está em uso"
+          });
+        }
+        
+        // Inserir novo usuário
+        const { data, error } = await supabase
+          .from('users')
+          .insert([userData])
+          .select();
+        
+        if (error) {
+          console.error('Erro ao criar usuário:', error);
+          return res.status(500).json({
+            error: "Erro ao criar usuário",
+            message: error.message
+          });
+        }
+        
+        // Remover senha do resultado
+        const { password, ...userWithoutPassword } = data[0];
+        
+        return res.status(201).json({
+          user: userWithoutPassword,
+          message: "Usuário criado com sucesso"
+        });
+      } catch (error) {
+        console.error('Erro ao criar usuário:', error);
+        return res.status(500).json({
+          error: "Erro interno do servidor",
+          message: error.message
+        });
+      }
+    }
+    // Atualizar usuário
+    else if (req.method === 'PUT' && req.query.action === 'update-user') {
+      try {
+        const userId = parseInt(req.query.id);
+        const userData = req.body;
+        
+        if (!userId || isNaN(userId)) {
+          return res.status(400).json({
+            error: "ID de usuário inválido",
+            message: "O ID do usuário deve ser um número válido"
+          });
+        }
+        
+        // Verificar se o usuário existe
+        const { data: existingUser, error: checkError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+        
+        if (checkError) {
+          console.error('Erro ao verificar usuário existente:', checkError);
+          return res.status(500).json({
+            error: "Erro ao verificar usuário existente",
+            message: checkError.message
+          });
+        }
+        
+        if (!existingUser) {
+          return res.status(404).json({
+            error: "Usuário não encontrado",
+            message: "O usuário com o ID especificado não existe"
+          });
+        }
+        
+        // Se a senha estiver vazia, manter a senha existente
+        if (!userData.password) {
+          delete userData.password;
+        }
+        
+        // Atualizar usuário
+        const { data, error } = await supabase
+          .from('users')
+          .update(userData)
+          .eq('id', userId)
+          .select();
+        
+        if (error) {
+          console.error('Erro ao atualizar usuário:', error);
+          return res.status(500).json({
+            error: "Erro ao atualizar usuário",
+            message: error.message
+          });
+        }
+        
+        // Remover senha do resultado
+        const { password, ...userWithoutPassword } = data[0];
+        
+        return res.status(200).json({
+          user: userWithoutPassword,
+          message: "Usuário atualizado com sucesso"
+        });
+      } catch (error) {
+        console.error('Erro ao atualizar usuário:', error);
+        return res.status(500).json({
+          error: "Erro interno do servidor",
+          message: error.message
+        });
+      }
+    }
+    // Excluir usuário
+    else if (req.method === 'DELETE' && req.query.action === 'delete-user') {
+      try {
+        const userId = parseInt(req.query.id);
+        
+        if (!userId || isNaN(userId)) {
+          return res.status(400).json({
+            error: "ID de usuário inválido",
+            message: "O ID do usuário deve ser um número válido"
+          });
+        }
+        
+        // Verificar se o usuário existe
+        const { data: existingUser, error: checkError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', userId)
+          .maybeSingle();
+        
+        if (checkError) {
+          console.error('Erro ao verificar usuário existente:', checkError);
+          return res.status(500).json({
+            error: "Erro ao verificar usuário existente",
+            message: checkError.message
+          });
+        }
+        
+        if (!existingUser) {
+          return res.status(404).json({
+            error: "Usuário não encontrado",
+            message: "O usuário com o ID especificado não existe"
+          });
+        }
+        
+        // Excluir usuário
+        const { error } = await supabase
+          .from('users')
+          .delete()
+          .eq('id', userId);
+        
+        if (error) {
+          console.error('Erro ao excluir usuário:', error);
+          return res.status(500).json({
+            error: "Erro ao excluir usuário",
+            message: error.message
+          });
+        }
+        
+        return res.status(200).json({
+          message: "Usuário excluído com sucesso"
+        });
+      } catch (error) {
+        console.error('Erro ao excluir usuário:', error);
+        return res.status(500).json({
+          error: "Erro interno do servidor",
+          message: error.message
         });
       }
     }

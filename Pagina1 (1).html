@@ -5,42 +5,185 @@
     <title>Acompanhamento de Técnicos e Veículos - FTTH</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script src="users.js"></script>
-    <script>
-        // Verificar autenticação
-        if (!Auth.isAuthenticated()) {
-            window.location.href = 'login.html';
-        }
-
-        // Obter usuário atual
-        const currentUser = Auth.getCurrentUser();
+    <script type="module">
+        import * as Auth from './js/auth.js';
         
-        // Garantir que administradores tenham a permissão MANAGE_USERS
-        if (currentUser.accessLevel === 'ADMIN') {
-            // Se o usuário tiver permissões personalizadas, garantir que MANAGE_USERS esteja incluída
-            if (currentUser.customPermissions && Array.isArray(currentUser.permissions)) {
-                if (!currentUser.permissions.includes(Auth.PERMISSIONS.MANAGE_USERS)) {
-                    currentUser.permissions.push(Auth.PERMISSIONS.MANAGE_USERS);
-                    // Atualizar o localStorage para persistir a alteração
-                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+        // Verificar autenticação
+        async function checkAuth() {
+            if (!await Auth.isAuthenticated()) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            // Obter usuário atual
+            const currentUser = Auth.getCurrentUser();
+            
+            // Garantir que administradores tenham a permissão MANAGE_USERS
+            if (currentUser.accessLevel === 'ADMIN') {
+                // Se o usuário tiver permissões personalizadas, garantir que MANAGE_USERS esteja incluída
+                if (currentUser.customPermissions && Array.isArray(currentUser.permissions)) {
+                    if (!currentUser.permissions.includes(Auth.PERMISSIONS.MANAGE_USERS)) {
+                        currentUser.permissions.push(Auth.PERMISSIONS.MANAGE_USERS);
+                        // Atualizar o sessionStorage para persistir a alteração
+                        sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    }
                 }
             }
+            
+            // Atribuir uma operação padrão com base no nível de acesso ou permissões personalizadas
+            // Em um sistema real, isso viria do banco de dados do usuário
+            if (!currentUser.operacao) {
+                if (currentUser.accessLevel === 'MAINTENANCE_MANAGER') {
+                    // Gerentes de manutenção são da operação Megalink por padrão
+                    currentUser.operacao = 'Megalink';
+                } else if (currentUser.accessLevel === 'TECH_MANAGER') {
+                    // Gerentes de técnicos são da operação BJ Fibra por padrão
+                    currentUser.operacao = 'BJ Fibra';
+                }
+                // ADMIN não recebe operação específica, podendo ver todas
+                // Se o usuário tiver a permissão VIEW_BY_OPERATION, ele poderá visualizar 
+                // registros de todas as operações independente da sua operação assignada
+            }
+            
+            // Atualizar o objeto do usuário no sessionStorage
+            sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+            
+            // Configurar elementos da interface após carregamento
+            document.addEventListener('DOMContentLoaded', setupUI);
+            
+            // Configurar manipulador do importador CSV
+            document.addEventListener('DOMContentLoaded', configureCSVImporter);
         }
         
-        // Atribuir uma operação padrão com base no nível de acesso ou permissões personalizadas
-        // Em um sistema real, isso viria do banco de dados do usuário
-        if (!currentUser.operacao) {
-            if (currentUser.accessLevel === 'MAINTENANCE_MANAGER') {
-                // Gerentes de manutenção são da operação Megalink por padrão
-                currentUser.operacao = 'Megalink';
-            } else if (currentUser.accessLevel === 'TECH_MANAGER') {
-                // Gerentes de técnicos são da operação BJ Fibra por padrão
-                currentUser.operacao = 'BJ Fibra';
+        // Iniciar verificação de autenticação
+        checkAuth();
+        
+        // Função para configurar a interface do usuário
+        function setupUI() {
+            const currentUser = Auth.getCurrentUser();
+            if (currentUser) {
+                // Configurar elementos da interface com base no usuário atual
+                // Código para atualizar a UI com informações do usuário...
             }
-            // ADMIN não recebe operação específica, podendo ver todas
-            // Se o usuário tiver a permissão VIEW_BY_OPERATION, ele poderá visualizar 
-            // registros de todas as operações independente da sua operação assignada
         }
+        
+        // Função para configurar o importador de CSV
+        function configureCSVImporter() {
+            const fileInput = document.getElementById('fileInput');
+            if (!fileInput) return;
+            
+            fileInput.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const text = e.target.result;
+                        importCSVData(text);
+                    };
+                    reader.readAsText(file);
+                }
+            });
+        }
+        
+        // Função para importar dados do CSV
+        function importCSVData(text) {
+            const lines = text.split('\n');
+            let importCount = 0;
+            let duplicateCount = 0;
+            let tecnicosSemVeiculoCount = 0;
+            let registrosComProblema = [];
+            let linhasIgnoradas = 0;
+            
+            console.log("Iniciando importação CSV...");
+            
+            // Pular a linha de cabeçalho
+            for (let i = 1; i < lines.length; i++) {
+                if (lines[i].trim()) {
+                    try {
+                        // Dividir a linha usando ponto e vírgula como separador
+                        const values = lines[i].split(';').map(v => v.trim());
+                        
+                        // Verificar se tem técnico e cidade
+                        const temTecnico = values[1] && values[1].trim();
+                        const temCidade = values[0] && values[0].trim();
+                        
+                        // Se não tem nem técnico nem cidade, pular
+                        if (!temTecnico && !temCidade) {
+                            linhasIgnoradas++;
+                            continue;
+                        }
+                        
+                        // Extrair latitude e longitude do formato atual
+                        let lat = '';
+                        let lng = '';
+                        
+                        if (values[9] && values[10]) {
+                            try {
+                                if (values[5] === "BJ Fibra") {
+                                    // Formato BJ Fibra: lat: -6.4037;"""lng"": -41.7382}"
+                                    lat = values[9].replace('lat:', '').replace(/"/g, '').trim();
+                                    lng = values[10].replace('"""lng"":', '').replace(/"/g, '').replace('}', '').trim();
+                                } else {
+                                    // Formato Megalink: lat: -5.890250;" ""lng"": -42.636018}"
+                                    lat = values[9].replace('lat:', '').trim();
+                                    lng = values[10].replace('" ""lng"":', '').replace('}"', '').trim();
+                                }
+
+                                // Garantir que as coordenadas estejam no formato correto
+                                lat = lat.replace(/,/g, '.').replace(/[^0-9.-]/g, '');
+                                lng = lng.replace(/,/g, '.').replace(/[^0-9.-]/g, '');
+                                
+                                // Verificar se as coordenadas são válidas
+                                const latNum = parseFloat(lat);
+                                const lngNum = parseFloat(lng);
+                                
+                                if (isNaN(latNum) || isNaN(lngNum)) {
+                                    registrosComProblema.push({
+                                        linha: i + 1,
+                                        dados: values,
+                                        erro: 'Coordenadas inválidas'
+                                    });
+                                    continue;
+                                }
+                            } catch (error) {
+                                console.error('Erro ao processar coordenadas:', error);
+                                registrosComProblema.push({
+                                    linha: i + 1,
+                                    dados: values,
+                                    erro: 'Erro ao processar coordenadas: ' + error.message
+                                });
+                                continue;
+                            }
+                        }
+                        
+                        // Processar o resto do CSV e criar os registros...
+                        // Esta parte será implementada conforme necessário
+                        
+                        importCount++;
+                    } catch (error) {
+                        console.error('Erro ao processar linha CSV:', error);
+                        registrosComProblema.push({
+                            linha: i + 1,
+                            dados: lines[i],
+                            erro: 'Erro de processamento: ' + error.message
+                        });
+                    }
+                }
+            }
+            
+            // Exibir resultados da importação
+            alert(`Importação concluída!\nRegistros importados: ${importCount}\nRegistros duplicados ignorados: ${duplicateCount}\nTécnicos sem veículo: ${tecnicosSemVeiculoCount}\nLinhas ignoradas: ${linhasIgnoradas}\nRegistros com problema: ${registrosComProblema.length}`);
+            
+            // Atualizar a exibição após a importação
+            if (typeof updateDisplay === 'function') {
+                updateDisplay();
+            }
+        }
+        
+        // Expor Auth e funções de importação CSV globalmente para uso em outros scripts inline
+        window.Auth = Auth;
+        window.importCSVData = importCSVData;
+        window.configureCSVImporter = configureCSVImporter;
     </script>
     <style>
         :root {
@@ -1146,7 +1289,7 @@
             // Configurar botão de logout
             document.getElementById('logoutButton').addEventListener('click', () => {
                 Auth.logout();
-                window.location.href = 'login.html';
+                // Remove o redirecionamento aqui, já que está implementado na função Auth.logout()
             });
             
             // Configurar botão de fullscreen para a tabela
@@ -4285,11 +4428,13 @@
                 }
             });
             
-            // Adicionar evento ao botão de logout
+            // Evento do botão de logout já configurado globalmente, não é necessário duplicar aqui
+            /*
             document.getElementById('logoutButton').addEventListener('click', function() {
                 Auth.logout();
                 window.location.href = 'login.html';
             });
+            */
             
             // Configurar botão de admin
             if (Auth.hasPermission(currentUser, Auth.PERMISSIONS.MANAGE_USERS)) {

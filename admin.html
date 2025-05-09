@@ -5,8 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Administração de Usuários</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script src="users.js" type="module"></script>
     <script type="module">
+        import * as Auth from './js/auth.js';
+        
         // Verificar autenticação
         async function checkAuth() {
             if (!await Auth.isAuthenticated()) {
@@ -26,6 +27,9 @@
         
         // Executar verificação de autenticação
         checkAuth();
+        
+        // Expor Auth globalmente para uso em outros scripts inline
+        window.Auth = Auth;
     </script>
     <style>
         :root {
@@ -812,7 +816,6 @@
             // Botão logout
             logoutButton.addEventListener('click', async () => {
                 await Auth.logout();
-                window.location.href = 'login.html';
             });
             
             // Configuração do sistema de notificações
