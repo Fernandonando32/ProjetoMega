@@ -302,27 +302,106 @@ export function hasPermission(user, permission) {
 export async function getAllUsers() {
     try {
         console.log('Buscando lista de usuários');
-        const response = await fetch(`${API_URL}?action=get-users`, {
-            method: 'GET',
-        });
-
-        const data = await response.json();
         
-        if (response.ok) {
-            console.log('Lista de usuários obtida com sucesso');
-            return data.users;
-        } else {
-            console.error('Erro ao obter usuários:', data.error);
-            // Retorna os usuários locais armazenados como fallback
+        // Obter usuários do armazenamento local primeiro
+        let localUsers = [];
+        try {
             const usersInLocalStorage = localStorage.getItem('users');
-            return usersInLocalStorage ? JSON.parse(usersInLocalStorage) : [];
+            if (usersInLocalStorage) {
+                localUsers = JSON.parse(usersInLocalStorage);
+                console.log(`Encontrados ${localUsers.length} usuários no armazenamento local`);
+            }
+        } catch (localError) {
+            console.warn('Erro ao acessar localStorage:', localError);
+        }
+        
+        // Tentar obter usuários do servidor
+        try {
+            const response = await fetch(`${API_URL}?action=get-users`, {
+                method: 'GET',
+                headers: {
+                    'Cache-Control': 'no-cache'
+                }
+            });
+
+            // Se não conseguir se comunicar com o servidor, usar apenas os dados locais
+            if (!response.ok) {
+                console.warn(`Erro na resposta do servidor: ${response.status} ${response.statusText}`);
+                return mergeDatabaseAndLocalUsers([], localUsers);
+            }
+
+            const data = await response.json();
+            
+            if (response.ok && data.users) {
+                console.log(`Recebidos ${data.users.length} usuários do servidor`);
+                
+                // Mesclar usuários do servidor com usuários locais
+                return mergeDatabaseAndLocalUsers(data.users, localUsers);
+            } else {
+                console.error('Erro ou formato inválido na resposta:', data);
+                return mergeDatabaseAndLocalUsers([], localUsers);
+            }
+        } catch (serverError) {
+            console.warn('Erro de comunicação com o servidor:', serverError);
+            return mergeDatabaseAndLocalUsers([], localUsers);
         }
     } catch (error) {
         console.error('Erro ao obter lista de usuários:', error);
-        // Retorna os usuários locais armazenados como fallback
-        const usersInLocalStorage = localStorage.getItem('users');
-        return usersInLocalStorage ? JSON.parse(usersInLocalStorage) : [];
+        
+        // Em caso de erro, tentar retornar os usuários locais como fallback
+        try {
+            const usersInLocalStorage = localStorage.getItem('users');
+            return usersInLocalStorage ? JSON.parse(usersInLocalStorage) : [];
+        } catch (fallbackError) {
+            console.error('Erro no fallback de localStorage:', fallbackError);
+            return [];
+        }
     }
+}
+
+/**
+ * Mescla usuários do banco de dados e do armazenamento local
+ * @param {Array} dbUsers - Usuários do banco de dados
+ * @param {Array} localUsers - Usuários do armazenamento local
+ * @returns {Array} - Lista de usuários mesclada
+ */
+function mergeDatabaseAndLocalUsers(dbUsers, localUsers) {
+    // Se não houver usuários locais, retornar apenas os do banco
+    if (!localUsers || localUsers.length === 0) {
+        return dbUsers;
+    }
+    
+    // Se não houver usuários do banco, retornar apenas os locais
+    if (!dbUsers || dbUsers.length === 0) {
+        return localUsers;
+    }
+    
+    // Criar um mapa de usuários do banco para rápido acesso
+    const dbUserMap = new Map();
+    dbUsers.forEach(user => {
+        dbUserMap.set(user.id, user);
+    });
+    
+    // Adicionar usuários locais que não existem no banco
+    // São os usuários com IDs baseados em timestamp (13+ dígitos)
+    const localOnlyUsers = localUsers.filter(user => {
+        // Se o ID for um timestamp (13+ dígitos)
+        return !dbUserMap.has(user.id) && String(user.id).length >= 13;
+    });
+    
+    console.log(`Mesclando ${dbUsers.length} usuários do servidor com ${localOnlyUsers.length} usuários locais`);
+    
+    // Combinar usuários do banco com usuários locais
+    const combinedUsers = [...dbUsers, ...localOnlyUsers];
+    
+    // Atualizar o armazenamento local com a lista mesclada
+    try {
+        localStorage.setItem('users', JSON.stringify(combinedUsers));
+    } catch (e) {
+        console.warn('Erro ao atualizar localStorage com usuários mesclados:', e);
+    }
+    
+    return combinedUsers;
 }
 
 /**
@@ -348,10 +427,20 @@ export async function createUser(userData) {
             
             if (response.ok) {
                 console.log('Usuário criado com sucesso');
-                return { success: true, user: data.user };
+                
+                // Se o usuário foi criado no modo offline, adicionar ao armazenamento local
+                if (data.offline) {
+                    console.log('Usuário criado em modo offline, salvando localmente');
+                    const existingUsers = localStorage.getItem('users');
+                    const users = existingUsers ? JSON.parse(existingUsers) : [];
+                    users.push(data.user);
+                    localStorage.setItem('users', JSON.stringify(users));
+                }
+                
+                return { success: true, user: data.user, offline: data.offline };
             } else {
                 console.error('Erro ao criar usuário:', data.error);
-                throw new Error(data.error);
+                throw new Error(data.message || data.error || 'Erro ao criar usuário');
             }
         } catch (serverError) {
             console.warn('Erro de comunicação com o servidor:', serverError);
@@ -373,7 +462,7 @@ export async function createUser(userData) {
             const updatedUsers = [...existingUsers, newUser];
             localStorage.setItem('users', JSON.stringify(updatedUsers));
             
-            return { success: true, user: newUser };
+            return { success: true, user: newUser, offline: true };
         }
     } catch (error) {
         console.error('Erro ao criar usuário:', error);
@@ -401,57 +490,117 @@ export async function updateUser(userId, userData) {
                 body: JSON.stringify(userData),
             });
 
+            if (!response.ok) {
+                console.error('Resposta não-OK do servidor:', response.status, response.statusText);
+                
+                // Se for um erro 404 (usuário não encontrado), provavelmente é um usuário local
+                if (response.status === 404) {
+                    console.log('Usuário não encontrado no servidor, tentando atualizar localmente');
+                    return updateLocalUser(userId, userData);
+                }
+            }
+
             const data = await response.json();
             
             if (response.ok) {
                 console.log('Usuário atualizado com sucesso');
+                
+                // Verificar se o usuário foi atualizado em modo offline
+                if (data.offline) {
+                    console.log('Usuário atualizado em modo offline, atualizando armazenamento local');
+                    return updateLocalUser(userId, userData);
+                }
+                
                 return { success: true, user: data.user };
             } else {
                 console.error('Erro ao atualizar usuário:', data.error);
-                throw new Error(data.error);
+                
+                // Tentar como fallback atualizar localmente
+                if (data.error === "Usuário não encontrado" || data.message?.includes("não existe")) {
+                    console.log('Tentando atualizar usuário localmente após erro de "não encontrado"');
+                    return updateLocalUser(userId, userData);
+                }
+                
+                throw new Error(data.message || data.error || 'Erro ao atualizar usuário');
             }
         } catch (serverError) {
             console.warn('Erro de comunicação com o servidor:', serverError);
             console.log('Usando armazenamento local para atualizar usuário');
             
-            // Obter lista atual de usuários
-            let existingUsers = await getAllUsers();
-            
-            // Verificar se o usuário existe
-            const userIndex = existingUsers.findIndex(user => user.id === userId);
-            if (userIndex === -1) {
-                return { success: false, message: 'Usuário não encontrado' };
-            }
-            
-            // Verificar se o nome de usuário já existe (exceto para o próprio usuário)
-            if (existingUsers.some(user => user.username === userData.username && user.id !== userId)) {
-                return { success: false, message: 'Nome de usuário já existe' };
-            }
-            
-            // Atualizar usuário
-            const updatedUser = {
-                ...existingUsers[userIndex],
-                ...userData,
-                id: userId // Manter o ID original
-            };
-            
-            existingUsers[userIndex] = updatedUser;
-            
-            // Salvar no armazenamento local
-            localStorage.setItem('users', JSON.stringify(existingUsers));
-            
-            // Se o usuário atual foi atualizado, atualizar na sessão
-            const currentUser = getCurrentUser();
-            if (currentUser && currentUser.id === userId) {
-                const { password, ...userWithoutPassword } = updatedUser;
-                sessionStorage.setItem('currentUser', JSON.stringify(userWithoutPassword));
-            }
-            
-            return { success: true, user: updatedUser };
+            return updateLocalUser(userId, userData);
         }
     } catch (error) {
         console.error('Erro ao atualizar usuário:', error);
         return { success: false, message: error.message || 'Erro ao atualizar usuário' };
+    }
+}
+
+/**
+ * Função auxiliar para atualizar um usuário no armazenamento local
+ * @param {number} userId - ID do usuário a ser atualizado
+ * @param {Object} userData - Novos dados do usuário
+ * @returns {Promise<Object>} - Objeto com resultado da operação
+ */
+async function updateLocalUser(userId, userData) {
+    try {
+        // Obter lista atual de usuários
+        let existingUsers = [];
+        const usersInLocalStorage = localStorage.getItem('users');
+        if (usersInLocalStorage) {
+            existingUsers = JSON.parse(usersInLocalStorage);
+        }
+        
+        // Verificar se o usuário existe
+        const userIndex = existingUsers.findIndex(user => user.id == userId);
+        
+        if (userIndex === -1) {
+            console.log(`Usuário ${userId} não encontrado no armazenamento local. Criando novo.`);
+            // Alternativa: criar um novo usuário
+            const newUser = {
+                ...userData,
+                id: userId
+            };
+            existingUsers.push(newUser);
+            localStorage.setItem('users', JSON.stringify(existingUsers));
+            
+            // Se o usuário atual foi atualizado, atualizar na sessão
+            const currentUser = getCurrentUser();
+            if (currentUser && currentUser.id == userId) {
+                const { password, ...userWithoutPassword } = newUser;
+                sessionStorage.setItem('currentUser', JSON.stringify(userWithoutPassword));
+            }
+            
+            return { success: true, user: newUser, offline: true };
+        }
+        
+        // Verificar se o nome de usuário já existe (exceto para o próprio usuário)
+        if (existingUsers.some(user => user.username === userData.username && user.id != userId)) {
+            return { success: false, message: 'Nome de usuário já existe' };
+        }
+        
+        // Atualizar usuário
+        const updatedUser = {
+            ...existingUsers[userIndex],
+            ...userData,
+            id: userId // Manter o ID original
+        };
+        
+        existingUsers[userIndex] = updatedUser;
+        
+        // Salvar no armazenamento local
+        localStorage.setItem('users', JSON.stringify(existingUsers));
+        
+        // Se o usuário atual foi atualizado, atualizar na sessão
+        const currentUser = getCurrentUser();
+        if (currentUser && currentUser.id == userId) {
+            const { password, ...userWithoutPassword } = updatedUser;
+            sessionStorage.setItem('currentUser', JSON.stringify(userWithoutPassword));
+        }
+        
+        return { success: true, user: updatedUser, offline: true };
+    } catch (error) {
+        console.error('Erro ao atualizar usuário localmente:', error);
+        return { success: false, message: 'Erro ao atualizar usuário localmente: ' + error.message };
     }
 }
 
