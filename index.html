@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>FTTH - Carregando Sistema</title>
+    <title>Sistema de Gestão FTTH</title>
     <script src="js/advanced-iframe-fix.js"></script>
     <style>
         body, html {
@@ -11,11 +11,35 @@
             height: 100%;
             overflow: hidden;
             font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: #2a3d66;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 20px;
+        }
+        
+        .note {
+            background: #f8f9fa;
+            border-left: 4px solid #2a3d66;
+            margin: 0;
+            padding: 10px;
+            font-size: 14px;
+            line-height: 1.5;
         }
         
         iframe {
             width: 100%;
-            height: 100%;
+            flex: 1;
             border: none;
             display: block;
             visibility: hidden; /* Inicialmente oculto para evitar flashes */
@@ -89,6 +113,14 @@
     </style>
 </head>
 <body>
+    <div class="header">
+        <h1>Sistema de Gestão FTTH</h1>
+    </div>
+    
+    <div class="note">
+        <strong>Nota:</strong> Este é o ponto de entrada recomendado para o sistema. Ele corrige automaticamente problemas de visualização na página principal.
+    </div>
+    
     <div id="loading">
         <div class="spinner"></div>
         <h2>Otimizando Exibição</h2>
