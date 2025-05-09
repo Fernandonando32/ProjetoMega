@@ -747,6 +747,48 @@
         </div>
     </div>
 
+    <!-- Modal de Sincronização -->
+    <div class="modal fade" id="syncModal" tabindex="-1" aria-labelledby="syncModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="syncModalLabel">Sincronização com Servidor</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="syncStatus">
+                        <p>Verificando usuários locais...</p>
+                        <div class="progress mb-3" style="display: none;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                        </div>
+                    </div>
+                    <div id="syncResults" style="display: none;">
+                        <div class="alert" role="alert"></div>
+                        <div class="sync-details mt-3" style="max-height: 200px; overflow-y: auto;">
+                            <h6>Detalhes:</h6>
+                            <ul class="list-group"></ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                    <button type="button" class="btn btn-primary" id="btnStartSync" style="display: none;">Iniciar Sincronização</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botão flutuante de sincronização -->
+    <div id="syncBadgeContainer" style="position: fixed; bottom: 20px; right: 20px; display: none; z-index: 1000;">
+        <button type="button" class="btn btn-warning position-relative" id="btnOpenSyncModal">
+            <i class="fas fa-sync-alt"></i> Sincronizar
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                <span id="localUserCount">0</span>
+                <span class="visually-hidden">usuários locais</span>
+            </span>
+        </button>
+    </div>
+
     <script type="module">
         // Variáveis Globais
         let users = [];
@@ -800,6 +842,9 @@
                     }
                 });
             });
+
+            // Verificar usuários locais na inicialização
+            await checkForLocalUsers();
         });
 
         // Configurar event listeners
@@ -1224,6 +1269,118 @@
                 submitButton.innerHTML = 'Salvar';
             }
         }
+
+        // Verificar se há usuários locais para sincronizar
+        async function checkForLocalUsers() {
+            try {
+                const localUsers = await Auth.checkLocalUsersCount();
+                
+                // Atualizar o badge e mostrar se necessário
+                if (localUsers.hasLocalUsers) {
+                    document.getElementById('localUserCount').textContent = localUsers.count;
+                    document.getElementById('syncBadgeContainer').style.display = 'block';
+                } else {
+                    document.getElementById('syncBadgeContainer').style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Erro ao verificar usuários locais:', error);
+            }
+        }
+        
+        // Modal de sincronização
+        document.getElementById('btnOpenSyncModal').addEventListener('click', async function() {
+            // Abrir modal
+            const syncModal = new bootstrap.Modal(document.getElementById('syncModal'));
+            syncModal.show();
+            
+            // Reset modal state
+            document.getElementById('syncStatus').style.display = 'block';
+            document.getElementById('syncResults').style.display = 'none';
+            document.querySelector('#syncStatus .progress').style.display = 'none';
+            document.getElementById('btnStartSync').style.display = 'none';
+            
+            // Verificar usuários locais
+            const localUsers = await Auth.checkLocalUsersCount();
+            
+            if (localUsers.hasLocalUsers) {
+                document.getElementById('syncStatus').innerHTML = `
+                    <p>Encontrados <strong>${localUsers.count}</strong> usuários locais para sincronizar:</p>
+                    <ul class="list-group mb-3">
+                        ${localUsers.usernames.map(username => `<li class="list-group-item">${username}</li>`).join('')}
+                    </ul>
+                    <p>Deseja sincronizar estes usuários com o servidor?</p>
+                `;
+                document.getElementById('btnStartSync').style.display = 'block';
+            } else {
+                document.getElementById('syncStatus').innerHTML = `
+                    <div class="alert alert-info" role="alert">
+                        Não há usuários locais para sincronizar.
+                    </div>
+                `;
+            }
+        });
+        
+        // Iniciar sincronização
+        document.getElementById('btnStartSync').addEventListener('click', async function() {
+            try {
+                // Atualizar UI para mostrar progresso
+                document.getElementById('btnStartSync').style.display = 'none';
+                document.getElementById('syncStatus').innerHTML = `
+                    <p>Sincronizando usuários locais com o servidor...</p>
+                `;
+                document.querySelector('#syncStatus .progress').style.display = 'block';
+                
+                // Executar sincronização
+                const result = await Auth.syncLocalUsers();
+                
+                // Mostrar resultados
+                document.getElementById('syncStatus').style.display = 'none';
+                document.getElementById('syncResults').style.display = 'block';
+                
+                const alertElement = document.querySelector('#syncResults .alert');
+                if (result.success) {
+                    alertElement.classList.add('alert-success');
+                    alertElement.classList.remove('alert-danger');
+                    alertElement.textContent = result.message;
+                } else {
+                    alertElement.classList.add('alert-danger');
+                    alertElement.classList.remove('alert-success');
+                    alertElement.textContent = `Erro: ${result.message || 'Falha na sincronização'}`;
+                }
+                
+                // Mostrar detalhes se houver
+                const detailsList = document.querySelector('#syncResults .sync-details ul');
+                detailsList.innerHTML = '';
+                
+                if (result.details && result.details.length > 0) {
+                    result.details.forEach(item => {
+                        const li = document.createElement('li');
+                        li.className = `list-group-item ${item.success ? 'list-group-item-success' : 'list-group-item-danger'}`;
+                        li.innerHTML = `
+                            <strong>${item.username}</strong>: 
+                            ${item.success 
+                                ? `Sincronizado com sucesso (ID: ${item.serverId})` 
+                                : `Falha: ${item.error || 'Erro desconhecido'}`}
+                        `;
+                        detailsList.appendChild(li);
+                    });
+                } else {
+                    detailsList.innerHTML = '<li class="list-group-item">Nenhum detalhe disponível</li>';
+                }
+                
+                // Atualizar contagem de usuários locais
+                await checkForLocalUsers();
+            } catch (error) {
+                console.error('Erro ao sincronizar:', error);
+                document.getElementById('syncStatus').style.display = 'none';
+                document.getElementById('syncResults').style.display = 'block';
+                
+                const alertElement = document.querySelector('#syncResults .alert');
+                alertElement.classList.add('alert-danger');
+                alertElement.classList.remove('alert-success');
+                alertElement.textContent = `Erro: ${error.message || 'Erro desconhecido durante a sincronização'}`;
+            }
+        });
     </script>
 </body>
 </html> 

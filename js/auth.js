@@ -933,4 +933,231 @@ export function getDiagnosticInfo() {
             timestamp: new Date().toISOString()
         };
     }
+}
+
+/**
+ * Sincroniza usuários locais com o servidor
+ * @returns {Promise<Object>} - Resultado da sincronização 
+ */
+export async function syncLocalUsers() {
+    try {
+        console.log('Iniciando sincronização de usuários locais com o servidor');
+        
+        // Obter todos os usuários locais
+        const usersInLocalStorage = localStorage.getItem('users');
+        if (!usersInLocalStorage) {
+            console.log('Nenhum usuário local para sincronizar');
+            return { success: true, message: 'Nenhum usuário local para sincronizar', synced: 0 };
+        }
+        
+        const localUsers = JSON.parse(usersInLocalStorage);
+        
+        // Filtrar apenas usuários criados localmente (com IDs de timestamp)
+        const localOnlyUsers = localUsers.filter(user => {
+            return String(user.id).length >= 13; // IDs de timestamp têm 13+ dígitos
+        });
+        
+        if (localOnlyUsers.length === 0) {
+            console.log('Nenhum usuário local para sincronizar');
+            return { success: true, message: 'Nenhum usuário local para sincronizar', synced: 0 };
+        }
+        
+        console.log(`Encontrados ${localOnlyUsers.length} usuários locais para sincronizar`);
+        
+        // Verificar conexão com o servidor antes de tentar sincronizar
+        const connectionTest = await testServerConnection();
+        if (!connectionTest.success) {
+            console.warn('Servidor não disponível para sincronização:', connectionTest.error);
+            return { 
+                success: false, 
+                message: 'Servidor não disponível para sincronização', 
+                error: connectionTest.error 
+            };
+        }
+        
+        // Sincronizar cada usuário local
+        const syncResults = [];
+        let successCount = 0;
+        
+        for (const localUser of localOnlyUsers) {
+            try {
+                console.log(`Sincronizando usuário local: ${localUser.username} (ID: ${localUser.id})`);
+                
+                // Preparar dados para envio (remover o ID local)
+                const { id, ...userData } = localUser;
+                
+                // Tentar criar o usuário no servidor
+                const response = await fetch(`${API_URL}?action=create-user`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(userData),
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.warn(`Falha ao sincronizar usuário ${localUser.username}:`, errorData);
+                    syncResults.push({
+                        username: localUser.username,
+                        localId: localUser.id,
+                        success: false,
+                        error: errorData.message || errorData.error || 'Erro desconhecido'
+                    });
+                    continue;
+                }
+                
+                // Processar resposta bem-sucedida
+                const data = await response.json();
+                console.log(`Usuário ${localUser.username} sincronizado com sucesso, novo ID: ${data.user.id}`);
+                
+                // Substituir o usuário local pelo usuário do servidor
+                syncResults.push({
+                    username: localUser.username,
+                    localId: localUser.id,
+                    serverId: data.user.id,
+                    success: true
+                });
+                
+                successCount++;
+            } catch (error) {
+                console.error(`Erro ao sincronizar usuário ${localUser.username}:`, error);
+                syncResults.push({
+                    username: localUser.username,
+                    localId: localUser.id,
+                    success: false,
+                    error: error.message
+                });
+            }
+        }
+        
+        // Atualizar a lista de usuários no localStorage
+        if (successCount > 0) {
+            await updateLocalUserList();
+        }
+        
+        return {
+            success: true,
+            message: `Sincronização concluída. ${successCount} de ${localOnlyUsers.length} usuários sincronizados.`,
+            details: syncResults,
+            synced: successCount
+        };
+    } catch (error) {
+        console.error('Erro ao sincronizar usuários locais:', error);
+        return {
+            success: false,
+            message: 'Erro ao sincronizar usuários locais',
+            error: error.message
+        };
+    }
+}
+
+/**
+ * Testa a conexão com o servidor
+ * @returns {Promise<Object>} - Resultado do teste
+ */
+async function testServerConnection() {
+    try {
+        console.log('Testando conexão com o servidor...');
+        
+        const testStartTime = Date.now();
+        const response = await fetch(`${API_URL}?action=check-users`, {
+            method: 'GET',
+            headers: { 'Cache-Control': 'no-cache' }
+        });
+        
+        const testEndTime = Date.now();
+        const responseTimeMs = testEndTime - testStartTime;
+        
+        if (!response.ok) {
+            console.warn(`Servidor respondeu com erro: ${response.status} ${response.statusText}`);
+            return {
+                success: false,
+                error: `Erro ${response.status}: ${response.statusText}`,
+                responseTimeMs
+            };
+        }
+        
+        const data = await response.json();
+        
+        return {
+            success: true,
+            responseTimeMs,
+            serverUsers: data.count,
+            status: data.status
+        };
+    } catch (error) {
+        console.error('Erro ao testar conexão com o servidor:', error);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+/**
+ * Atualiza a lista de usuários local após sincronização
+ * @returns {Promise<boolean>} - True se a atualização foi bem-sucedida
+ */
+async function updateLocalUserList() {
+    try {
+        console.log('Atualizando lista de usuários local após sincronização');
+        
+        // Obter lista atualizada do servidor
+        const response = await fetch(`${API_URL}?action=get-users`, {
+            method: 'GET',
+            headers: { 'Cache-Control': 'no-cache' }
+        });
+        
+        if (!response.ok) {
+            console.warn(`Erro ao obter lista atualizada: ${response.status}`);
+            return false;
+        }
+        
+        const data = await response.json();
+        
+        if (!data.users || !Array.isArray(data.users)) {
+            console.warn('Resposta do servidor não contém lista de usuários válida');
+            return false;
+        }
+        
+        // Atualizar localStorage
+        localStorage.setItem('users', JSON.stringify(data.users));
+        console.log(`Lista local atualizada com ${data.users.length} usuários`);
+        
+        return true;
+    } catch (error) {
+        console.error('Erro ao atualizar lista de usuários local:', error);
+        return false;
+    }
+}
+
+/**
+ * Verifica se há usuários para sincronizar e mostra contagem
+ * @returns {Promise<Object>} - Informações sobre usuários locais
+ */
+export async function checkLocalUsersCount() {
+    try {
+        // Obter todos os usuários locais
+        const usersInLocalStorage = localStorage.getItem('users');
+        if (!usersInLocalStorage) {
+            return { count: 0, hasLocalUsers: false };
+        }
+        
+        const localUsers = JSON.parse(usersInLocalStorage);
+        
+        // Filtrar apenas usuários criados localmente (com IDs de timestamp)
+        const localOnlyUsers = localUsers.filter(user => {
+            return String(user.id).length >= 13; // IDs de timestamp têm 13+ dígitos
+        });
+        
+        return { 
+            count: localOnlyUsers.length, 
+            hasLocalUsers: localOnlyUsers.length > 0,
+            usernames: localOnlyUsers.map(u => u.username)
+        };
+    } catch (error) {
+        console.error('Erro ao verificar usuários locais:', error);
+        return { count: 0, hasLocalUsers: false, error: error.message };
+    }
 } 
