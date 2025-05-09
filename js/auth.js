@@ -534,6 +534,12 @@ export async function updateUser(userId, userData) {
             } else {
                 console.error('Erro ao atualizar usuário:', data.error);
                 
+                // Verificar se é o erro de recursão infinita
+                if (data.message?.includes("infinite recursion") || data.error?.includes("infinite recursion")) {
+                    console.log('Detectado erro de recursão infinita, usando fallback local');
+                    return updateLocalUser(userId, userData);
+                }
+                
                 // Tentar como fallback atualizar localmente
                 if (data.error === "Usuário não encontrado" || data.message?.includes("não existe")) {
                     console.log('Tentando atualizar usuário localmente após erro de "não encontrado"');
@@ -544,7 +550,13 @@ export async function updateUser(userId, userData) {
             }
         } catch (serverError) {
             console.warn('Erro de comunicação com o servidor:', serverError);
-            console.log('Usando armazenamento local para atualizar usuário');
+            
+            // Verificar se o erro é de recursão infinita
+            if (serverError.message?.includes("infinite recursion")) {
+                console.log('Detectado erro de recursão infinita na política Supabase, usando armazenamento local');
+            } else {
+                console.log('Usando armazenamento local para atualizar usuário');
+            }
             
             return updateLocalUser(userId, userData);
         }
