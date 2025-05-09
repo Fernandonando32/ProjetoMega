@@ -31,7 +31,8 @@ export const PERMISSIONS = {
     MANAGE_USERS: 'manage_users'
 };
 
-const API_URL = '/api/login';
+// URL da API de login
+const API_URL = '/api';
 
 /**
  * Faz login no sistema
@@ -41,6 +42,7 @@ const API_URL = '/api/login';
  */
 export async function login(username, password) {
     try {
+        console.log('Tentando login para usuário:', username);
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
@@ -52,6 +54,7 @@ export async function login(username, password) {
         const data = await response.json();
         
         if (response.ok) {
+            console.log('Login bem-sucedido');
             // Armazenar dados do usuário na sessão
             sessionStorage.setItem('currentUser', JSON.stringify(data.user));
             return true;
@@ -74,9 +77,11 @@ export async function isAuthenticated() {
         // Primeiro, verifica se há dados no sessionStorage
         const storedUser = sessionStorage.getItem('currentUser');
         if (storedUser) {
+            console.log('Usuário já autenticado via sessionStorage');
             return true;
         }
         
+        console.log('Verificando autenticação com o servidor');
         // Se não houver, verifica com o servidor
         const response = await fetch(`${API_URL}?action=check`, {
             method: 'GET',
@@ -85,10 +90,12 @@ export async function isAuthenticated() {
         const data = await response.json();
         
         if (response.ok && data.authenticated) {
+            console.log('Usuário autenticado via servidor');
             // Atualiza os dados do usuário na sessão
             sessionStorage.setItem('currentUser', JSON.stringify(data.user));
             return true;
         } else {
+            console.log('Usuário não autenticado');
             return false;
         }
     } catch (error) {
@@ -103,6 +110,7 @@ export async function isAuthenticated() {
  */
 export async function logout() {
     try {
+        console.log('Fazendo logout');
         // Limpa dados do usuário do sessionStorage
         sessionStorage.removeItem('currentUser');
         

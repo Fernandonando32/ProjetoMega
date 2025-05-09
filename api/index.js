@@ -7,7 +7,7 @@ const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 /**
- * Manipulador de requisição para a API de login da Vercel
+ * Manipulador de requisição para a API principal da Vercel
  */
 export default async function handler(req, res) {
   // Habilitar CORS
@@ -28,13 +28,13 @@ export default async function handler(req, res) {
   console.log('API recebeu requisição:', {
     method: req.method,
     query: req.query,
-    body: req.body,
+    body: typeof req.body === 'object' ? 'Objeto JSON' : typeof req.body,
     path: req.url
   });
 
-  // Verificar se é uma requisição POST
-  if (req.method === 'POST') {
-    try {
+  try {
+    // Verificar se é uma requisição POST para login
+    if (req.method === 'POST' && !req.query.action) {
       // Extrair credenciais da requisição
       const { username, password } = req.body;
       
@@ -52,6 +52,7 @@ export default async function handler(req, res) {
         .single();
       
       if (userError || !user) {
+        console.log('Usuário não encontrado ou erro:', userError);
         return res.status(401).json({
           error: "Credenciais inválidas"
         });
@@ -59,6 +60,7 @@ export default async function handler(req, res) {
       
       // Verificar a senha (em produção, deve usar bcrypt ou similar)
       if (user.password !== password) {
+        console.log('Senha incorreta');
         return res.status(401).json({
           error: "Credenciais inválidas" 
         });
@@ -67,20 +69,16 @@ export default async function handler(req, res) {
       // Remover senha dos dados a serem enviados
       const { password: _, ...userWithoutPassword } = user;
       
+      console.log('Login bem-sucedido para:', username);
+      
       // Retornar dados do usuário
       return res.status(200).json({
         user: userWithoutPassword,
         message: "Login bem-sucedido"
       });
-    } catch (error) {
-      console.error('Erro no processo de autenticação:', error);
-      return res.status(500).json({
-        error: "Erro interno do servidor"
-      });
-    }
-  } else if (req.method === 'GET' && req.query.action === 'check') {
+    } 
     // Verificar autenticação
-    try {
+    else if (req.method === 'GET' && req.query.action === 'check') {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
@@ -111,16 +109,9 @@ export default async function handler(req, res) {
         authenticated: true,
         user: userWithoutPassword
       });
-    } catch (error) {
-      console.error('Erro ao verificar autenticação:', error);
-      return res.status(500).json({
-        authenticated: false,
-        error: "Erro interno do servidor"
-      });
-    }
-  } else if (req.method === 'POST' && req.query.action === 'logout') {
+    } 
     // Logout
-    try {
+    else if (req.method === 'POST' && req.query.action === 'logout') {
       const { error } = await supabase.auth.signOut();
       
       if (error) {
@@ -132,14 +123,21 @@ export default async function handler(req, res) {
       return res.status(200).json({
         message: "Logout bem-sucedido"
       });
-    } catch (error) {
-      console.error('Erro ao fazer logout:', error);
-      return res.status(500).json({
-        error: "Erro interno do servidor"
+    } 
+    // Método não permitido
+    else {
+      console.log('Requisição não reconhecida');
+      return res.status(405).json({ 
+        error: 'Método não permitido',
+        method: req.method,
+        path: req.url,
+        query: req.query
       });
     }
-  } else {
-    // Método não permitido
-    return res.status(405).json({ error: 'Método não permitido' });
+  } catch (error) {
+    console.error('Erro na execução da API:', error);
+    return res.status(500).json({
+      error: "Erro interno do servidor"
+    });
   }
 } 
