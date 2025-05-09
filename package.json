@@ -1,0 +1,23 @@
+{
+  "name": "projeto-cursor",
+  "version": "1.0.0",
+  "description": "O Sistema de Gestão FTTH é uma aplicação web integrada para gerenciamento de técnicos, veículos e tarefas em operações de fibra óptica. O sistema consiste em três módulos principais:",
+  "main": "users.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fernandonando32/ProjetoMega.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Fernandonando32/ProjetoMega/issues"
+  },
+  "homepage": "https://github.com/Fernandonando32/ProjetoMega#readme",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.4"
+  }
+}
