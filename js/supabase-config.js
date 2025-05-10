@@ -87,20 +87,10 @@ class SupabaseManager {
     // Inicializar o cliente Supabase
     async initialize() {
         try {
-            // Inicializar o cache explicitamente
-            this.initializeCache();
-            
             // Não criamos um novo cliente, apenas testamos a conexão
             await this.testConnection();
             this.connected = true;
             console.log('Conexão com Supabase estabelecida com sucesso');
-            
-            // Verificar operações pendentes
-            if (this.offlineQueue.length > 0 && window.SERVER_STATUS.serverReachable) {
-                console.log(`Detectadas ${this.offlineQueue.length} operações pendentes. Tentando sincronizar...`);
-                setTimeout(() => this.processPendingOperations(), 3000);
-            }
-            
             return true;
         } catch (error) {
             console.error('Erro ao inicializar Supabase:', error);
@@ -112,38 +102,6 @@ class SupabaseManager {
             }
             return false;
         }
-    }
-
-    // Inicializar o cache de forma explícita
-    initializeCache() {
-        if (!this.cache || !(this.cache instanceof Map)) {
-            console.log('Inicializando sistema de cache...');
-            this.cache = new Map();
-            
-            // Pré-carregar alguns dados essenciais se o servidor estiver acessível
-            if (window.SERVER_STATUS.serverReachable) {
-                // Carregar dados de usuários em segundo plano
-                setTimeout(async () => {
-                    try {
-                        const users = await this.client.from('users').select('*');
-                        if (users.data) {
-                            this.cache.set('users-*', {
-                                data: users.data,
-                                timestamp: Date.now()
-                            });
-                            console.log('Cache pré-carregado com dados de usuários');
-                        }
-                    } catch (error) {
-                        console.warn('Não foi possível pré-carregar o cache:', error);
-                    }
-                }, 100);
-            }
-        }
-    }
-
-    // Verificar o status do cache
-    isCacheWorking() {
-        return this.cache instanceof Map;
     }
 
     // Testar conexão com o servidor

@@ -50,7 +50,7 @@
         
         // Executar verificação de autenticação após carregamento do DOM
         document.addEventListener('DOMContentLoaded', function() {
-            checkAuth();
+        checkAuth();
         });
     </script>
     <style>
@@ -1527,7 +1527,7 @@
             // Iniciar o diagnóstico usando o helper
             DiagnosticHelper.displayDiagnosticReport('diagnosticReportContainer');
         });
-        
+
         // Fechar modal de diagnóstico
         document.querySelector('#diagnosticModal .close').addEventListener('click', function() {
             document.getElementById('diagnosticModal').style.display = 'none';
@@ -1536,7 +1536,7 @@
         document.getElementById('btnCloseDiagnostic').addEventListener('click', function() {
             document.getElementById('diagnosticModal').style.display = 'none';
         });
-        
+
         // Botão de diagnóstico avançado
         document.getElementById('btnAdvancedDiagnostic').addEventListener('click', async function() {
             try {
@@ -1553,7 +1553,7 @@
                 alert('Ocorreu um erro ao tentar o diagnóstico avançado: ' + error.message);
             }
         });
-        
+
         // Fechar modal ao clicar fora
         window.addEventListener('click', function(event) {
             const diagnosticModal = document.getElementById('diagnosticModal');
