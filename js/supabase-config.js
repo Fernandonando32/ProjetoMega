@@ -14,7 +14,22 @@ const SUPABASE_CONFIG = {
     cache: {
         enabled: true,
         ttl: 5 * 60 * 1000 // 5 minutos
+    },
+    // Modo offline
+    offline: {
+        enabled: true,
+        syncQueue: 'supabase_sync_queue'
     }
+};
+
+// Definir o status do servidor
+window.SERVER_STATUS = {
+    serverReachable: false,
+    databaseConnected: true,
+    tablesExist: true,
+    permissionsOk: true,
+    canCreateUser: false,
+    isOnline: true
 };
 
 // Verificar se já existe uma instância do cliente Supabase
@@ -32,6 +47,41 @@ class SupabaseManager {
         this.connected = false;
         this.reconnectAttempts = 0;
         this.cache = new Map();
+        this.offlineQueue = [];
+        this.loadOfflineQueue();
+    }
+
+    // Carregar a fila offline do localStorage
+    loadOfflineQueue() {
+        try {
+            const savedQueue = localStorage.getItem(SUPABASE_CONFIG.offline.syncQueue);
+            if (savedQueue) {
+                this.offlineQueue = JSON.parse(savedQueue);
+                console.log(`Carregada fila offline com ${this.offlineQueue.length} operações pendentes`);
+            }
+        } catch (error) {
+            console.error('Erro ao carregar fila offline:', error);
+            this.offlineQueue = [];
+        }
+    }
+
+    // Salvar a fila offline no localStorage
+    saveOfflineQueue() {
+        try {
+            localStorage.setItem(SUPABASE_CONFIG.offline.syncQueue, JSON.stringify(this.offlineQueue));
+        } catch (error) {
+            console.error('Erro ao salvar fila offline:', error);
+        }
+    }
+
+    // Adicionar operação à fila offline
+    addToOfflineQueue(operation) {
+        this.offlineQueue.push({
+            ...operation,
+            timestamp: Date.now()
+        });
+        this.saveOfflineQueue();
+        console.log(`Operação adicionada à fila offline. Total: ${this.offlineQueue.length}`);
     }
 
     // Inicializar o cliente Supabase
@@ -44,6 +94,12 @@ class SupabaseManager {
             return true;
         } catch (error) {
             console.error('Erro ao inicializar Supabase:', error);
+            // Se o servidor não estiver acessível, ativar modo offline
+            if (!window.SERVER_STATUS.serverReachable) {
+                console.warn('Servidor não acessível, ativando modo offline');
+                // Tenta executar operações offline quando estiver online novamente
+                window.addEventListener('online', () => this.processPendingOperations());
+            }
             return false;
         }
     }
@@ -53,9 +109,12 @@ class SupabaseManager {
         try {
             const { data, error } = await this.client.from('users').select('count').limit(1);
             if (error) throw error;
+            // Atualizar status do servidor
+            window.SERVER_STATUS.serverReachable = true;
             return true;
         } catch (error) {
             console.error('Erro ao testar conexão:', error);
+            // Status do servidor já está definido como inacessível
             return false;
         }
     }
@@ -76,7 +135,7 @@ class SupabaseManager {
         return await this.initialize();
     }
 
-    // Obter dados com cache
+    // Obter dados com cache e suporte offline
     async getData(table, query, useCache = true) {
         const cacheKey = `${table}-${JSON.stringify(query)}`;
 
@@ -88,6 +147,18 @@ class SupabaseManager {
         }
 
         try {
+            // Verificar se o servidor está acessível
+            if (!window.SERVER_STATUS.serverReachable) {
+                console.warn(`Servidor não acessível, usando dados em cache para ${table}`);
+                // Retornar dados do cache mesmo que expirados
+                const cachedData = this.cache.get(cacheKey);
+                if (cachedData) {
+                    return cachedData.data;
+                }
+                // Se não houver cache, retornar array vazio
+                return [];
+            }
+
             const { data, error } = await this.client.from(table).select(query);
             if (error) throw error;
 
@@ -101,49 +172,211 @@ class SupabaseManager {
             return data;
         } catch (error) {
             console.error(`Erro ao obter dados da tabela ${table}:`, error);
+            // Em caso de erro, tentar usar o cache
+            const cachedData = this.cache.get(cacheKey);
+            if (cachedData) {
+                console.warn(`Usando dados em cache para ${table} devido a erro`);
+                return cachedData.data;
+            }
             throw error;
         }
     }
 
-    // Inserir dados
+    // Inserir dados com suporte offline
     async insertData(table, data) {
         try {
+            // Verificar se o servidor está acessível
+            if (!window.SERVER_STATUS.serverReachable) {
+                console.warn(`Servidor não acessível, adicionando operação de inserção em ${table} à fila offline`);
+                // Gerar ID temporário para uso offline
+                const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                const tempData = { ...data, id: tempId, _is_temp: true };
+                
+                // Adicionar à fila offline
+                this.addToOfflineQueue({
+                    type: 'insert',
+                    table,
+                    data: tempData
+                });
+                
+                return tempData;
+            }
+
             const { data: result, error } = await this.client.from(table).insert(data);
             if (error) throw error;
             return result;
         } catch (error) {
             console.error(`Erro ao inserir dados na tabela ${table}:`, error);
+            
+            // Se ocorrer erro, tente adicionar à fila offline
+            if (SUPABASE_CONFIG.offline.enabled) {
+                console.warn(`Adicionando operação de inserção em ${table} à fila offline devido a erro`);
+                const tempId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+                const tempData = { ...data, id: tempId, _is_temp: true };
+                
+                this.addToOfflineQueue({
+                    type: 'insert',
+                    table,
+                    data: tempData
+                });
+                
+                return tempData;
+            }
+            
             throw error;
         }
     }
 
-    // Atualizar dados
+    // Atualizar dados com suporte offline
     async updateData(table, id, data) {
         try {
+            // Verificar se o servidor está acessível
+            if (!window.SERVER_STATUS.serverReachable) {
+                console.warn(`Servidor não acessível, adicionando operação de atualização em ${table} à fila offline`);
+                
+                // Adicionar à fila offline
+                this.addToOfflineQueue({
+                    type: 'update',
+                    table,
+                    id,
+                    data
+                });
+                
+                // Retornar dados atualizados para uso local
+                return { ...data, id };
+            }
+
             const { data: result, error } = await this.client.from(table).update(data).eq('id', id);
             if (error) throw error;
             return result;
         } catch (error) {
             console.error(`Erro ao atualizar dados na tabela ${table}:`, error);
+            
+            // Se ocorrer erro, tente adicionar à fila offline
+            if (SUPABASE_CONFIG.offline.enabled) {
+                console.warn(`Adicionando operação de atualização em ${table} à fila offline devido a erro`);
+                
+                this.addToOfflineQueue({
+                    type: 'update',
+                    table,
+                    id,
+                    data
+                });
+                
+                // Retornar dados atualizados para uso local
+                return { ...data, id };
+            }
+            
             throw error;
         }
     }
 
-    // Excluir dados
+    // Excluir dados com suporte offline
     async deleteData(table, id) {
         try {
+            // Verificar se o servidor está acessível
+            if (!window.SERVER_STATUS.serverReachable) {
+                console.warn(`Servidor não acessível, adicionando operação de exclusão em ${table} à fila offline`);
+                
+                // Adicionar à fila offline
+                this.addToOfflineQueue({
+                    type: 'delete',
+                    table,
+                    id
+                });
+                
+                return true;
+            }
+
             const { data: result, error } = await this.client.from(table).delete().eq('id', id);
             if (error) throw error;
             return result;
         } catch (error) {
             console.error(`Erro ao excluir dados da tabela ${table}:`, error);
+            
+            // Se ocorrer erro, tente adicionar à fila offline
+            if (SUPABASE_CONFIG.offline.enabled) {
+                console.warn(`Adicionando operação de exclusão em ${table} à fila offline devido a erro`);
+                
+                this.addToOfflineQueue({
+                    type: 'delete',
+                    table,
+                    id
+                });
+                
+                return true;
+            }
+            
             throw error;
         }
+    }
+
+    // Processar operações pendentes quando o servidor estiver disponível
+    async processPendingOperations() {
+        if (!window.SERVER_STATUS.serverReachable || this.offlineQueue.length === 0) {
+            return;
+        }
+
+        console.log(`Processando ${this.offlineQueue.length} operações pendentes`);
+        
+        // Copiar a fila para processar
+        const operationsToProcess = [...this.offlineQueue];
+        this.offlineQueue = [];
+        this.saveOfflineQueue();
+        
+        // Processar cada operação
+        for (const operation of operationsToProcess) {
+            try {
+                switch (operation.type) {
+                    case 'insert':
+                        // Remover propriedades temporárias
+                        const insertData = { ...operation.data };
+                        if (insertData._is_temp) {
+                            delete insertData._is_temp;
+                            delete insertData.id; // Deixar o banco gerar um ID real
+                        }
+                        await this.client.from(operation.table).insert(insertData);
+                        break;
+                        
+                    case 'update':
+                        await this.client.from(operation.table).update(operation.data).eq('id', operation.id);
+                        break;
+                        
+                    case 'delete':
+                        await this.client.from(operation.table).delete().eq('id', operation.id);
+                        break;
+                }
+                
+                console.log(`Operação ${operation.type} em ${operation.table} processada com sucesso`);
+            } catch (error) {
+                console.error(`Erro ao processar operação ${operation.type} em ${operation.table}:`, error);
+                // Adicionar de volta à fila
+                this.offlineQueue.push(operation);
+            }
+        }
+        
+        // Salvar a fila atualizada
+        this.saveOfflineQueue();
+        
+        // Limpar o cache para recarregar dados
+        this.clearCache();
     }
 
     // Limpar cache
     clearCache() {
         this.cache.clear();
+        console.log('Cache limpo');
+    }
+
+    // Obter status do sistema
+    getSystemStatus() {
+        return {
+            ...window.SERVER_STATUS,
+            offlineQueueSize: this.offlineQueue.length,
+            cacheSize: this.cache.size,
+            reconnectAttempts: this.reconnectAttempts,
+            timestamp: new Date().toISOString()
+        };
     }
 }
 

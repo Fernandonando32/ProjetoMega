@@ -15,6 +15,9 @@
     <!-- Configurações específicas -->
     <script src="./js/db-config.js"></script>
     <script src="./js/auth.js"></script>
+    
+    <!-- Ferramenta de diagnóstico -->
+    <script src="./js/diagnostic-helper.js"></script>
     <script>
         // Verificar autenticação e permissões
         async function checkAuth() {
@@ -846,57 +849,13 @@
                 <span class="close">&times;</span>
             </div>
             <div class="modal-body">
-                <div id="diagnosticStatus">
-                    <p>Executando diagnóstico do banco de dados...</p>
-                    <div class="progress-bar" style="height: 10px; width: 100%; background-color: #2a3d66; border-radius: 5px; margin-bottom: 15px;"></div>
-                </div>
-                <div id="diagnosticResults" style="display: none;">
-                    <div class="alert" role="alert" style="padding: 10px; border-radius: 4px; margin-bottom: 15px;"></div>
-                    
-                    <div class="diagnostic-details" style="margin-top: 15px;">
-                        <h6>Detalhes do Diagnóstico:</h6>
-                        
-                        <div class="panel" style="margin-bottom: 15px; border: 1px solid #e0e6f0; border-radius: 5px; overflow: hidden;">
-                            <div class="panel-header" style="background: #f8f9fa; padding: 10px 15px; border-bottom: 1px solid #e0e6f0;">
-                                <h6 style="margin: 0;">Status da Conexão</h6>
-                            </div>
-                            <div class="panel-body" style="padding: 15px;" id="connectionStatus">
-                                <!-- Será preenchido pelo JavaScript -->
-                            </div>
-                        </div>
-                        
-                        <div class="panel" style="margin-bottom: 15px; border: 1px solid #e0e6f0; border-radius: 5px; overflow: hidden;">
-                            <div class="panel-header" style="background: #f8f9fa; padding: 10px 15px; border-bottom: 1px solid #e0e6f0;">
-                                <h6 style="margin: 0;">Detalhes do Banco</h6>
-                            </div>
-                            <div class="panel-body" style="padding: 15px;" id="databaseDetails">
-                                <!-- Será preenchido pelo JavaScript -->
-                            </div>
-                        </div>
-                        
-                        <div class="panel" style="margin-bottom: 15px; border: 1px solid #e0e6f0; border-radius: 5px; overflow: hidden;">
-                            <div class="panel-header" style="background: #f8f9fa; padding: 10px 15px; border-bottom: 1px solid #e0e6f0;">
-                                <h6 style="margin: 0;">Resultados dos Testes</h6>
-                            </div>
-                            <div class="panel-body" style="padding: 15px;" id="testResults">
-                                <!-- Será preenchido pelo JavaScript -->
-                            </div>
-                        </div>
-                        
-                        <div class="panel" style="border: 1px solid #e0e6f0; border-radius: 5px; overflow: hidden;">
-                            <div class="panel-header" style="background: #f8f9fa; padding: 10px 15px; border-bottom: 1px solid #e0e6f0;">
-                                <h6 style="margin: 0;">Dados Técnicos Completos</h6>
-                            </div>
-                            <div class="panel-body" style="padding: 15px;">
-                                <pre id="rawDiagnosticData" style="background: #f8f9fa; padding: 10px; border-radius: 4px; overflow: auto; max-height: 200px; font-size: 12px;"></pre>
-                            </div>
-                        </div>
-                    </div>
+                <div id="diagnosticReportContainer">
+                    <!-- O relatório de diagnóstico será exibido aqui -->
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="button" id="btnCloseDiagnostic">Fechar</button>
-                <button type="button" class="button btn-primary" id="btnFixDatabase" style="display: none;">Tentar Corrigir</button>
+                <button type="button" class="button btn-primary" id="btnAdvancedDiagnostic">Diagnóstico Avançado</button>
             </div>
         </div>
     </div>
@@ -1540,134 +1499,10 @@
             // Abrir modal
             document.getElementById('diagnosticModal').style.display = 'block';
             
-            // Resetar estado do modal
-            document.getElementById('diagnosticStatus').style.display = 'block';
-            document.getElementById('diagnosticResults').style.display = 'none';
-            document.getElementById('btnFixDatabase').style.display = 'none';
-            
-            try {
-                // Executar diagnóstico
-                const results = await Auth.runDatabaseDiagnostic();
-                
-                // Atualizar UI com resultados
-                document.getElementById('diagnosticStatus').style.display = 'none';
-                document.getElementById('diagnosticResults').style.display = 'block';
-                
-                // Mostrar mensagem principal
-                const alertElement = document.querySelector('#diagnosticResults .alert');
-                
-                if (results.databaseConnected && results.tablesExist && results.canCreateUser) {
-                    alertElement.className = 'alert alert-success';
-                    alertElement.textContent = 'O banco de dados está funcionando corretamente.';
-                } else if (results.serverReachable && !results.databaseConnected) {
-                    alertElement.className = 'alert alert-danger';
-                    alertElement.textContent = 'O servidor está acessível, mas não consegue se conectar ao banco de dados.';
-                    document.getElementById('btnFixDatabase').style.display = 'inline-block';
-                } else if (results.serverReachable && results.databaseConnected && !results.tablesExist) {
-                    alertElement.className = 'alert alert-danger';
-                    alertElement.textContent = 'Conectado ao banco de dados, mas a tabela de usuários não existe.';
-                    document.getElementById('btnFixDatabase').style.display = 'inline-block';
-                } else if (results.infiniteRecursion) {
-                    alertElement.className = 'alert alert-danger';
-                    alertElement.textContent = 'Detectado erro de recursão infinita nas políticas de segurança do Supabase.';
-                    document.getElementById('btnFixDatabase').style.display = 'inline-block';
-                } else if (!results.permissionsOk) {
-                    alertElement.className = 'alert alert-danger';
-                    alertElement.textContent = 'Erro de permissões ou políticas no banco de dados.';
-                    document.getElementById('btnFixDatabase').style.display = 'inline-block';
-                } else if (!results.serverReachable) {
-                    alertElement.className = 'alert alert-danger';
-                    alertElement.textContent = 'Não foi possível acessar o servidor API.';
-                } else {
-                    alertElement.className = 'alert alert-warning';
-                    alertElement.textContent = 'Diagnóstico concluído com problemas identificados.';
-                    document.getElementById('btnFixDatabase').style.display = 'inline-block';
-                }
-                
-                // Detalhes da conexão
-                let connectionHtml = '<ul style="list-style: none; padding-left: 0;">';
-                connectionHtml += `<li><strong>Servidor API:</strong> ${results.serverReachable ? '✅ Acessível' : '❌ Inacessível'}</li>`;
-                connectionHtml += `<li><strong>Funcionamento da API:</strong> ${results.apiWorking ? '✅ Funcional' : '❌ Não funcional'}</li>`;
-                connectionHtml += `<li><strong>Conexão com banco:</strong> ${results.databaseConnected ? '✅ Conectado' : '❌ Desconectado'}</li>`;
-                connectionHtml += `<li><strong>Tabela de usuários:</strong> ${results.tablesExist ? '✅ Existe' : '❌ Não existe'}</li>`;
-                connectionHtml += `<li><strong>Armazenamento local:</strong> ${results.localStorage?.working ? '✅ Funcional' : '❌ Não funcional'}</li>`;
-                connectionHtml += `<li><strong>Online:</strong> ${results.environment.isOnline ? '✅ Sim' : '❌ Não'}</li>`;
-                connectionHtml += '</ul>';
-                
-                document.getElementById('connectionStatus').innerHTML = connectionHtml;
-                
-                // Detalhes do banco
-                if (results.dbDetails) {
-                    let dbHtml = '<ul style="list-style: none; padding-left: 0;">';
-                    if (results.dbDetails.fields && results.dbDetails.fields.length > 0) {
-                        dbHtml += `<li><strong>Campos na tabela:</strong> ${results.dbDetails.fields.join(', ')}</li>`;
-                    }
-                    if (results.dbDetails.errors && results.dbDetails.errors.length > 0) {
-                        dbHtml += '<li><strong>Erros detectados:</strong><ul>';
-                        results.dbDetails.errors.forEach(err => {
-                            dbHtml += `<li>${err.context || ''}: ${err.error || JSON.stringify(err)}</li>`;
-                        });
-                        dbHtml += '</ul></li>';
-                    }
-                    if (results.permissionError) {
-                        dbHtml += `<li><strong>Erro de permissão:</strong> ${results.permissionError}</li>`;
-                    }
-                    if (results.recursionError) {
-                        dbHtml += `<li><strong>Erro de recursão:</strong> ${results.recursionError}</li>`;
-                    }
-                    dbHtml += '</ul>';
-                    
-                    document.getElementById('databaseDetails').innerHTML = dbHtml;
-                } else {
-                    document.getElementById('databaseDetails').innerHTML = '<p>Informações detalhadas do banco não disponíveis.</p>';
-                }
-                
-                // Resultados dos testes
-                if (results.tests && results.tests.length > 0) {
-                    let testsHtml = '<ul style="list-style: none; padding-left: 0;">';
-                    results.tests.forEach(test => {
-                        const icon = test.success === true ? '✅' : (test.success === false ? '❌' : '⚠️');
-                        testsHtml += `<li>${icon} <strong>${test.name}:</strong> `;
-                        
-                        if (test.success) {
-                            testsHtml += 'Sucesso';
-                        } else if (test.error) {
-                            testsHtml += `Falha - ${test.error}`;
-                        } else if (test.status) {
-                            testsHtml += `Status ${test.status} ${test.statusText || ''}`;
-                        } else if (test.note) {
-                            testsHtml += test.note;
-                        }
-                        
-                        testsHtml += '</li>';
-                    });
-                    testsHtml += '</ul>';
-                    
-                    document.getElementById('testResults').innerHTML = testsHtml;
-                } else {
-                    document.getElementById('testResults').innerHTML = '<p>Nenhum teste executado.</p>';
-                }
-                
-                // Dados técnicos completos
-                document.getElementById('rawDiagnosticData').textContent = JSON.stringify(results, null, 2);
-                
-            } catch (error) {
-                console.error('Erro ao executar diagnóstico:', error);
-                
-                document.getElementById('diagnosticStatus').style.display = 'none';
-                document.getElementById('diagnosticResults').style.display = 'block';
-                
-                const alertElement = document.querySelector('#diagnosticResults .alert');
-                alertElement.className = 'alert alert-danger';
-                alertElement.textContent = `Erro ao executar diagnóstico: ${error.message}`;
-                
-                document.getElementById('connectionStatus').innerHTML = '<p>Ocorreu um erro ao executar o diagnóstico.</p>';
-                document.getElementById('databaseDetails').innerHTML = '<p>Informações não disponíveis devido a erro.</p>';
-                document.getElementById('testResults').innerHTML = '<p>Testes não executados devido a erro.</p>';
-                document.getElementById('rawDiagnosticData').textContent = JSON.stringify({error: error.message}, null, 2);
-            }
+            // Iniciar o diagnóstico usando o helper
+            DiagnosticHelper.displayDiagnosticReport('diagnosticReportContainer');
         });
-
+        
         // Fechar modal de diagnóstico
         document.querySelector('#diagnosticModal .close').addEventListener('click', function() {
             document.getElementById('diagnosticModal').style.display = 'none';
@@ -1676,55 +1511,24 @@
         document.getElementById('btnCloseDiagnostic').addEventListener('click', function() {
             document.getElementById('diagnosticModal').style.display = 'none';
         });
-
-        // Tentar corrigir problemas do banco
-        document.getElementById('btnFixDatabase').addEventListener('click', async function() {
-            this.disabled = true;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Tentando corrigir...';
-            
+        
+        // Botão de diagnóstico avançado
+        document.getElementById('btnAdvancedDiagnostic').addEventListener('click', async function() {
             try {
-                // Chamar API para tentar inicializar/corrigir o banco
-                const response = await fetch(`${API_URL}?action=fix-database`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({})
-                });
+                // Executar as correções automáticas
+                const fixes = await DiagnosticHelper.attemptFixes();
                 
-                if (response.ok) {
-                    const data = await response.json();
-                    
-                    const alertElement = document.querySelector('#diagnosticResults .alert');
-                    if (data.success) {
-                        alertElement.className = 'alert alert-success';
-                        alertElement.textContent = 'Correção aplicada com sucesso! ' + (data.message || '');
-                    } else {
-                        alertElement.className = 'alert alert-warning';
-                        alertElement.textContent = 'Tentativa de correção executada, mas com avisos: ' + (data.message || '');
-                    }
-                    
-                    // Executar diagnóstico novamente após 3 segundos
-                    setTimeout(() => {
-                        document.getElementById('btnDiagnostic').click();
-                    }, 3000);
-                } else {
-                    const errorData = await response.json();
-                    const alertElement = document.querySelector('#diagnosticResults .alert');
-                    alertElement.className = 'alert alert-danger';
-                    alertElement.textContent = 'Falha ao aplicar correção: ' + (errorData.message || errorData.error || 'Erro desconhecido');
-                }
+                // Atualizar o relatório
+                DiagnosticHelper.displayDiagnosticReport('diagnosticReportContainer');
+                
+                // Exibir resultados
+                alert(`${fixes.successful.filter(f => f.success).length} de ${fixes.actionsAttempted.length} tentativas de correção foram bem-sucedidas.`);
             } catch (error) {
-                console.error('Erro ao tentar corrigir banco:', error);
-                const alertElement = document.querySelector('#diagnosticResults .alert');
-                alertElement.className = 'alert alert-danger';
-                alertElement.textContent = 'Erro ao tentar corrigir: ' + error.message;
-            } finally {
-                this.disabled = false;
-                this.innerHTML = 'Tentar Corrigir';
+                console.error('Erro ao executar diagnóstico avançado:', error);
+                alert('Ocorreu um erro ao tentar o diagnóstico avançado: ' + error.message);
             }
         });
-
+        
         // Fechar modal ao clicar fora
         window.addEventListener('click', function(event) {
             const diagnosticModal = document.getElementById('diagnosticModal');
