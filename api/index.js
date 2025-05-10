@@ -37,6 +37,44 @@ END;
 $$ LANGUAGE plpgsql;
 `;
 
+// Função SQL para excluir a tabela de usuários
+const DROP_USERS_TABLE_SQL = `
+DROP TABLE IF EXISTS users CASCADE;
+`;
+
+// Função SQL para criar a tabela de usuários
+const CREATE_USERS_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  username VARCHAR(50) UNIQUE NOT NULL,
+  password VARCHAR(100) NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(100) UNIQUE NOT NULL,
+  accessLevel VARCHAR(20) NOT NULL DEFAULT 'USER',
+  operacao VARCHAR(50),
+  customPermissions JSONB DEFAULT '{}',
+  permissions JSONB DEFAULT '[]',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Criar função para atualizar o timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Criar trigger para atualizar o timestamp
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
+CREATE TRIGGER update_users_updated_at
+  BEFORE UPDATE ON users
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+`;
+
 // Testar conexão inicial
 console.log('Testando conexão inicial com Supabase...');
 supabase.rpc('version')
@@ -94,36 +132,6 @@ const DEFAULT_USERS = [
     email: 'viewer@example.com'
   }
 ];
-
-// Função SQL para criar a tabela de usuários
-const CREATE_USERS_TABLE_SQL = `
-CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  username VARCHAR(50) UNIQUE NOT NULL,
-  password VARCHAR(100) NOT NULL,
-  name VARCHAR(100) NOT NULL,
-  email VARCHAR(100) UNIQUE NOT NULL,
-  accessLevel VARCHAR(20) NOT NULL DEFAULT 'USER',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Criar função para atualizar o timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = CURRENT_TIMESTAMP;
-  RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- Criar trigger para atualizar o timestamp
-DROP TRIGGER IF EXISTS update_users_updated_at ON users;
-CREATE TRIGGER update_users_updated_at
-  BEFORE UPDATE ON users
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-`;
 
 async function createUsersTable() {
   try {
@@ -1593,6 +1601,66 @@ export default async function handler(req, res) {
           success: false,
           message: "Erro interno ao testar conexão",
           error: error.message
+        });
+      }
+    }
+    // Recriar tabela de usuários
+    else if (req.method === 'POST' && req.query.action === 'recreate-users-table') {
+      try {
+        console.log('Recebendo requisição para recriar tabela de usuários...');
+        
+        // Primeiro, tentar excluir a tabela existente
+        console.log('Tentando excluir tabela users existente...');
+        const { error: dropError } = await supabase.rpc('drop_users_table');
+        
+        if (dropError) {
+          console.error('Erro ao excluir tabela:', dropError);
+          // Continuar mesmo com erro, pois a tabela pode não existir
+        } else {
+          console.log('Tabela users excluída com sucesso');
+        }
+        
+        // Criar a nova tabela
+        console.log('Criando nova tabela users...');
+        const { error: createError } = await supabase.sql(CREATE_USERS_TABLE_SQL);
+        
+        if (createError) {
+          console.error('Erro ao criar nova tabela:', createError);
+          return res.status(500).json({
+            success: false,
+            error: "Erro ao criar nova tabela de usuários",
+            message: createError.message
+          });
+        }
+        
+        console.log('Nova tabela users criada com sucesso');
+        
+        // Inicializar com usuários padrão
+        console.log('Inicializando usuários padrão...');
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert(DEFAULT_USERS);
+        
+        if (insertError) {
+          console.error('Erro ao inserir usuários padrão:', insertError);
+          return res.status(500).json({
+            success: false,
+            error: "Erro ao inserir usuários padrão",
+            message: insertError.message
+          });
+        }
+        
+        return res.status(200).json({
+          success: true,
+          message: "Tabela de usuários recriada com sucesso",
+          usersInitialized: DEFAULT_USERS.length
+        });
+      } catch (error) {
+        console.error('Erro ao recriar tabela de usuários:', error);
+        return res.status(500).json({
+          success: false,
+          error: "Erro interno ao recriar tabela",
+          message: error.message
         });
       }
     }

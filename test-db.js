@@ -76,6 +76,24 @@ async function initializeUsers() {
   }
 }
 
+async function recreateUsersTable() {
+  try {
+    console.log('Tentando recriar a tabela de usuários...');
+    const response = await fetch(`${API_URL}?action=recreate-users-table`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    const data = await response.json();
+    console.log('Resposta:', data);
+    return data;
+  } catch (error) {
+    console.error('Erro ao recriar tabela:', error);
+    return null;
+  }
+}
+
 // Função principal para testar
 async function testDatabase() {
   console.log('=== Iniciando verificação do banco de dados ===\n');
@@ -101,6 +119,17 @@ async function testDatabase() {
     console.log('3. As políticas de segurança permitem acesso');
     return;
   }
+
+  // Recriar a tabela de usuários
+  console.log('\n=== Recriando tabela de usuários ===');
+  const recreated = await recreateUsersTable();
+  
+  if (!recreated || !recreated.success) {
+    console.error('ERRO: Não foi possível recriar a tabela de usuários');
+    return;
+  }
+  
+  console.log('Tabela de usuários recriada com sucesso!');
   
   // Verifica a estrutura da tabela
   console.log('\n=== Verificando estrutura da tabela users ===');
@@ -136,17 +165,6 @@ async function testDatabase() {
   } else {
     console.log('Nenhum usuário encontrado na tabela');
   }
-  
-  // Tenta inicializar os usuários padrão
-  console.log('\nTentando inicializar usuários padrão...');
-  const initialized = await initializeUsers();
-  
-  if (!initialized || !initialized.success) {
-    console.error('ERRO: Não foi possível inicializar os usuários padrão');
-    return;
-  }
-  
-  console.log('Usuários padrão inicializados com sucesso!');
   
   // Executa diagnóstico final
   console.log('\n=== Executando diagnóstico final ===');
