@@ -1,9 +1,9 @@
 // Configuração do Supabase
 const SUPABASE_CONFIG = {
     // URL do seu projeto Supabase
-    url: 'https://seu-projeto.supabase.co',
+    url: 'https://ryttlyigvimycygnzfju.supabase.co',
     // Chave anônima do seu projeto
-    anonKey: 'sua-chave-anonima',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5dHRseWlndmlteWN5Z256Zmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3MzE5OTYsImV4cCI6MjA2MjMwNzk5Nn0.njG4i1oZ3Ex9s490eTdXCaREInxM4aEgHazf8UhRTOA',
     // Configurações de reconexão
     reconnect: {
         maxAttempts: 5,
@@ -17,10 +17,18 @@ const SUPABASE_CONFIG = {
     }
 };
 
+// Verificar se já existe uma instância do cliente Supabase
+if (!window.supabaseClient) {
+    // Criar apenas uma instância do cliente para toda a aplicação
+    window.supabaseClient = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+    console.log('Cliente Supabase inicializado globalmente');
+}
+
 // Classe para gerenciar a conexão com o Supabase
 class SupabaseManager {
     constructor() {
-        this.client = null;
+        // Usar a instância global em vez de criar uma nova
+        this.client = window.supabaseClient;
         this.connected = false;
         this.reconnectAttempts = 0;
         this.cache = new Map();
@@ -29,7 +37,7 @@ class SupabaseManager {
     // Inicializar o cliente Supabase
     async initialize() {
         try {
-            this.client = supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+            // Não criamos um novo cliente, apenas testamos a conexão
             await this.testConnection();
             this.connected = true;
             console.log('Conexão com Supabase estabelecida com sucesso');
@@ -139,9 +147,11 @@ class SupabaseManager {
     }
 }
 
-// Exportar instância única do gerenciador
-const supabaseManager = new SupabaseManager();
-window.supabaseManager = supabaseManager;
-
-// Inicializar automaticamente
-supabaseManager.initialize().catch(console.error); 
+// Verificar se já existe uma instância do gerenciador
+if (!window.supabaseManager) {
+    // Exportar instância única do gerenciador
+    window.supabaseManager = new SupabaseManager();
+    
+    // Inicializar automaticamente
+    window.supabaseManager.initialize().catch(console.error);
+} 
