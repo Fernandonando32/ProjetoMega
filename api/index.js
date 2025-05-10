@@ -50,7 +50,72 @@ const DEFAULT_USERS = [
   }
 ];
 
-// Verifica se os usuários padrão existem e os cria se necessário
+// Função SQL para criar a tabela de usuários
+const CREATE_USERS_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  username VARCHAR(50) UNIQUE NOT NULL,
+  password VARCHAR(100) NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  email VARCHAR(100) UNIQUE NOT NULL,
+  accessLevel VARCHAR(20) NOT NULL DEFAULT 'USER',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Criar função para atualizar o timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Criar trigger para atualizar o timestamp
+DROP TRIGGER IF EXISTS update_users_updated_at ON users;
+CREATE TRIGGER update_users_updated_at
+  BEFORE UPDATE ON users
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+`;
+
+async function createUsersTable() {
+  try {
+    console.log('Criando tabela de usuários...');
+    
+    // Criar a tabela users usando SQL direto
+    const { error: createError } = await supabase
+      .from('users')
+      .select('*')
+      .limit(1);
+    
+    if (createError) {
+      if (error.code === '42P01') { // relação não existe
+        // Criar a tabela usando SQL
+        const { error: sqlError } = await supabase.sql(CREATE_USERS_TABLE_SQL);
+        
+        if (sqlError) {
+          console.error('Erro ao criar tabela users:', sqlError);
+          return false;
+        }
+        
+        console.log('Tabela users criada com sucesso');
+        return true;
+      }
+      
+      console.error('Erro ao verificar tabela users:', createError);
+      return false;
+    }
+    
+    console.log('Tabela users já existe');
+    return true;
+  } catch (error) {
+    console.error('Erro ao criar tabela users:', error);
+    return false;
+  }
+}
+
 async function initializeUsers() {
   try {
     console.log('Verificando usuários existentes...');
@@ -61,7 +126,16 @@ async function initializeUsers() {
     
     if (error) {
       console.error('Erro ao verificar usuários:', error);
-      return;
+      
+      // Se a tabela não existir, tentar criá-la
+      if (error.code === '42P01') {
+        const created = await createUsersTable();
+        if (!created) {
+          return;
+        }
+      } else {
+        return;
+      }
     }
     
     // Se não há usuários, inicializar com os padrões
@@ -957,6 +1031,45 @@ export default async function handler(req, res) {
         });
       }
     }
+    // Verificar se a tabela de usuários existe
+    else if (req.method === 'GET' && req.query.action === 'check-users-table') {
+      try {
+        console.log('Verificando se a tabela de usuários existe...');
+        
+        const { data, error } = await supabase
+          .from('users')
+          .select('count')
+          .limit(1);
+        
+        if (error) {
+          if (error.code === '42P01') { // relação não existe
+            return res.status(200).json({
+              exists: false,
+              message: "A tabela de usuários não existe"
+            });
+          }
+          
+          return res.status(500).json({
+            exists: false,
+            error: "Erro ao verificar tabela de usuários",
+            message: error.message
+          });
+        }
+        
+        return res.status(200).json({
+          exists: true,
+          message: "A tabela de usuários existe",
+          count: data?.[0]?.count || 0
+        });
+      } catch (error) {
+        console.error('Erro ao verificar tabela de usuários:', error);
+        return res.status(500).json({
+          exists: false,
+          error: "Erro interno ao verificar tabela",
+          message: error.message
+        });
+      }
+    }
     // Salvar registros FTTH no banco de dados
     else if (req.method === 'POST' && req.query.action === 'salvar-ftth-registros') {
       try {
@@ -1309,6 +1422,34 @@ export default async function handler(req, res) {
           success: false,
           message: "Erro interno ao obter importações",
           error: error.message
+        });
+      }
+    }
+    // Criar tabela de usuários
+    else if (req.method === 'POST' && req.query.action === 'create-users-table') {
+      try {
+        console.log('Recebendo requisição para criar tabela de usuários...');
+        
+        const created = await createUsersTable();
+        
+        if (created) {
+          return res.status(200).json({
+            success: true,
+            message: "Tabela de usuários criada ou já existe"
+          });
+        } else {
+          return res.status(500).json({
+            success: false,
+            error: "Erro ao criar tabela de usuários",
+            message: "Não foi possível criar a tabela de usuários"
+          });
+        }
+      } catch (error) {
+        console.error('Erro ao criar tabela de usuários:', error);
+        return res.status(500).json({
+          success: false,
+          error: "Erro interno ao criar tabela",
+          message: error.message
         });
       }
     }
