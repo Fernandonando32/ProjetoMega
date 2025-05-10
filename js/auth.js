@@ -362,4 +362,36 @@ Auth.syncLocalUsers = async function() {
     }
 };
 
+/**
+ * Executa diagnóstico do banco de dados
+ * @returns {Promise<Object>} - Resultado do diagnóstico
+ */
+Auth.runDatabaseDiagnostic = async function() {
+    try {
+        const response = await fetch(`${API_URL}?action=diagnostic`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Erro no servidor: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return {
+            success: true,
+            message: 'Diagnóstico concluído com sucesso',
+            details: data
+        };
+    } catch (error) {
+        console.error('Erro ao executar diagnóstico:', error);
+        return {
+            success: false,
+            message: 'Erro ao executar diagnóstico: ' + error.message
+        };
+    }
+};
+
 console.log('Auth module loaded successfully (non-module version)'); 
