@@ -4,7 +4,52 @@ import { createClient } from '@supabase/supabase-js';
 // Configuração do cliente Supabase
 const supabaseUrl = "https://ryttlyigvimycygnzfju.supabase.co";
 const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5dHRseWlndmlteWN5Z256Zmp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY3MzE5OTYsImV4cCI6MjA2MjMwNzk5Nn0.njG4i1oZ3Ex9s490eTdXCaREInxM4aEgHazf8UhRTOA";
-const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Verificar configuração
+console.log('Configurando Supabase...');
+console.log('URL:', supabaseUrl);
+console.log('Chave:', supabaseKey ? 'Presente' : 'Ausente');
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('ERRO: URL ou chave do Supabase ausentes!');
+  throw new Error('Configuração do Supabase incompleta');
+}
+
+// Criar cliente com opções de debug
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  },
+  db: {
+    schema: 'public'
+  }
+});
+
+// Função SQL para obter a versão do banco
+const GET_VERSION_SQL = `
+CREATE OR REPLACE FUNCTION version()
+RETURNS text AS $$
+BEGIN
+  RETURN version();
+END;
+$$ LANGUAGE plpgsql;
+`;
+
+// Testar conexão inicial
+console.log('Testando conexão inicial com Supabase...');
+supabase.rpc('version')
+  .then(({ data, error }) => {
+    if (error) {
+      console.error('Erro na conexão inicial:', error);
+    } else {
+      console.log('Conexão inicial bem-sucedida');
+    }
+  })
+  .catch(err => {
+    console.error('Exceção na conexão inicial:', err);
+  });
 
 // Usuários padrão do sistema 
 const DEFAULT_USERS = [
@@ -908,14 +953,15 @@ export default async function handler(req, res) {
           errors: [],
           connectionDetails: {
             url: supabaseUrl,
-            keyLength: supabaseKey ? supabaseKey.length : 0
+            keyLength: supabaseKey ? supabaseKey.length : 0,
+            keyPrefix: supabaseKey ? supabaseKey.substring(0, 10) + '...' : 'none'
           }
         };
         
-        // Testar conexão básica
+        // Testar conexão básica usando uma query simples
         try {
           console.log('[DIAGNOSE] Tentando conexão com Supabase...');
-          const { data, error } = await supabase.from('_test').select('*').limit(1);
+          const { data, error } = await supabase.from('users').select('count').limit(1);
           
           if (error) {
             console.error('[DIAGNOSE] Erro ao verificar conexão:', error);
@@ -923,62 +969,51 @@ export default async function handler(req, res) {
               context: 'connection_test',
               error: error.message,
               code: error.code,
-              details: error.details || 'Sem detalhes adicionais'
+              details: error.details || 'Sem detalhes adicionais',
+              hint: error.hint || 'Sem dica adicional'
             });
             
-            // Verificar se é um erro de autenticação
-            if (error.message?.includes('JWT') || error.message?.includes('auth')) {
+            // Se a tabela não existir, a conexão está ok
+            if (error.code === '42P01') {
+              console.log('[DIAGNOSE] Conexão com Supabase bem-sucedida (tabela users não existe)');
+              diagnosticResults.supabaseConnection = true;
               diagnosticResults.errors.push({
-                context: 'auth_error',
-                error: 'Possível erro de autenticação com a chave do Supabase'
+                context: 'missing_table',
+                error: 'A tabela users não existe no banco de dados.',
+                solution: 'Execute a criação da tabela usando o endpoint create-users-table'
               });
+            } else {
+              // Verificar se é um erro de autenticação
+              if (error.message?.includes('JWT') || error.message?.includes('auth')) {
+                diagnosticResults.errors.push({
+                  context: 'auth_error',
+                  error: 'Possível erro de autenticação com a chave do Supabase',
+                  details: 'Verifique se a chave do Supabase está correta e tem as permissões necessárias'
+                });
+              }
+              
+              // Verificar se é um erro de rede
+              if (error.message?.includes('network') || error.message?.includes('timeout')) {
+                diagnosticResults.errors.push({
+                  context: 'network_error',
+                  error: 'Possível erro de rede',
+                  details: 'Verifique se o servidor do Supabase está acessível'
+                });
+              }
             }
           } else {
             console.log('[DIAGNOSE] Conexão com Supabase bem-sucedida');
             diagnosticResults.supabaseConnection = true;
+            diagnosticResults.userTableExists = true;
           }
         } catch (connectionError) {
           console.error('[DIAGNOSE] Exceção ao testar conexão:', connectionError);
           diagnosticResults.errors.push({
             context: 'connection_test_exception',
             error: connectionError.message,
-            stack: connectionError.stack
+            stack: connectionError.stack,
+            type: connectionError.name
           });
-        }
-        
-        // Se a conexão foi bem sucedida, verificar a tabela users
-        if (diagnosticResults.supabaseConnection) {
-          try {
-            console.log('[DIAGNOSE] Verificando tabela users...');
-            const { data, error } = await supabase.from('users').select('count').limit(1);
-            
-            if (error) {
-              console.error('[DIAGNOSE] Erro ao verificar tabela users:', error);
-              diagnosticResults.errors.push({
-                context: 'user_table_check',
-                error: error.message,
-                code: error.code
-              });
-              
-              // Se a tabela não existir
-              if (error.code === '42P01') {
-                console.error('[DIAGNOSE] A tabela users não existe!');
-                diagnosticResults.errors.push({
-                  context: 'missing_table',
-                  error: 'A tabela users não existe no banco de dados.'
-                });
-              }
-            } else {
-              console.log('[DIAGNOSE] Tabela users verificada com sucesso');
-              diagnosticResults.userTableExists = true;
-            }
-          } catch (tableError) {
-            console.error('[DIAGNOSE] Exceção ao verificar tabela:', tableError);
-            diagnosticResults.errors.push({
-              context: 'table_check_exception',
-              error: tableError.message
-            });
-          }
         }
         
         // Retornar resultados do diagnóstico
@@ -994,21 +1029,25 @@ export default async function handler(req, res) {
           },
           dbDetails: {
             fields: diagnosticResults.userTableFields,
-            errors: diagnosticResults.errors
+            errors: diagnosticResults.errors,
+            connection: diagnosticResults.connectionDetails
           },
           tests: [
             {
               name: "Conexão com o banco",
-              success: diagnosticResults.supabaseConnection
+              success: diagnosticResults.supabaseConnection,
+              error: diagnosticResults.errors.find(e => e.context === 'connection_test')?.error
             },
             {
               name: "Tabela de usuários",
               success: diagnosticResults.userTableExists,
-              note: diagnosticResults.userTableExists ? "Tabela encontrada" : "Nenhum usuário encontrado"
+              note: diagnosticResults.userTableExists ? "Tabela encontrada" : "Nenhum usuário encontrado",
+              error: diagnosticResults.errors.find(e => e.context === 'user_table_check')?.error
             },
             {
               name: "Usuário padrão",
-              success: diagnosticResults.firstUser !== null
+              success: diagnosticResults.firstUser !== null,
+              error: diagnosticResults.errors.find(e => e.context === 'missing_table')?.error
             }
           ]
         });
