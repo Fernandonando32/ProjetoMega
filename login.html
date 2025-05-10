@@ -163,9 +163,8 @@
         </div>
     </div>
 
-    <script type="module">
-        import * as Auth from './js/auth.js';
-        
+    <script src="./js/auth.js"></script>
+    <script>
         // Verificar se já está autenticado
         async function checkExistingAuth() {
             if (await Auth.isAuthenticated()) {
