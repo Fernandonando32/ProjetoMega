@@ -201,11 +201,12 @@
             loginError.style.display = 'none';
             
             try {
-                const success = await Auth.login(username, password);
+                const result = await Auth.login(username, password);
                 
-                if (success) {
+                if (result.success) {
                     redirectLoggedInUser();
                 } else {
+                    loginError.textContent = result.message || 'Usuário ou senha incorretos';
                     loginError.style.display = 'block';
                     loginButton.disabled = false;
                     loginButton.textContent = 'Entrar';

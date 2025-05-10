@@ -81,22 +81,28 @@ const ACCESS_LEVELS = {
 class Auth {
     static async login(username, password) {
         try {
-            // Verificar credenciais no Supabase
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email: username,
-                password: password
-            });
-
-            if (error) throw error;
-
-            // Obter dados do usuário
+            // Primeiro, buscar o usuário pelo username para obter o email
             const { data: userData, error: userError } = await supabase
                 .from('users')
                 .select('*')
-                .eq('id', data.user.id)
+                .eq('username', username)
                 .single();
 
-            if (userError) throw userError;
+            if (userError) {
+                console.error('Erro ao buscar usuário:', userError);
+                return { success: false, message: 'Usuário não encontrado' };
+            }
+
+            // Fazer login com o email do usuário
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: userData.email,
+                password: password
+            });
+
+            if (error) {
+                console.error('Erro na autenticação:', error);
+                return { success: false, message: 'Senha incorreta' };
+            }
 
             // Armazenar dados do usuário
             const user = {
