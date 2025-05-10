@@ -262,4 +262,104 @@ Auth.deleteUser = async function(userId) {
     return true;
 };
 
+/**
+ * Verifica se há usuários locais para sincronizar
+ * @returns {Promise<Object>} - Objeto com informações sobre usuários locais
+ */
+Auth.checkLocalUsersCount = async function() {
+    try {
+        // Verificar se há usuários no localStorage
+        const localUsers = localStorage.getItem('localUsers');
+        if (!localUsers) {
+            return {
+                hasLocalUsers: false,
+                count: 0,
+                usernames: []
+            };
+        }
+
+        const users = JSON.parse(localUsers);
+        return {
+            hasLocalUsers: users.length > 0,
+            count: users.length,
+            usernames: users.map(user => user.username)
+        };
+    } catch (error) {
+        console.error('Erro ao verificar usuários locais:', error);
+        return {
+            hasLocalUsers: false,
+            count: 0,
+            usernames: []
+        };
+    }
+};
+
+/**
+ * Sincroniza usuários locais com o servidor
+ * @returns {Promise<Object>} - Resultado da sincronização
+ */
+Auth.syncLocalUsers = async function() {
+    try {
+        // Obter usuários locais
+        const localUsers = localStorage.getItem('localUsers');
+        if (!localUsers) {
+            return {
+                success: true,
+                message: 'Não há usuários locais para sincronizar'
+            };
+        }
+
+        const users = JSON.parse(localUsers);
+        const results = {
+            success: true,
+            message: 'Sincronização concluída',
+            details: []
+        };
+
+        // Tentar sincronizar cada usuário
+        for (const user of users) {
+            try {
+                const response = await fetch(`${API_URL}?action=create-user`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(user)
+                });
+
+                const data = await response.json();
+                
+                results.details.push({
+                    username: user.username,
+                    success: response.ok,
+                    serverId: data.userId,
+                    error: data.error
+                });
+            } catch (error) {
+                results.details.push({
+                    username: user.username,
+                    success: false,
+                    error: error.message
+                });
+            }
+        }
+
+        // Se todos os usuários foram sincronizados com sucesso, limpar o localStorage
+        if (results.details.every(detail => detail.success)) {
+            localStorage.removeItem('localUsers');
+            results.message = 'Todos os usuários foram sincronizados com sucesso';
+        } else {
+            results.message = 'Alguns usuários não puderam ser sincronizados';
+        }
+
+        return results;
+    } catch (error) {
+        console.error('Erro ao sincronizar usuários:', error);
+        return {
+            success: false,
+            message: 'Erro ao sincronizar usuários: ' + error.message
+        };
+    }
+};
+
 console.log('Auth module loaded successfully (non-module version)'); 
