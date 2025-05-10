@@ -15,6 +15,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Importar auth.js como script regular, não como módulo -->
     <script src="js/auth.js"></script>
+    <!-- Importar script de estatísticas corrigido -->
+    <script src="js/fix-estatisticas.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <script>
@@ -201,5 +203,54 @@
     <div id="app">
         <!-- O conteúdo será carregado dinamicamente -->
     </div>
+    
+    <!-- Estatísticas -->
+    <div id="estatisticas">
+        <h2>Estatísticas</h2>
+        <div class="estatistica">
+            <span id="totalTecnicos">0</span>
+            <label>Técnicos</label>
+        </div>
+        <div class="estatistica">
+            <span id="totalVeiculos">0</span>
+            <label>Veículos</label>
+        </div>
+        <div class="estatistica">
+            <span id="totalCidades">0</span>
+            <label>Cidades</label>
+        </div>
+        
+        <!-- Estatísticas por operação -->
+        <h3>Por Operação</h3>
+        <div class="estatisticas-operacao">
+            <div>
+                <span id="bjfibraCount">0</span>
+                <label>Técnicos BJ Fibra</label>
+            </div>
+            <div>
+                <span id="megalinkCount">0</span>
+                <label>Técnicos Megalink</label>
+            </div>
+            <div>
+                <span id="bjfibraVeiculosCount">0</span>
+                <label>Veículos BJ Fibra</label>
+            </div>
+            <div>
+                <span id="megalinkVeiculosCount">0</span>
+                <label>Veículos Megalink</label>
+            </div>
+        </div>
+        
+        <button onclick="atualizarEstatisticas()">Atualizar Estatísticas</button>
+    </div>
+    
+    <!-- Scripts adicionais -->
+    <script>
+        // Inicializar estatísticas quando a página carregar
+        document.addEventListener('DOMContentLoaded', function() {
+            // Atualizar estatísticas após um pequeno delay para garantir que tudo foi carregado
+            setTimeout(atualizarEstatisticas, 1000);
+        });
+    </script>
 </body>
 </html> 
