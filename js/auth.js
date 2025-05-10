@@ -200,7 +200,14 @@ class Auth {
                 password: userData.password
             });
 
-            if (authError) throw authError;
+            if (authError) {
+                console.warn('Erro ao criar usuário no auth, tentando rota alternativa:', authError);
+                // Verificar se é erro de permissão ou servidor inacessível
+                if (authError.message.includes('permission') || !window.SERVER_STATUS.serverReachable) {
+                    return this.saveUserLocally(userData);
+                }
+                throw authError;
+            }
 
             // Criar registro na tabela users
             const { data, error } = await supabase
@@ -217,11 +224,24 @@ class Auth {
                 }])
                 .select();
 
-            if (error) throw error;
+            if (error) {
+                console.warn('Erro ao salvar usuário no banco, tentando rota alternativa:', error);
+                // Se falhar ao inserir no banco, também salvar localmente
+                if (error.message.includes('permission') || !window.SERVER_STATUS.serverReachable) {
+                    return this.saveUserLocally(userData);
+                }
+                throw error;
+            }
 
             return { success: true, user: data[0] };
         } catch (error) {
             console.error('Erro ao criar usuário:', error);
+            
+            // Tentar salvar localmente em caso de erro
+            if (!window.SERVER_STATUS.serverReachable) {
+                return this.saveUserLocally(userData);
+            }
+            
             return { success: false, message: error.message };
         }
     }
@@ -436,6 +456,52 @@ class Auth {
             return { working: true };
         } catch (error) {
             return { working: false, error: error.message };
+        }
+    }
+
+    // Novo método para salvar usuário localmente
+    static saveUserLocally(userData) {
+        try {
+            // Obter usuários locais existentes
+            const localUsers = JSON.parse(localStorage.getItem('localUsers') || '[]');
+            
+            // Verificar se o nome de usuário já existe
+            if (localUsers.some(u => u.username === userData.username)) {
+                return { success: false, message: 'Nome de usuário já existe localmente' };
+            }
+            
+            // Adicionar timestamp e ID temporário
+            const tempUser = {
+                ...userData,
+                id: `temp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                created_at: new Date().toISOString(),
+                is_local: true
+            };
+            
+            // Adicionar à lista local
+            localUsers.push(tempUser);
+            localStorage.setItem('localUsers', JSON.stringify(localUsers));
+            
+            console.log('Usuário salvo localmente:', tempUser);
+            
+            // Mostrar badge de sincronização, se existir
+            if (document.getElementById('syncBadgeContainer')) {
+                document.getElementById('syncBadgeContainer').style.display = 'block';
+                const countElement = document.getElementById('localUserCount');
+                if (countElement) {
+                    countElement.textContent = localUsers.length;
+                }
+            }
+            
+            return { 
+                success: true, 
+                user: tempUser, 
+                message: 'Usuário criado localmente. Será sincronizado quando o servidor estiver disponível.',
+                isLocal: true
+            };
+        } catch (error) {
+            console.error('Erro ao salvar usuário localmente:', error);
+            return { success: false, message: `Falha ao salvar localmente: ${error.message}` };
         }
     }
 }
