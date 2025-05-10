@@ -91,7 +91,7 @@ async function createUsersTable() {
       .limit(1);
     
     if (createError) {
-      if (error.code === '42P01') { // relação não existe
+      if (createError.code === '42P01') { // relação não existe
         // Criar a tabela usando SQL
         const { error: sqlError } = await supabase.sql(CREATE_USERS_TABLE_SQL);
         
@@ -1529,6 +1529,40 @@ export default async function handler(req, res) {
           success: false,
           error: "Erro interno ao inicializar usuários",
           message: error.message
+        });
+      }
+    }
+    // Testar conexão com o banco
+    else if (req.method === 'GET' && req.query.action === 'test-connection') {
+      try {
+        console.log('Testando conexão com o banco...');
+        
+        // Tentar executar uma query simples
+        const { data, error } = await supabase
+          .from('users')
+          .select('count')
+          .limit(1);
+        
+        if (error) {
+          console.error('Erro ao testar conexão:', error);
+          return res.status(500).json({
+            success: false,
+            message: "Erro ao conectar com o banco",
+            error: error.message
+          });
+        }
+        
+        return res.status(200).json({
+          success: true,
+          message: "Conexão com o banco estabelecida com sucesso",
+          data: data
+        });
+      } catch (error) {
+        console.error('Erro ao testar conexão:', error);
+        return res.status(500).json({
+          success: false,
+          message: "Erro interno ao testar conexão",
+          error: error.message
         });
       }
     }
