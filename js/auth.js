@@ -368,7 +368,7 @@ Auth.syncLocalUsers = async function() {
  */
 Auth.runDatabaseDiagnostic = async function() {
     try {
-        const response = await fetch(`${API_URL}?action=run-diagnostic`, {
+        const response = await fetch(`${API_URL}?action=diagnose-db`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
