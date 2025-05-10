@@ -28,7 +28,7 @@
             const currentUser = Auth.getCurrentUser();
             
             // Garantir que administradores tenham a permissão MANAGE_USERS
-            if (currentUser.accessLevel === 'ADMIN') {
+            if (currentUser && currentUser.accessLevel === 'ADMIN') {
                 // Se o usuário tiver permissões personalizadas, garantir que MANAGE_USERS esteja incluída
                 if (currentUser.customPermissions && Array.isArray(currentUser.permissions)) {
                     if (!currentUser.permissions.includes(Auth.PERMISSIONS.MANAGE_USERS)) {
@@ -40,8 +40,7 @@
             }
             
             // Atribuir uma operação padrão com base no nível de acesso ou permissões personalizadas
-            // Em um sistema real, isso viria do banco de dados do usuário
-            if (!currentUser.operacao) {
+            if (currentUser && !currentUser.operacao) {
                 if (currentUser.accessLevel === 'MAINTENANCE_MANAGER') {
                     // Gerentes de manutenção são da operação Megalink por padrão
                     currentUser.operacao = 'Megalink';
@@ -49,13 +48,12 @@
                     // Gerentes de técnicos são da operação BJ Fibra por padrão
                     currentUser.operacao = 'BJ Fibra';
                 }
-                // ADMIN não recebe operação específica, podendo ver todas
-                // Se o usuário tiver a permissão VIEW_BY_OPERATION, ele poderá visualizar 
-                // registros de todas as operações independente da sua operação assignada
             }
             
             // Atualizar o objeto do usuário no sessionStorage
-            sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+            if (currentUser) {
+                sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+            }
             
             // Configurar elementos da interface após carregamento
             document.addEventListener('DOMContentLoaded', setupUI);
@@ -65,7 +63,10 @@
         }
         
         // Iniciar verificação de autenticação
-        checkAuth();
+        checkAuth().catch(error => {
+            console.error('Erro na autenticação:', error);
+            window.location.href = 'login.html';
+        });
         
         // Função para configurar a interface do usuário
         function setupUI() {
