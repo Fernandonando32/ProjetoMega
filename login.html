@@ -179,7 +179,7 @@
         function redirectLoggedInUser() {
             const currentUser = Auth.getCurrentUser();
             
-            if (Auth.hasPermission(currentUser, Auth.PERMISSIONS.MANAGE_USERS)) {
+            if (currentUser && currentUser.permissions && currentUser.permissions.includes('manage_users')) {
                 window.location.href = 'admin.html';
             } else {
                 window.location.href = 'Pagina1 (1).html';
