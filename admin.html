@@ -48,8 +48,10 @@
             document.getElementById('currentUserName').textContent = currentUser.name;
         }
         
-        // Executar verificação de autenticação
-        checkAuth();
+        // Executar verificação de autenticação após carregamento do DOM
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuth();
+        });
     </script>
     <style>
         :root {
