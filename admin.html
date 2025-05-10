@@ -18,6 +18,18 @@
     
     <!-- Ferramenta de diagnóstico -->
     <script src="./js/diagnostic-helper.js"></script>
+    
+    <!-- API de usuários -->
+    <script src="./js/users-api.js"></script>
+    
+    <!-- Gerenciador de sincronização -->
+    <script src="./js/sync-manager.js"></script>
+    
+    <!-- Sistema de notificações -->
+    <script src="./js/notification-system.js"></script>
+    
+    <!-- Sistema de armazenamento offline -->
+    <script src="./js/offline-storage.js"></script>
     <script>
         // Verificar autenticação e permissões
         async function checkAuth() {
@@ -841,6 +853,13 @@
         </button>
     </div>
 
+    <!-- Botão de sincronização manual -->
+    <div style="position: fixed; bottom: 20px; left: 200px; z-index: 1000;">
+        <button type="button" class="button btn-primary" id="btnForceSync">
+            <i class="fas fa-sync-alt"></i> Sincronizar Dados
+        </button>
+    </div>
+
     <!-- Modal de Diagnóstico -->
     <div id="diagnosticModal" class="modal" style="display: none;">
         <div class="modal-content" style="max-width: 700px; width: 90%;">
@@ -993,7 +1012,12 @@
         // Carregar lista de usuários
         async function loadUsers() {
             try {
-                users = await Auth.getAllUsers();
+                // Usar a nova API de usuários
+                users = await UserAPI.getAllUsers({
+                    useCache: false, // Forçar busca atualizada
+                    orderBy: 'name',
+                    ascending: true
+                });
                 
                 // Renderizar tabela
                 renderUserTable();
@@ -1188,7 +1212,7 @@
                 confirmDeleteButton.disabled = true;
                 
                 // Chamar a API para excluir o usuário
-                const result = await Auth.deleteUser(userId);
+                const result = await UserAPI.deleteUser(userId);
                 
                 if (result.success) {
                     // Remover o usuário da lista local
@@ -1304,13 +1328,13 @@
                 
                 let result;
                 
-                // Atualizar ou adicionar usuário
+                // Atualizar ou adicionar usuário usando a nova API
                 if (userId) {
                     // Atualizar usuário existente
-                    result = await Auth.updateUser(userId, userData);
+                    result = await UserAPI.updateUser(userId, userData);
                 } else {
                     // Adicionar novo usuário
-                    result = await Auth.createUser(userData);
+                    result = await UserAPI.createUser(userData);
                 }
                 
                 if (result.success) {
@@ -1324,7 +1348,7 @@
                     alert(userId ? 'Usuário atualizado com sucesso!' : 'Usuário adicionado com sucesso!');
                 } else {
                     // Mostrar erro
-                    if (result.message === 'Nome de usuário já existe') {
+                    if (result.message === 'Nome de usuário já existe' || result.message === 'Nome de usuário já está em uso') {
                         usernameError.style.display = 'block';
                     } else {
                         alert(`Erro: ${result.message}`);
@@ -1534,6 +1558,47 @@
             const diagnosticModal = document.getElementById('diagnosticModal');
             if (event.target === diagnosticModal) {
                 diagnosticModal.style.display = 'none';
+            }
+        });
+        
+        // Botão de sincronização manual
+        document.getElementById('btnForceSync').addEventListener('click', async function() {
+            try {
+                // Desabilitar botão durante sincronização
+                this.disabled = true;
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
+                
+                // Forçar sincronização
+                const result = await SyncManager.forceSyncNow();
+                
+                if (result.success) {
+                    // Atualizar lista de usuários
+                    await loadUsers();
+                    
+                    // Mostrar mensagem de sucesso
+                    NotificationSystem.showSuccess(
+                        'Sincronização concluída',
+                        `${result.operationsProcessed || 0} operações processadas. ${result.operationsRemaining || 0} operações pendentes.`
+                    );
+                } else {
+                    // Mostrar mensagem de erro
+                    NotificationSystem.showError(
+                        'Falha na sincronização',
+                        result.message || 'Não foi possível completar a sincronização.'
+                    );
+                }
+            } catch (error) {
+                console.error('Erro ao sincronizar dados:', error);
+                
+                // Mostrar mensagem de erro
+                NotificationSystem.showError(
+                    'Erro na sincronização',
+                    error.message || 'Ocorreu um erro durante a sincronização.'
+                );
+            } finally {
+                // Restaurar botão
+                this.disabled = false;
+                this.innerHTML = '<i class="fas fa-sync-alt"></i> Sincronizar Dados';
             }
         });
     </script>
