@@ -6,10 +6,21 @@
 // Importação da configuração do Supabase
 import SUPABASE_CONFIG from '../config.js';
 
+// Garantir que a configuração esteja disponível
+const getConfig = () => {
+    // Se a importação falhou ou não está disponível, usar a versão global
+    if (!SUPABASE_CONFIG && window.SUPABASE_CONFIG) {
+        console.log('Usando configuração global');
+        return window.SUPABASE_CONFIG;
+    }
+    return SUPABASE_CONFIG;
+};
+
 class SupabaseService {
     constructor() {
         this.supabase = null;
         this.initialized = false;
+        this.config = getConfig();
     }
 
     /**
@@ -27,8 +38,8 @@ class SupabaseService {
             
             // Cria o cliente Supabase
             this.supabase = window.supabase.createClient(
-                SUPABASE_CONFIG.url,
-                SUPABASE_CONFIG.key
+                this.config.url,
+                this.config.key
             );
             
             this.initialized = true;
