@@ -380,16 +380,68 @@ Auth.runDatabaseDiagnostic = async function() {
         }
 
         const data = await response.json();
-        return {
+        
+        // Processar os dados do diagnóstico
+        const results = {
             success: true,
             message: 'Diagnóstico concluído com sucesso',
-            details: data
+            serverReachable: true,
+            databaseConnected: data.database?.status === 'connected',
+            tablesExist: data.database?.users?.status === 'available',
+            canCreateUser: data.database?.defaultUserLogin?.status === 'success',
+            environment: {
+                isOnline: navigator.onLine,
+                node: data.environment?.node,
+                env: data.environment?.env,
+                platform: data.environment?.platform,
+                vercel: data.environment?.vercel
+            },
+            dbDetails: {
+                fields: data.database?.users?.sample?.[0] ? Object.keys(data.database.users.sample[0]) : [],
+                errors: data.database?.error ? [{ context: 'database', error: data.database.error }] : []
+            },
+            tests: [
+                {
+                    name: 'Conexão com o banco',
+                    success: data.database?.status === 'connected'
+                },
+                {
+                    name: 'Tabela de usuários',
+                    success: data.database?.users?.status === 'available',
+                    note: data.database?.users?.count ? `${data.database.users.count} usuários encontrados` : 'Nenhum usuário encontrado'
+                },
+                {
+                    name: 'Usuário padrão',
+                    success: data.database?.defaultUserLogin?.status === 'success',
+                    note: data.database?.defaultUserLogin?.result
+                }
+            ]
         };
+
+        return results;
     } catch (error) {
         console.error('Erro ao executar diagnóstico:', error);
         return {
             success: false,
-            message: 'Erro ao executar diagnóstico: ' + error.message
+            message: 'Erro ao executar diagnóstico: ' + error.message,
+            serverReachable: false,
+            databaseConnected: false,
+            tablesExist: false,
+            canCreateUser: false,
+            environment: {
+                isOnline: navigator.onLine
+            },
+            dbDetails: {
+                fields: [],
+                errors: [{ context: 'error', error: error.message }]
+            },
+            tests: [
+                {
+                    name: 'Conexão com o servidor',
+                    success: false,
+                    error: error.message
+                }
+            ]
         };
     }
 };
