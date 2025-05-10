@@ -905,23 +905,34 @@ export default async function handler(req, res) {
           userTableFields: [],
           firstUser: null,
           defaultUsers: DEFAULT_USERS.length,
-          errors: []
+          errors: [],
+          connectionDetails: {
+            url: supabaseUrl,
+            keyLength: supabaseKey ? supabaseKey.length : 0
+          }
         };
         
         // Testar conexão básica
         try {
+          console.log('[DIAGNOSE] Tentando conexão com Supabase...');
           const { data, error } = await supabase.from('_test').select('*').limit(1);
           
-          if (error && error.code === '42P01') { // relação não existe
-            console.log('[DIAGNOSE] Teste de conexão bem-sucedido (tabela _test não existe, mas conexão funciona)');
-            diagnosticResults.supabaseConnection = true;
-          } else if (error) {
+          if (error) {
             console.error('[DIAGNOSE] Erro ao verificar conexão:', error);
             diagnosticResults.errors.push({
               context: 'connection_test',
               error: error.message,
-              code: error.code
+              code: error.code,
+              details: error.details || 'Sem detalhes adicionais'
             });
+            
+            // Verificar se é um erro de autenticação
+            if (error.message?.includes('JWT') || error.message?.includes('auth')) {
+              diagnosticResults.errors.push({
+                context: 'auth_error',
+                error: 'Possível erro de autenticação com a chave do Supabase'
+              });
+            }
           } else {
             console.log('[DIAGNOSE] Conexão com Supabase bem-sucedida');
             diagnosticResults.supabaseConnection = true;
@@ -930,11 +941,12 @@ export default async function handler(req, res) {
           console.error('[DIAGNOSE] Exceção ao testar conexão:', connectionError);
           diagnosticResults.errors.push({
             context: 'connection_test_exception',
-            error: connectionError.message
+            error: connectionError.message,
+            stack: connectionError.stack
           });
         }
         
-        // Verificar se a tabela users existe
+        // Se a conexão foi bem sucedida, verificar a tabela users
         if (diagnosticResults.supabaseConnection) {
           try {
             console.log('[DIAGNOSE] Verificando tabela users...');
@@ -959,51 +971,6 @@ export default async function handler(req, res) {
             } else {
               console.log('[DIAGNOSE] Tabela users verificada com sucesso');
               diagnosticResults.userTableExists = true;
-              
-              // Verificar campos da tabela
-              try {
-                console.log('[DIAGNOSE] Obtendo estrutura da tabela users...');
-                const { data: userData, error: userError } = await supabase
-                  .from('users')
-                  .select('*')
-                  .limit(1);
-                
-                if (userError) {
-                  console.error('[DIAGNOSE] Erro ao obter campos da tabela users:', userError);
-                  diagnosticResults.errors.push({
-                    context: 'field_check',
-                    error: userError.message
-                  });
-                } else if (userData && userData.length > 0) {
-                  console.log('[DIAGNOSE] Obtidos campos da tabela users');
-                  const firstUser = userData[0];
-                  diagnosticResults.userTableFields = Object.keys(firstUser);
-                  
-                  // Remover senha para segurança
-                  const { password, ...userWithoutPassword } = firstUser;
-                  diagnosticResults.firstUser = userWithoutPassword;
-                  
-                  // Verificar campos necessários
-                  const requiredFields = ['id', 'username', 'name', 'accessLevel', 'email'];
-                  const missingFields = requiredFields.filter(field => !Object.keys(firstUser).includes(field));
-                  
-                  if (missingFields.length > 0) {
-                    console.warn(`[DIAGNOSE] Campos obrigatórios ausentes: ${missingFields.join(', ')}`);
-                    diagnosticResults.errors.push({
-                      context: 'missing_fields',
-                      fields: missingFields
-                    });
-                  }
-                } else {
-                  console.log('[DIAGNOSE] Tabela users está vazia');
-                }
-              } catch (fieldError) {
-                console.error('[DIAGNOSE] Exceção ao verificar campos:', fieldError);
-                diagnosticResults.errors.push({
-                  context: 'field_check_exception',
-                  error: fieldError.message
-                });
-              }
             }
           } catch (tableError) {
             console.error('[DIAGNOSE] Exceção ao verificar tabela:', tableError);
@@ -1016,17 +983,41 @@ export default async function handler(req, res) {
         
         // Retornar resultados do diagnóstico
         return res.status(200).json({
-          diagnostic: diagnosticResults,
-          env: {
-            NODE_ENV: process.env.NODE_ENV || 'not set',
-            VERCEL_ENV: process.env.VERCEL_ENV || 'not set'
-          }
+          success: true,
+          message: "Diagnóstico concluído com sucesso",
+          serverReachable: true,
+          databaseConnected: diagnosticResults.supabaseConnection,
+          tablesExist: diagnosticResults.userTableExists,
+          canCreateUser: diagnosticResults.supabaseConnection && diagnosticResults.userTableExists,
+          environment: {
+            isOnline: true
+          },
+          dbDetails: {
+            fields: diagnosticResults.userTableFields,
+            errors: diagnosticResults.errors
+          },
+          tests: [
+            {
+              name: "Conexão com o banco",
+              success: diagnosticResults.supabaseConnection
+            },
+            {
+              name: "Tabela de usuários",
+              success: diagnosticResults.userTableExists,
+              note: diagnosticResults.userTableExists ? "Tabela encontrada" : "Nenhum usuário encontrado"
+            },
+            {
+              name: "Usuário padrão",
+              success: diagnosticResults.firstUser !== null
+            }
+          ]
         });
       } catch (error) {
         console.error('[DIAGNOSE] Erro geral de diagnóstico:', error);
         return res.status(500).json({
-          error: "Erro ao realizar diagnóstico",
-          message: error.message,
+          success: false,
+          message: "Erro ao realizar diagnóstico",
+          error: error.message,
           stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
       }
