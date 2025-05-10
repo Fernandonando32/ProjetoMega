@@ -24,6 +24,16 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
   },
   db: {
     schema: 'public'
+  },
+  global: {
+    headers: {
+      'x-application-name': 'projeto-mega'
+    }
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10
+    }
   }
 });
 
@@ -77,16 +87,23 @@ CREATE TRIGGER update_users_updated_at
 
 // Testar conexão inicial
 console.log('Testando conexão inicial com Supabase...');
-supabase.rpc('version')
+supabase.from('users').select('count').limit(1)
   .then(({ data, error }) => {
     if (error) {
       console.error('Erro na conexão inicial:', error);
+      console.error('Detalhes do erro:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      });
     } else {
       console.log('Conexão inicial bem-sucedida');
     }
   })
   .catch(err => {
     console.error('Exceção na conexão inicial:', err);
+    console.error('Stack trace:', err.stack);
   });
 
 // Usuários padrão do sistema 
@@ -948,9 +965,6 @@ export default async function handler(req, res) {
       try {
         console.log('[DIAGNOSE] Iniciando diagnóstico do banco de dados');
         
-        // Verificar se consegue se conectar ao Supabase
-        console.log('[DIAGNOSE] Verificando conexão com Supabase...');
-        
         const diagnosticResults = {
           timestamp: new Date().toISOString(),
           supabaseConnection: false,
@@ -962,7 +976,13 @@ export default async function handler(req, res) {
           connectionDetails: {
             url: supabaseUrl,
             keyLength: supabaseKey ? supabaseKey.length : 0,
-            keyPrefix: supabaseKey ? supabaseKey.substring(0, 10) + '...' : 'none'
+            keyPrefix: supabaseKey ? supabaseKey.substring(0, 10) + '...' : 'none',
+            headers: supabase.rest.headers,
+            config: {
+              schema: supabase.rest.config.schema,
+              autoRefreshToken: supabase.auth.config.autoRefreshToken,
+              persistSession: supabase.auth.config.persistSession
+            }
           }
         };
         
