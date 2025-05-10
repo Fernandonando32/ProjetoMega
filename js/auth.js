@@ -369,14 +369,10 @@ Auth.syncLocalUsers = async function() {
 Auth.runDatabaseDiagnostic = async function() {
     try {
         const response = await fetch(`${API_URL}?action=run-diagnostic`, {
-            method: 'POST',
+            method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                timestamp: new Date().toISOString(),
-                type: 'database_diagnostic'
-            })
+            }
         });
 
         if (!response.ok) {
