@@ -12,21 +12,22 @@
     <script src="./js/db-config.js"></script>
     <script src="./js/auth.js"></script>
     <script>
-        // Verificar autenticação
+        // Verificar autenticação e permissões
         async function checkAuth() {
             if (!await Auth.isAuthenticated()) {
                 window.location.href = 'login.html';
-                throw new Error('Não autenticado');
+                return;
             }
 
-            // Obter usuário atual
             const currentUser = Auth.getCurrentUser();
-            
-            // Verificar se é administrador
-            if (!Auth.hasPermission(currentUser, Auth.PERMISSIONS.MANAGE_USERS)) {
-                window.location.href = 'Agenda.html';
-                throw new Error('Sem permissão');
+            if (!currentUser || !currentUser.permissions || !currentUser.permissions.includes('manage_users')) {
+                window.location.href = 'Pagina1 (1).html';
+                return;
             }
+
+            // Atualizar informações do usuário
+            document.getElementById('userName').textContent = currentUser.name;
+            document.getElementById('userRole').textContent = currentUser.role;
         }
         
         // Executar verificação de autenticação
