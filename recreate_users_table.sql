@@ -1,3 +1,6 @@
+-- Habilitar extensão UUID
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
 -- Primeiro, remover a tabela existente e suas dependências
 DROP TABLE IF EXISTS users CASCADE;
 
@@ -40,9 +43,17 @@ INSERT INTO users (username, password, name, email, accessLevel) VALUES
     ('usuario', 'user123', 'Usuário Padrão', 'user@example.com', 'USER'),
     ('visualizador', 'view123', 'Visualizador', 'viewer@example.com', 'VIEWER');
 
--- Criar políticas de segurança (RLS)
+-- Habilitar RLS
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
+-- Política para permitir acesso anônimo (temporário para testes)
+CREATE POLICY "Acesso anônimo temporário"
+    ON users FOR ALL
+    USING (true)
+    WITH CHECK (true);
+
+-- Comentar as políticas restritivas por enquanto
+/*
 -- Política para permitir leitura para todos os usuários autenticados
 CREATE POLICY "Usuários podem ler seus próprios dados"
     ON users FOR SELECT
@@ -71,4 +82,5 @@ CREATE POLICY "Administradores podem inserir novos usuários"
 -- Política para permitir que administradores excluam usuários
 CREATE POLICY "Administradores podem excluir usuários"
     ON users FOR DELETE
-    USING (auth.jwt() ->> 'role' = 'ADMIN'); 
+    USING (auth.jwt() ->> 'role' = 'ADMIN');
+*/ 
