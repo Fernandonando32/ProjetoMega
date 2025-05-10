@@ -906,7 +906,7 @@
         document.addEventListener('DOMContentLoaded', async function() {
             // Mostrar informações do usuário atual
             const currentUser = Auth.getCurrentUser();
-            currentUserNameElement.textContent = `${currentUser.name} (${Auth.ACCESS_LEVELS[currentUser.accessLevel].name})`;
+            currentUserNameElement.textContent = `${currentUser.name} (${window.ACCESS_LEVELS[currentUser.accessLevel].name})`;
             
             // Carregar lista de usuários
             await loadUsers();
@@ -1075,7 +1075,7 @@
                     <td>${user.name}</td>
                     <td>${user.username}</td>
                     <td>${user.email || '-'}</td>
-                    <td>${Auth.ACCESS_LEVELS[user.accessLevel].name} <span class="badge ${badgeClass}">${user.accessLevel}</span></td>
+                    <td>${window.ACCESS_LEVELS[user.accessLevel].name} <span class="badge ${badgeClass}">${user.accessLevel}</span></td>
                     <td>${user.operacao || '-'}</td>
                     <td class="user-actions">
                         <button class="button btn-primary edit-user" data-id="${user.id}">
@@ -1248,7 +1248,7 @@
             }
             
             const accessLevel = document.getElementById('accessLevel').value;
-            const permissions = Auth.ACCESS_LEVELS[accessLevel].permissions;
+            const permissions = window.ACCESS_LEVELS[accessLevel].permissions;
             
             // Resetar todas as permissões
             document.querySelectorAll('#permissionsContainer input[type="checkbox"]').forEach(checkbox => {
