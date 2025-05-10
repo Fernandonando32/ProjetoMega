@@ -1034,18 +1034,19 @@ export default async function handler(req, res) {
     // Verificar se a tabela de usuários existe
     else if (req.method === 'GET' && req.query.action === 'check-users-table') {
       try {
-        console.log('Verificando se a tabela de usuários existe...');
+        console.log('Verificando estrutura da tabela users...');
         
-        const { data, error } = await supabase
+        // Tentar obter um usuário para verificar a estrutura
+        const { data: user, error } = await supabase
           .from('users')
-          .select('count')
+          .select('*')
           .limit(1);
         
         if (error) {
           if (error.code === '42P01') { // relação não existe
             return res.status(200).json({
               exists: false,
-              message: "A tabela de usuários não existe"
+              message: "A tabela users não existe"
             });
           }
           
@@ -1056,13 +1057,17 @@ export default async function handler(req, res) {
           });
         }
         
+        // Se chegou aqui, a tabela existe
+        const fields = user && user.length > 0 ? Object.keys(user[0]) : [];
+        
         return res.status(200).json({
           exists: true,
-          message: "A tabela de usuários existe",
-          count: data?.[0]?.count || 0
+          message: "A tabela users existe",
+          fields: fields,
+          count: user?.length || 0
         });
       } catch (error) {
-        console.error('Erro ao verificar tabela de usuários:', error);
+        console.error('Erro ao verificar estrutura da tabela:', error);
         return res.status(500).json({
           exists: false,
           error: "Erro interno ao verificar tabela",
@@ -1449,6 +1454,80 @@ export default async function handler(req, res) {
         return res.status(500).json({
           success: false,
           error: "Erro interno ao criar tabela",
+          message: error.message
+        });
+      }
+    }
+    // Inicializar usuários padrão
+    else if (req.method === 'POST' && req.query.action === 'initialize-users') {
+      try {
+        console.log('Recebendo requisição para inicializar usuários padrão...');
+        
+        // Verificar se a tabela existe
+        const { data: existingUsers, error: checkError } = await supabase
+          .from('users')
+          .select('count')
+          .limit(1);
+        
+        if (checkError) {
+          if (checkError.code === '42P01') { // relação não existe
+            // Criar a tabela primeiro
+            const created = await createUsersTable();
+            if (!created) {
+              return res.status(500).json({
+                success: false,
+                error: "Erro ao criar tabela de usuários",
+                message: "Não foi possível criar a tabela de usuários"
+              });
+            }
+          } else {
+            return res.status(500).json({
+              success: false,
+              error: "Erro ao verificar usuários existentes",
+              message: checkError.message
+            });
+          }
+        }
+        
+        // Se não há usuários, inicializar com os padrões
+        const count = existingUsers?.[0]?.count || 0;
+        console.log(`Encontrados ${count} usuários no banco de dados.`);
+        
+        if (count === 0) {
+          console.log('Inicializando usuários padrão...');
+          
+          // Inserir usuários padrão
+          const { error: insertError } = await supabase
+            .from('users')
+            .insert(DEFAULT_USERS);
+          
+          if (insertError) {
+            console.error('Erro ao inserir usuários padrão:', insertError);
+            return res.status(500).json({
+              success: false,
+              error: "Erro ao inserir usuários padrão",
+              message: insertError.message
+            });
+          }
+          
+          console.log('Usuários padrão criados com sucesso!');
+          return res.status(200).json({
+            success: true,
+            message: "Usuários padrão inicializados com sucesso",
+            count: DEFAULT_USERS.length
+          });
+        }
+        
+        return res.status(200).json({
+          success: true,
+          message: "Usuários já existem no banco de dados",
+          count
+        });
+      } catch (error) {
+        console.error('Erro ao inicializar usuários:', error);
+        return res.status(500).json({
+          success: false,
+          error: "Erro interno ao inicializar usuários",
           message: error.message
         });
       }
