@@ -129,14 +129,14 @@ const TableInspector = {
         // Dados de teste
         const testUser = {
             username: `test_user_${Date.now()}`,
-            email: `test_${Date.now()}@example.com`,
+            email: `test${Date.now()}@example.com`,
             password: 'Test123!',
             full_name: 'Test User',
             name: 'Test User',
             role: 'VIEWER',
             accessLevel: 'VIEWER',
             permissions: [],
-            operacao: '',
+            operacao: 'BJ Fibra',
             is_active: true
         };
         
@@ -148,7 +148,7 @@ const TableInspector = {
             if (window.Auth && window.Auth.createUser) {
                 const result = await window.Auth.createUser({
                     username: testUser.username + '_1',
-                    email: testUser.email.replace('@', '_1@'),
+                    email: `test${Date.now()}_1@example.com`,
                     password: testUser.password,
                     name: testUser.name,
                     accessLevel: testUser.accessLevel,
@@ -185,7 +185,7 @@ const TableInspector = {
                 .from('users')
                 .insert([{
                     username: testUser.username + '_2',
-                    email: testUser.email.replace('@', '_2@'),
+                    email: `test${Date.now()}_2@example.com`,
                     full_name: testUser.full_name,
                     role: testUser.role,
                     permissions: testUser.permissions,
@@ -217,9 +217,9 @@ const TableInspector = {
                 .from('users')
                 .insert([{
                     username: testUser.username + '_3',
-                    email: testUser.email.replace('@', '_3@'),
-                    name: testUser.name,
-                    accessLevel: testUser.accessLevel,
+                    email: `test${Date.now()}_3@example.com`,
+                    full_name: testUser.name,
+                    role: testUser.accessLevel,
                     permissions: testUser.permissions,
                     operacao: testUser.operacao,
                     is_active: testUser.is_active

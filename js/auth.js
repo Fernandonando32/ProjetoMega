@@ -117,7 +117,7 @@ class Auth {
                 email: userData.email,
                 accessLevel: userData.role,
                 permissions: userData.permissions || [],
-                operacao: userData.operacao
+                operacao: userData.operacao || ''
             };
 
             // Salvar no localStorage
@@ -183,7 +183,7 @@ class Auth {
                 email: user.email,
                 accessLevel: user.role,
                 permissions: user.permissions || [],
-                operacao: user.operacao,
+                operacao: user.operacao || '',
                 is_active: user.is_active
             }));
         } catch (error) {
@@ -212,6 +212,7 @@ class Auth {
                     full_name: userData.name,
                     role: userData.accessLevel,
                     permissions: userData.permissions || [],
+                    operacao: userData.operacao || '',
                     is_active: true
                 }])
                 .select();
@@ -234,7 +235,8 @@ class Auth {
                     username: userData.username,
                     email: userData.email,
                     role: userData.accessLevel,
-                    permissions: userData.permissions || []
+                    permissions: userData.permissions || [],
+                    operacao: userData.operacao
                 })
                 .eq('id', userId)
                 .select();
@@ -411,7 +413,7 @@ class Auth {
         try {
             const testUser = {
                 username: 'test_user_' + Date.now(),
-                email: `test_${Date.now()}@test.com`,
+                email: `test${Date.now()}@example.com`,
                 password: 'Test123!',
                 name: 'Test User',
                 accessLevel: 'VIEWER'
