@@ -30,6 +30,9 @@
     
     <!-- Sistema de armazenamento offline -->
     <script src="./js/offline-storage.js"></script>
+    
+    <!-- Inspetor de tabelas (diagnóstico) -->
+    <script src="./js/table-inspector.js"></script>
     <script>
         // Verificar autenticação e permissões
         async function checkAuth() {
@@ -854,8 +857,15 @@
         </button>
     </div>
 
-    <!-- Botão de sincronização manual -->
+    <!-- Botão de diagnóstico da tabela users -->
     <div style="position: fixed; bottom: 20px; left: 200px; z-index: 1000;">
+        <button type="button" class="button btn-primary" id="btnTableInspector">
+            <i class="fas fa-table"></i> Diagnóstico da Tabela Users
+        </button>
+    </div>
+
+    <!-- Botão de sincronização manual -->
+    <div style="position: fixed; bottom: 20px; left: 420px; z-index: 1000;">
         <button type="button" class="button btn-primary" id="btnForceSync">
             <i class="fas fa-sync-alt"></i> Sincronizar Dados
         </button>
@@ -876,6 +886,25 @@
             <div class="modal-footer">
                 <button type="button" class="button" id="btnCloseDiagnostic">Fechar</button>
                 <button type="button" class="button btn-primary" id="btnAdvancedDiagnostic">Diagnóstico Avançado</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Diagnóstico da Tabela Users -->
+    <div id="tableInspectorModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 800px; width: 90%;">
+            <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h5 class="modal-title">Diagnóstico da Tabela Users</h5>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="tableInspectorContainer">
+                    <!-- O relatório de inspeção da tabela será exibido aqui -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="button" id="btnCloseTableInspector">Fechar</button>
+                <button type="button" class="button btn-primary" id="btnRunTableTests">Executar Testes</button>
             </div>
         </div>
     </div>
@@ -1559,6 +1588,51 @@
             const diagnosticModal = document.getElementById('diagnosticModal');
             if (event.target === diagnosticModal) {
                 diagnosticModal.style.display = 'none';
+            }
+        });
+        
+        // Diagnóstico da tabela users
+        document.getElementById('btnTableInspector').addEventListener('click', function() {
+            // Abrir modal
+            document.getElementById('tableInspectorModal').style.display = 'block';
+            
+            // Iniciar análise da tabela
+            if (window.TableInspector) {
+                window.TableInspector.displayReport('tableInspectorContainer');
+            } else {
+                document.getElementById('tableInspectorContainer').innerHTML = 
+                    '<div class="alert alert-danger">Ferramenta de diagnóstico da tabela não disponível</div>';
+            }
+        });
+        
+        // Fechar modal de diagnóstico da tabela
+        document.querySelector('#tableInspectorModal .close').addEventListener('click', function() {
+            document.getElementById('tableInspectorModal').style.display = 'none';
+        });
+        
+        document.getElementById('btnCloseTableInspector').addEventListener('click', function() {
+            document.getElementById('tableInspectorModal').style.display = 'none';
+        });
+        
+        // Executar testes na tabela
+        document.getElementById('btnRunTableTests').addEventListener('click', async function() {
+            this.disabled = true;
+            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando testes...';
+            
+            if (window.TableInspector) {
+                const testResults = await window.TableInspector.testUserCreation();
+                window.TableInspector.displayReport('tableInspectorContainer');
+            }
+            
+            this.disabled = false;
+            this.innerHTML = 'Executar Testes';
+        });
+        
+        // Fechar modal ao clicar fora
+        window.addEventListener('click', function(event) {
+            const tableInspectorModal = document.getElementById('tableInspectorModal');
+            if (event.target === tableInspectorModal) {
+                tableInspectorModal.style.display = 'none';
             }
         });
         
