@@ -195,7 +195,7 @@ class Auth {
     static async createUser(userData) {
         try {
             // Criar usuário no Supabase Auth
-            const { data: authData, error: authError } = await supabase.auth.signUp({
+            const { data: authData, error: authError } = await supabase.auth.admin.createUser({
                 email: userData.email,
                 password: userData.password
             });
@@ -212,7 +212,6 @@ class Auth {
                     full_name: userData.name,
                     role: userData.accessLevel,
                     permissions: userData.permissions || [],
-                    operacao: userData.operacao,
                     is_active: true
                 }])
                 .select();
@@ -235,8 +234,7 @@ class Auth {
                     username: userData.username,
                     email: userData.email,
                     role: userData.accessLevel,
-                    permissions: userData.permissions || [],
-                    operacao: userData.operacao
+                    permissions: userData.permissions || []
                 })
                 .eq('id', userId)
                 .select();

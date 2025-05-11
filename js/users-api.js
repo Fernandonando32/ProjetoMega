@@ -63,7 +63,7 @@ const UserAPI = {
             if (window.supabaseManager) {
                 const users = await window.supabaseManager.getData(
                     'users', 
-                    `id,name,username,email,role,permissions,accessLevel,operacao,is_active,last_login,created_at,updated_at`, 
+                    `id,full_name,username,email,role,permissions,is_active,last_login,created_at,updated_at`, 
                     useCache
                 );
                 
@@ -150,13 +150,13 @@ const UserAPI = {
             }
             
             // Caso contrário, preparar dados para inserção direta
+            // Mapear campos para a estrutura correta da tabela users
             const userToCreate = {
                 username: userData.username,
                 email: userData.email,
                 full_name: userData.name,
                 role: userData.accessLevel,
                 permissions: userData.permissions || [],
-                operacao: userData.operacao,
                 is_active: true,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
@@ -240,7 +240,6 @@ const UserAPI = {
                 full_name: userData.name,
                 role: userData.accessLevel,
                 permissions: userData.permissions || [],
-                operacao: userData.operacao,
                 updated_at: new Date().toISOString()
             };
             
