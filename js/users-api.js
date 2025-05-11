@@ -143,9 +143,21 @@ const UserAPI = {
         }
         
         try {
-            // Preparar dados para inserção
+            // Se Auth está disponível, usar o método de criação de usuário do Auth
+            if (window.Auth && window.Auth.createUser) {
+                const result = await window.Auth.createUser(userData);
+                return result;
+            }
+            
+            // Caso contrário, preparar dados para inserção direta
             const userToCreate = {
-                ...userData,
+                username: userData.username,
+                email: userData.email,
+                full_name: userData.name,
+                role: userData.accessLevel,
+                permissions: userData.permissions || [],
+                operacao: userData.operacao,
+                is_active: true,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
             };
@@ -216,9 +228,19 @@ const UserAPI = {
                 }
             }
             
-            // Preparar dados para atualização
+            // Se Auth está disponível, usar o método de atualização de usuário do Auth
+            if (window.Auth && window.Auth.updateUser) {
+                return await window.Auth.updateUser(userId, userData);
+            }
+            
+            // Preparar dados para atualização com os nomes de campos corretos
             const userToUpdate = {
-                ...userData,
+                username: userData.username,
+                email: userData.email,
+                full_name: userData.name,
+                role: userData.accessLevel,
+                permissions: userData.permissions || [],
+                operacao: userData.operacao,
                 updated_at: new Date().toISOString()
             };
             
