@@ -130,7 +130,7 @@ const TableInspector = {
         const timestamp = Date.now();
         const testUser = {
             username: `test_user_${timestamp}`,
-            email: `test.${timestamp}@example.com`,
+            email: `test${timestamp}@example.com`,
             password: 'Test123!',
             full_name: 'Test User',
             name: 'Test User',
@@ -149,7 +149,7 @@ const TableInspector = {
             if (window.Auth && window.Auth.createUser) {
                 const result = await window.Auth.createUser({
                     username: testUser.username + '_1',
-                    email: `test.${timestamp}.1@example.com`,
+                    email: `test${timestamp}_1@example.com`,
                     password: testUser.password,
                     name: testUser.name,
                     accessLevel: testUser.accessLevel,
@@ -185,7 +185,7 @@ const TableInspector = {
             if (window.UserAPI && window.UserAPI.createUser) {
                 const result = await window.UserAPI.createUser({
                     username: testUser.username + '_2',
-                    email: `test.${timestamp}.2@example.com`,
+                    email: `test${timestamp}_2@example.com`,
                     password: testUser.password,
                     name: testUser.full_name,
                     accessLevel: testUser.role,
@@ -221,7 +221,7 @@ const TableInspector = {
             if (window.supabaseManager && window.Auth) {
                 // Primeiro criar o usuário na autenticação
                 const { data: authData, error: authError } = await window.supabaseClient.auth.signUp({
-                    email: `test.${timestamp}.3@example.com`,
+                    email: `test${timestamp}_3@example.com`,
                     password: testUser.password
                 });
                 

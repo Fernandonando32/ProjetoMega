@@ -882,21 +882,21 @@
                 <div id="diagnosticReportContainer">
                     <!-- O relatório de diagnóstico será exibido aqui -->
                 </div>
-            </div>
+                            </div>
             <div class="modal-footer">
                 <button type="button" class="button" id="btnCloseDiagnostic">Fechar</button>
                 <button type="button" class="button btn-primary" id="btnAdvancedDiagnostic">Diagnóstico Avançado</button>
-            </div>
-        </div>
-    </div>
-
+                            </div>
+                            </div>
+                        </div>
+                        
     <!-- Modal de Diagnóstico da Tabela Users -->
     <div id="tableInspectorModal" class="modal" style="display: none;">
         <div class="modal-content" style="max-width: 800px; width: 90%;">
             <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <h5 class="modal-title">Diagnóstico da Tabela Users</h5>
                 <span class="close">&times;</span>
-            </div>
+                            </div>
             <div class="modal-body">
                 <div id="tableInspectorContainer">
                     <!-- O relatório de inspeção da tabela será exibido aqui -->
@@ -1640,7 +1640,7 @@
         document.getElementById('btnForceSync').addEventListener('click', async function() {
             try {
                 // Desabilitar botão durante sincronização
-                this.disabled = true;
+            this.disabled = true;
                 this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
                 
                 // Forçar sincronização
@@ -1655,7 +1655,7 @@
                         'Sincronização concluída',
                         `${result.operationsProcessed || 0} operações processadas. ${result.operationsRemaining || 0} operações pendentes.`
                     );
-                } else {
+                    } else {
                     // Mostrar mensagem de erro
                     NotificationSystem.showError(
                         'Falha na sincronização',
