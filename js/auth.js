@@ -448,9 +448,10 @@ class Auth {
 
     static async testCreateUser() {
         try {
+            const timestamp = Date.now();
             const testUser = {
-                username: 'test_user_' + Date.now(),
-                email: `test${Date.now()}@example.com`,
+                username: 'test_user_' + timestamp,
+                email: `test.${timestamp}@example.com`,
                 password: 'Test123!',
                 name: 'Test User',
                 accessLevel: 'VIEWER'

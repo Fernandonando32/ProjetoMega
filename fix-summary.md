@@ -40,29 +40,31 @@ HAS_ADMIN_PERMISSIONS: true
 
 ### 3. Correção dos Formatos de Email nos Testes
 
-No arquivo `table-inspector.js`, corrigimos o problema de emails inválidos usando um timestamp consistente:
+Nos arquivos `table-inspector.js`, `auth.js` e `test-user-creation.js`, corrigimos o problema de emails inválidos usando um formato de email válido com pontos em vez de underscores:
 
 ```javascript
 // Dados de teste
 const timestamp = Date.now();
 const testUser = {
     username: `test_user_${timestamp}`,
-    email: `test${timestamp}@example.com`,
+    email: `test.${timestamp}@example.com`,
     // ...
 };
 
 // Teste 1: Usando Auth.createUser
 // ...
-email: `test${timestamp}_1@example.com`,
+email: `test.${timestamp}.1@example.com`,
 
 // Teste 2: Usando UserAPI.createUser
 // ...
-email: `test${timestamp}_2@example.com`,
+email: `test.${timestamp}.2@example.com`,
 
 // Teste 3: Usando supabaseManager
 // ...
-email: `test${timestamp}_3@example.com`,
+email: `test.${timestamp}.3@example.com`,
 ```
+
+O problema estava no uso de underscores (_) nos endereços de email, que estavam sendo rejeitados pelo Supabase. Substituímos por pontos (.) que são aceitos no formato de email.
 
 ### 4. Criação de Ferramentas de Teste
 
@@ -94,4 +96,4 @@ Conforme o relatório de inspeção, a estrutura correta da tabela 'users' é:
 
 As correções implementadas resolvem os problemas de conectividade com o banco de dados, permitindo a criação e gerenciamento adequado de usuários com o campo 'operacao' necessário para a funcionalidade da aplicação.
 
-O código agora está alinhado com a estrutura real do banco de dados, usando os nomes de campos corretos ('role' em vez de 'accessLevel', 'full_name' em vez de 'name') e incluindo o campo 'operacao' que foi adicionado à tabela. 
+O código agora está alinhado com a estrutura real do banco de dados, usando os nomes de campos corretos ('role' em vez de 'accessLevel', 'full_name' em vez de 'name') e incluindo o campo 'operacao' que foi adicionado à tabela. Além disso, o formato dos emails de teste foi corrigido para garantir que sejam aceitos pelo Supabase. 
