@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Criação de Usuário</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        
+        h1 {
+            color: #333;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .info {
+            background-color: #e7f3fe;
+            border-left: 5px solid #2196F3;
+            padding: 15px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Teste de Criação de Usuário</h1>
+        
+        <div class="info">
+            <p>Esta página testa a criação de usuário usando diferentes métodos para verificar se as correções estão funcionando.</p>
+            <p>Clique no botão abaixo para iniciar os testes.</p>
+        </div>
+        
+        <div id="status">
+            <h3>Status do Sistema:</h3>
+            <div id="system-status">Verificando...</div>
+        </div>
+    </div>
+    
+    <!-- Scripts do Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+    
+    <!-- Scripts da aplicação -->
+    <script src="js/supabase-config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/users-api.js"></script>
+    <script src="js/test-user-creation.js"></script>
+    
+    <script>
+        // Verificar status do sistema ao carregar
+        document.addEventListener('DOMContentLoaded', async () => {
+            const statusDiv = document.getElementById('system-status');
+            
+            try {
+                // Verificar se o cliente Supabase está disponível
+                if (!window.supabaseClient) {
+                    statusDiv.innerHTML = '<p style="color: red;">❌ Cliente Supabase não disponível</p>';
+                    return;
+                }
+                
+                statusDiv.innerHTML = '<p>✅ Cliente Supabase disponível</p>';
+                
+                // Verificar se Auth está disponível
+                if (window.Auth) {
+                    statusDiv.innerHTML += '<p>✅ Módulo Auth disponível</p>';
+                    
+                    // Verificar status do servidor
+                    try {
+                        const diagnostic = await window.Auth.runDatabaseDiagnostic();
+                        statusDiv.innerHTML += `
+                            <p>Diagnóstico:</p>
+                            <ul>
+                                <li>Servidor acessível: ${diagnostic.serverReachable ? '✅' : '❌'}</li>
+                                <li>Banco conectado: ${diagnostic.databaseConnected ? '✅' : '❌'}</li>
+                                <li>Tabelas existem: ${diagnostic.tablesExist ? '✅' : '❌'}</li>
+                                <li>Permissões OK: ${diagnostic.permissionsOk ? '✅' : '❌'}</li>
+                                <li>Pode criar usuário: ${diagnostic.canCreateUser ? '✅' : '❌'}</li>
+                            </ul>
+                        `;
+                    } catch (error) {
+                        statusDiv.innerHTML += `<p style="color: red;">❌ Erro ao executar diagnóstico: ${error.message}</p>`;
+                    }
+                } else {
+                    statusDiv.innerHTML += '<p style="color: orange;">⚠️ Módulo Auth não disponível</p>';
+                }
+                
+                // Verificar se UserAPI está disponível
+                if (window.UserAPI) {
+                    statusDiv.innerHTML += '<p>✅ Módulo UserAPI disponível</p>';
+                } else {
+                    statusDiv.innerHTML += '<p style="color: orange;">⚠️ Módulo UserAPI não disponível</p>';
+                }
+                
+                // Verificar se supabaseManager está disponível
+                if (window.supabaseManager) {
+                    statusDiv.innerHTML += '<p>✅ Módulo supabaseManager disponível</p>';
+                } else {
+                    statusDiv.innerHTML += '<p style="color: orange;">⚠️ Módulo supabaseManager não disponível</p>';
+                }
+                
+                // Verificar configuração HAS_ADMIN_PERMISSIONS
+                if (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.HAS_ADMIN_PERMISSIONS) {
+                    statusDiv.innerHTML += '<p>✅ Permissões de administrador ativadas</p>';
+                } else {
+                    statusDiv.innerHTML += '<p style="color: orange;">⚠️ Permissões de administrador desativadas</p>';
+                }
+                
+            } catch (error) {
+                statusDiv.innerHTML = `<p style="color: red;">❌ Erro ao verificar status: ${error.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html> 

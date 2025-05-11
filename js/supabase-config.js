@@ -21,7 +21,7 @@ const SUPABASE_CONFIG = {
         syncQueue: 'supabase_sync_queue'
     },
     // Indica se o usuário atual tem permissões de administração no Supabase
-    HAS_ADMIN_PERMISSIONS: false
+    HAS_ADMIN_PERMISSIONS: true
 };
 
 // Definir o status do servidor
