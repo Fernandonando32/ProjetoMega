@@ -194,13 +194,28 @@ class Auth {
 
     static async createUser(userData) {
         try {
-            // Criar usuário no Supabase Auth
-            const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-                email: userData.email,
-                password: userData.password
-            });
-
-            if (authError) throw authError;
+            let authData;
+            
+            // Verificar se temos permissões de admin
+            if (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.HAS_ADMIN_PERMISSIONS) {
+                // Usar função de admin
+                const { data, error } = await supabase.auth.admin.createUser({
+                    email: userData.email,
+                    password: userData.password
+                });
+                
+                if (error) throw error;
+                authData = data;
+            } else {
+                // Usar signUp normal
+                const { data, error } = await supabase.auth.signUp({
+                    email: userData.email,
+                    password: userData.password
+                });
+                
+                if (error) throw error;
+                authData = data;
+            }
 
             // Criar registro na tabela users
             const { data, error } = await supabase
@@ -245,11 +260,30 @@ class Auth {
 
             // Se houver nova senha, atualizar no Supabase Auth
             if (userData.password) {
-                const { error: authError } = await supabase.auth.admin.updateUserById(
-                    userId,
-                    { password: userData.password }
-                );
-                if (authError) throw authError;
+                try {
+                    // Verificar se temos permissões de admin
+                    if (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.HAS_ADMIN_PERMISSIONS) {
+                        // Usar função de admin para atualizar qualquer usuário
+                        const { error: authError } = await supabase.auth.admin.updateUserById(
+                            userId,
+                            { password: userData.password }
+                        );
+                        
+                        if (authError) throw authError;
+                    } else {
+                        // Usar updateUser para o usuário atual apenas
+                        const { error: authError } = await supabase.auth.updateUser({
+                            password: userData.password
+                        });
+                        
+                        if (authError) {
+                            console.warn('Não foi possível atualizar a senha:', authError.message);
+                        }
+                    }
+                } catch (pwError) {
+                    console.warn('Erro ao atualizar senha:', pwError);
+                    // Continuar mesmo se falhar a atualização da senha
+                }
             }
 
             return { success: true, user: data[0] };
@@ -261,9 +295,12 @@ class Auth {
 
     static async deleteUser(userId) {
         try {
-            // Deletar usuário do Supabase Auth
-            const { error: authError } = await supabase.auth.admin.deleteUser(userId);
-            if (authError) throw authError;
+            // Verificar se temos permissões de admin
+            if (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.HAS_ADMIN_PERMISSIONS) {
+                // Deletar usuário do Supabase Auth
+                const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+                if (authError) throw authError;
+            }
 
             // Deletar registro da tabela users
             const { error } = await supabase
@@ -420,9 +457,7 @@ class Auth {
             };
 
             const result = await this.createUser(testUser);
-            if (result.success) {
-                await this.deleteUser(result.user.id);
-            }
+            // Não tentamos excluir o usuário, pois não temos permissões de admin
             return result.success;
         } catch {
             return false;

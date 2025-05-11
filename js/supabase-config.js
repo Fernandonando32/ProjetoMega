@@ -19,7 +19,9 @@ const SUPABASE_CONFIG = {
     offline: {
         enabled: true,
         syncQueue: 'supabase_sync_queue'
-    }
+    },
+    // Indica se o usuário atual tem permissões de administração no Supabase
+    HAS_ADMIN_PERMISSIONS: false
 };
 
 // Definir o status do servidor

@@ -142,7 +142,7 @@ const TableInspector = {
         
         console.log('Testando criação de usuário com diferentes formatos...');
         
-        // Teste 1: Formato Auth.js (com Auth)
+        // Teste 1: Usando Auth.createUser
         try {
             console.log('Teste 1: Usando Auth.createUser...');
             if (window.Auth && window.Auth.createUser) {
@@ -178,64 +178,84 @@ const TableInspector = {
             });
         }
         
-        // Teste 2: Inserção direta (formato auth.js)
+        // Teste 2: Usando UserAPI.createUser
         try {
-            console.log('Teste 2: Inserção direta (formato auth.js)...');
-            const { data, error } = await window.supabaseClient
-                .from('users')
-                .insert([{
+            console.log('Teste 2: Usando UserAPI.createUser...');
+            if (window.UserAPI && window.UserAPI.createUser) {
+                const result = await window.UserAPI.createUser({
                     username: testUser.username + '_2',
                     email: `test${Date.now()}_2@example.com`,
-                    full_name: testUser.full_name,
-                    role: testUser.role,
+                    password: testUser.password,
+                    name: testUser.full_name,
+                    accessLevel: testUser.role,
                     permissions: testUser.permissions,
-                    operacao: testUser.operacao,
-                    is_active: testUser.is_active
-                }])
-                .select();
+                    operacao: testUser.operacao
+                });
                 
-            testResults.push({
-                method: 'direct_insert_auth_format',
-                success: !error,
-                message: error ? error.message : 'Sucesso',
-                data: data && data.length > 0 ? data[0] : null,
-                error
-            });
+                testResults.push({
+                    method: 'UserAPI.createUser',
+                    success: result.success,
+                    message: result.message || 'Sucesso',
+                    data: result.success ? result.user : null
+                });
+            } else {
+                testResults.push({
+                    method: 'UserAPI.createUser',
+                    success: false,
+                    message: 'Método não disponível'
+                });
+            }
         } catch (error) {
             testResults.push({
-                method: 'direct_insert_auth_format',
+                method: 'UserAPI.createUser',
                 success: false,
                 message: error.message,
                 error
             });
         }
         
-        // Teste 3: Inserção direta (formato users-api.js)
+        // Teste 3: Usando supabaseManager
         try {
-            console.log('Teste 3: Inserção direta (formato users-api.js)...');
-            const { data, error } = await window.supabaseClient
-                .from('users')
-                .insert([{
-                    username: testUser.username + '_3',
+            console.log('Teste 3: Usando supabaseManager...');
+            if (window.supabaseManager && window.Auth) {
+                // Primeiro criar o usuário na autenticação
+                const { data: authData, error: authError } = await window.supabaseClient.auth.signUp({
                     email: `test${Date.now()}_3@example.com`,
+                    password: testUser.password
+                });
+                
+                if (authError) throw authError;
+                
+                // Depois criar o registro na tabela users
+                const userData = {
+                    id: authData.user.id,
+                    username: testUser.username + '_3',
+                    email: authData.user.email,
                     full_name: testUser.name,
                     role: testUser.accessLevel,
                     permissions: testUser.permissions,
                     operacao: testUser.operacao,
-                    is_active: testUser.is_active
-                }])
-                .select();
+                    is_active: true
+                };
                 
-            testResults.push({
-                method: 'direct_insert_api_format',
-                success: !error,
-                message: error ? error.message : 'Sucesso',
-                data: data && data.length > 0 ? data[0] : null,
-                error
-            });
+                const result = await window.supabaseManager.insertData('users', userData);
+                
+                testResults.push({
+                    method: 'supabaseManager.insertData',
+                    success: !!result,
+                    message: result ? 'Sucesso' : 'Falha',
+                    data: result
+                });
+            } else {
+                testResults.push({
+                    method: 'supabaseManager.insertData',
+                    success: false,
+                    message: 'Método não disponível'
+                });
+            }
         } catch (error) {
             testResults.push({
-                method: 'direct_insert_api_format',
+                method: 'supabaseManager.insertData',
                 success: false,
                 message: error.message,
                 error
