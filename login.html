@@ -159,13 +159,16 @@
         </form>
 
         <div class="form-footer">
+            <p><a href="register.html" style="color: var(--primary-color); text-decoration: none; margin-bottom: 10px; display: block;">Não tem uma conta? Registre-se aqui</a></p>
+            <p id="server-info" style="margin-top: 10px; font-size: 12px;">Outros usuários podem acessar este sistema em: <span id="server-address">carregando...</span></p>
             <p>© 2023 Sistema de Gestão FTTH. Todos os direitos reservados.</p>
         </div>
     </div>
 
-    <!-- Supabase -->
+    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="./js/pg-config.js"></script>
+    <script src="./js/api-config.js"></script>
     <script src="./js/auth.js"></script>
     <script>
         // Verificar se já está autenticado
@@ -173,6 +176,13 @@
             if (await Auth.isAuthenticated()) {
                 redirectLoggedInUser();
             }
+        }
+
+        // Mostrar endereço do servidor
+        function showServerAddress() {
+            const serverAddressElement = document.getElementById('server-address');
+            const currentLocation = window.location;
+            serverAddressElement.textContent = `${currentLocation.protocol}//${currentLocation.hostname}:${currentLocation.port}`;
         }
 
         // Redirecionar usuário com base nas permissões
@@ -273,6 +283,9 @@
         document.addEventListener('DOMContentLoaded', function() {
             // Verificar autenticação existente
             checkExistingAuth();
+            
+            // Mostrar endereço do servidor
+            showServerAddress();
             
             // Configurar formulário de login
             document.getElementById('loginForm').addEventListener('submit', handleLogin);

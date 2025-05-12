@@ -1,0 +1,116 @@
+    <!-- Scripts -->
+    <script src="./js/pg-config.js"></script>
+    <script src="./js/api-config.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const registerForm = document.getElementById('registerForm');
+            const registerButton = document.getElementById('registerButton');
+            const registerError = document.getElementById('registerError');
+            const registerSuccess = document.getElementById('registerSuccess');
+            
+            registerForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                
+                // Limpar mensagens anteriores
+                registerError.style.display = 'none';
+                registerSuccess.style.display = 'none';
+                
+                // Obter valores do formulário
+                const fullName = document.getElementById('fullName').value.trim();
+                const username = document.getElementById('username').value.trim();
+                const email = document.getElementById('email').value.trim();
+                const password = document.getElementById('password').value;
+                const confirmPassword = document.getElementById('confirmPassword').value;
+                const operacao = document.getElementById('operacao').value;
+                
+                // Validar dados
+                if (!fullName || !username || !email || !password) {
+                    registerError.textContent = 'Todos os campos obrigatórios devem ser preenchidos';
+                    registerError.style.display = 'block';
+                    return;
+                }
+                
+                // Validar email
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                if (!emailRegex.test(email)) {
+                    registerError.textContent = 'Por favor, informe um endereço de e-mail válido';
+                    registerError.style.display = 'block';
+                    return;
+                }
+                
+                // Validar senha
+                if (password.length < 8) {
+                    registerError.textContent = 'A senha deve ter pelo menos 8 caracteres';
+                    registerError.style.display = 'block';
+                    return;
+                }
+                
+                // Validar confirmação de senha
+                if (password !== confirmPassword) {
+                    registerError.textContent = 'As senhas não coincidem';
+                    registerError.style.display = 'block';
+                    return;
+                }
+                
+                // Mostrar carregamento
+                registerButton.disabled = true;
+                registerButton.innerHTML = '<div class="loading-spinner"></div> Registrando...';
+                
+                try {
+                    // Preparar dados para envio
+                    const userData = {
+                        full_name: fullName,
+                        username: username,
+                        email: email,
+                        password: password,
+                        operacao: operacao || null
+                    };
+                    
+                    // Enviar requisição para o servidor
+                    const response = await fetch(window.API_URLS ? window.API_URLS.REGISTER : 'http://localhost:3000/api/auth/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(userData)
+                    });
+                    
+                    // Processar resposta
+                    const result = await response.json();
+                    
+                    if (response.ok && result.success) {
+                        // Mostrar mensagem de sucesso
+                        registerSuccess.textContent = 'Registro concluído com sucesso! Redirecionando para a tela de login...';
+                        registerSuccess.style.display = 'block';
+                        
+                        // Limpar formulário
+                        registerForm.reset();
+                        
+                        // Redirecionar para a página de login após 2 segundos
+                        setTimeout(() => {
+                            window.location.href = 'login.html';
+                        }, 2000);
+                    } else {
+                        // Mostrar mensagem de erro
+                        registerError.textContent = result.message || 'Erro ao registrar. Por favor, tente novamente.';
+                        registerError.style.display = 'block';
+                        registerButton.disabled = false;
+                        registerButton.textContent = 'Criar Conta';
+                    }
+                } catch (error) {
+                    console.error('Erro ao registrar:', error);
+                    registerError.textContent = 'Erro ao conectar ao servidor. Verifique sua conexão.';
+                    registerError.style.display = 'block';
+                    registerButton.disabled = false;
+                    registerButton.textContent = 'Criar Conta';
+                }
+            });
+            
+            // Adicionar informação sobre o endereço do servidor
+            const serverInfo = document.createElement('p');
+            serverInfo.style.marginTop = '10px';
+            serverInfo.style.fontSize = '12px';
+            serverInfo.innerHTML = `Outros usuários podem acessar este sistema em: <span id="server-address">${window.location.protocol}//${window.location.hostname}:${window.location.port}</span>`;
+            document.querySelector('.form-footer').insertBefore(serverInfo, document.querySelector('.form-footer').firstChild);
+        });
+    </script> 
