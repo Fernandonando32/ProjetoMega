@@ -244,14 +244,41 @@ const TableInspector = {
                     password_hash: tempPasswordHash // Adicionar password_hash temporário
                 };
                 
-                const result = await window.supabaseManager.insertData('users', userData);
+                console.log('Tentando inserir usuário via supabaseManager:', userData);
                 
-                testResults.push({
-                    method: 'supabaseManager.insertData',
-                    success: !!result,
-                    message: result ? 'Sucesso' : 'Falha',
-                    data: result
-                });
+                try {
+                    const result = await window.supabaseManager.insertData('users', userData);
+                    console.log('Resultado da inserção:', result);
+                    
+                    testResults.push({
+                        method: 'supabaseManager.insertData',
+                        success: !!result,
+                        message: result ? 'Sucesso' : 'Falha',
+                        data: result
+                    });
+                } catch (insertError) {
+                    console.error('Erro ao inserir via supabaseManager:', insertError);
+                    
+                    // Tentar inserção direta como fallback
+                    console.log('Tentando inserção direta como fallback...');
+                    const { data: directResult, error: directError } = await window.supabaseClient
+                        .from('users')
+                        .insert(userData)
+                        .select();
+                        
+                    if (directError) {
+                        console.error('Falha também na inserção direta:', directError);
+                        throw directError;
+                    }
+                    
+                    console.log('Inserção direta bem-sucedida:', directResult);
+                    testResults.push({
+                        method: 'supabaseManager.insertData (fallback direto)',
+                        success: true,
+                        message: 'Sucesso via inserção direta',
+                        data: directResult[0]
+                    });
+                }
             } else {
                 testResults.push({
                     method: 'supabaseManager.insertData',

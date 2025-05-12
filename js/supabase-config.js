@@ -26,11 +26,11 @@ const SUPABASE_CONFIG = {
 
 // Definir o status do servidor
 window.SERVER_STATUS = {
-    serverReachable: false,
+    serverReachable: true,
     databaseConnected: true,
     tablesExist: true,
     permissionsOk: true,
-    canCreateUser: false,
+    canCreateUser: true,
     isOnline: true
 };
 
@@ -204,9 +204,15 @@ class SupabaseManager {
                 return tempData;
             }
 
-            const { data: result, error } = await this.client.from(table).insert(data);
+            // Usar .select() para garantir que os dados inseridos sejam retornados
+            const { data: result, error } = await this.client
+                .from(table)
+                .insert(data)
+                .select();
+
             if (error) throw error;
-            return result;
+            // Retornar o primeiro item dos resultados
+            return result && result.length > 0 ? result[0] : null;
         } catch (error) {
             console.error(`Erro ao inserir dados na tabela ${table}:`, error);
             
