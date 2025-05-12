@@ -1052,7 +1052,7 @@
                 renderUserTable();
                 
                 // Verificar se há usuários locais
-                checkLocalUsers();
+                await checkForLocalUsers();
             } catch (error) {
                 console.error('Erro ao carregar usuários:', error);
                 userTableBody.innerHTML = `<tr><td colspan="7" class="error">Erro ao carregar usuários: ${error.message}</td></tr>`;
