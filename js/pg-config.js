@@ -72,6 +72,12 @@ class DbManager {
             }
         };
 
+        // Adicionar token de autenticação se disponível
+        const authToken = localStorage.getItem('authToken');
+        if (authToken) {
+            options.headers['Authorization'] = `Bearer ${authToken}`;
+        }
+
         if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
             options.body = JSON.stringify(data);
         }
