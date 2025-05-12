@@ -445,6 +445,34 @@
             margin-bottom: 5px;
         }
 
+        .day-number {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .tasks-count {
+            margin-top: 5px;
+        }
+
+        .tasks-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 5px;
+        }
+
+        .task-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 2px;
+        }
+
+        .more-tasks {
+            font-size: 10px;
+            color: var(--light-text);
+        }
+
         .calendar-tasks {
             flex: 1;
             overflow-y: auto;
@@ -1137,6 +1165,40 @@
             border: none;
             border-radius: 5px;
         }
+
+        .calendar-day .calendar-task {
+            padding: 2px 4px;
+            margin-bottom: 2px;
+            border-radius: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 11px;
+            line-height: 1.2;
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .calendar-day .calendar-task:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+
+        .calendar-day .more-tasks {
+            text-align: center;
+            padding: 2px;
+            font-size: 10px;
+            color: var(--light-text);
+            background-color: var(--secondary-color);
+            border-radius: 3px;
+            margin-top: 2px;
+            cursor: pointer;
+        }
+
+        .calendar-day.other-month .calendar-task {
+            opacity: 0.7;
+        }
     </style>
 </head>
 <body>
@@ -1633,6 +1695,13 @@
                 const tasksData = await TasksAPI.getAllTasks();
                 console.log('Dados de tarefas recebidos:', tasksData.length);
                 
+                // Debug para examinar as datas
+                if (tasksData.length > 0) {
+                    console.log('Detalhes de datas da primeira tarefa:');
+                    const task = tasksData[0];
+                    debugTaskDates(task);
+                }
+                
                 // Validar e processar as tarefas
                 tasks = tasksData.filter(task => {
                     // Garantir que todas as tarefas tenham os campos necessários
@@ -1654,13 +1723,20 @@
                     
                     // Se a tarefa não tem date mas tem start_date, criar o campo date
                     if (!task.date && task.start_date) {
-                        task.date = new Date(task.start_date).toISOString().split('T')[0];
+                        const startDate = new Date(task.start_date);
+                        task.date = startDate.toISOString().split('T')[0];
+                        console.log(`Data atribuída para a tarefa ${task.title} a partir de start_date:`, task.date);
                     }
                     
                     // Se a tarefa não tem date mas tem end_date, criar o campo date
                     if (!task.date && task.end_date) {
-                        task.date = new Date(task.end_date).toISOString().split('T')[0];
+                        const endDate = new Date(task.end_date);
+                        task.date = endDate.toISOString().split('T')[0];
+                        console.log(`Data atribuída para a tarefa ${task.title} a partir de end_date:`, task.date);
                     }
+                    
+                    // Debug para cada tarefa
+                    debugTaskDates(task);
                     
                     return true;
                 });
@@ -1683,6 +1759,35 @@
             } catch (error) {
                 console.error('Erro ao carregar tarefas:', error);
             }
+        }
+
+        // Função auxiliar para debug de datas
+        function debugTaskDates(task) {
+            console.group(`Debug de datas para tarefa "${task.title}" (ID: ${task.id})`);
+            
+            // Campos de data originais
+            console.log('Campo date:', task.date);
+            console.log('Campo start_date:', task.start_date);
+            console.log('Campo end_date:', task.end_date);
+            
+            // Conversões de data
+            if (task.date) {
+                const dateObj = new Date(task.date);
+                console.log('Date -> objeto Date:', dateObj);
+                console.log('Date -> getUTCDate():', dateObj.getUTCDate());
+                console.log('Date -> getDate():', dateObj.getDate());
+            }
+            
+            if (task.start_date) {
+                const startDateObj = new Date(task.start_date);
+                console.log('start_date -> objeto Date:', startDateObj);
+                console.log('start_date -> getUTCDate():', startDateObj.getUTCDate());
+                console.log('start_date -> getDate():', startDateObj.getDate());
+                console.log('start_date -> toISOString():', startDateObj.toISOString());
+                console.log('start_date -> toISOString().split("T")[0]:', startDateObj.toISOString().split('T')[0]);
+            }
+            
+            console.groupEnd();
         }
 
         // Função principal para renderizar o calendário
@@ -1898,6 +2003,9 @@
 
         // Função para renderizar visualização mensal
         function renderMonthlyView(calendarGrid) {
+            console.log("Renderizando visualização mensal...");
+            console.log("Total de tarefas disponíveis:", tasks.length);
+            
             // Criar cabeçalho da semana
             const weekdaysRow = document.createElement('div');
             weekdaysRow.className = 'calendar-weekdays';
@@ -2040,9 +2148,12 @@
 
         // Função auxiliar para criar célula de dia
         function createDayCell(date, isOtherMonth) {
+            // Formato ISO para a data atual (para logs)
+            const dateFormatted = date.toISOString().split('T')[0];
+            
             const dayCell = document.createElement('div');
             dayCell.className = 'calendar-day';
-            dayCell.dataset.date = date.toISOString().split('T')[0];
+            dayCell.dataset.date = dateFormatted;
             
             if (isOtherMonth) {
                 dayCell.classList.add('other-month');
@@ -2074,55 +2185,86 @@
             };
             
             // Filtrar tarefas para este dia
-            const currentDateStr = date.toISOString().split('T')[0]; // formato YYYY-MM-DD
+            const currentDateStr = dateFormatted; // formato YYYY-MM-DD
             
             // Encontrar tarefas para este dia
             const dayTasks = tasks.filter(task => {
+                // Para depuração detalhada
+                const taskDate = task.date;
+                const taskStartDate = task.start_date ? new Date(task.start_date) : null;
+                
                 // Verificar a data no formato YYYY-MM-DD (mais confiável)
                 if (task.date === currentDateStr) {
+                    console.log(`Tarefa "${task.title}" encontrada para ${currentDateStr} por igualdade direta`);
                     return true;
                 }
                 
                 // Verificar também pelo formato original do banco
                 if (task.start_date && isSameDay(new Date(task.start_date), date)) {
+                    console.log(`Tarefa "${task.title}" encontrada para ${currentDateStr} por comparação start_date`);
                     return true;
                 }
                 
                 // Verificar se a data de término está neste dia (caso só tenha data de término)
                 if (!task.start_date && task.end_date && isSameDay(new Date(task.end_date), date)) {
+                    console.log(`Tarefa "${task.title}" encontrada para ${currentDateStr} por comparação end_date`);
                     return true;
                 }
                 
                 return false;
             });
             
+            if (dayTasks.length > 0) {
+                console.log(`Dia ${currentDateStr}: ${dayTasks.length} tarefas encontradas`);
+                console.log(`Tarefas para ${currentDateStr}:`, dayTasks.map(t => t.title).join(', '));
+            }
+            
             // Adicionar indicador de tarefas
             if (dayTasks.length > 0) {
-                const tasksCount = document.createElement('div');
-                tasksCount.className = 'tasks-count';
+                // Criar container de tarefas
+                const tasksContainer = document.createElement('div');
+                tasksContainer.className = 'calendar-tasks';
                 
-                // Adicionar apenas uma prévia com até 3 tarefas
-                const tasksPreview = document.createElement('div');
-                tasksPreview.className = 'tasks-preview';
-                
-                const previewTasks = dayTasks.slice(0, 3);
-                previewTasks.forEach(task => {
-                    const taskDot = document.createElement('div');
-                    taskDot.className = 'task-dot';
-                    taskDot.style.backgroundColor = task.color || '#2a3d66';
-                    tasksPreview.appendChild(taskDot);
+                // Exibir as tarefas (limitado a 3 para não sobrecarregar a célula)
+                const visibleTasks = dayTasks.slice(0, 3);
+                visibleTasks.forEach(task => {
+                    const taskItem = document.createElement('div');
+                    taskItem.className = 'calendar-task';
+                    taskItem.style.backgroundColor = task.color || '#2a3d66';
+                    taskItem.textContent = task.title;
+                    
+                    // Adicionar classes de prioridade
+                    if (task.priority === 'alta') {
+                        taskItem.classList.add('priority-high');
+                    } else if (task.priority === 'media') {
+                        taskItem.classList.add('priority-medium');
+                    } else {
+                        taskItem.classList.add('priority-low');
+                    }
+                    
+                    // Marcar como concluída se for o caso
+                    if (task.completed) {
+                        taskItem.classList.add('completed');
+                    }
+                    
+                    // Adicionar evento de clique para visualizar detalhes
+                    taskItem.addEventListener('click', (e) => {
+                        e.stopPropagation(); // Evitar que o clique se propague para o dia
+                        showTaskDetails(task);
+                    });
+                    
+                    tasksContainer.appendChild(taskItem);
                 });
                 
-                // Se houver mais tarefas, adicionar indicador
+                // Se houver mais tarefas do que o limite, mostrar indicador
                 if (dayTasks.length > 3) {
                     const moreIndicator = document.createElement('div');
                     moreIndicator.className = 'more-tasks';
-                    moreIndicator.textContent = `+${dayTasks.length - 3}`;
-                    tasksPreview.appendChild(moreIndicator);
+                    moreIndicator.textContent = `+ ${dayTasks.length - 3} mais`;
+                    tasksContainer.appendChild(moreIndicator);
                 }
                 
-                tasksCount.appendChild(tasksPreview);
-                dayCell.appendChild(tasksCount);
+                dayCell.appendChild(tasksContainer);
                 
                 // Adicionar evento para mostrar todas as tarefas do dia
                 dayCell.addEventListener('click', () => {
