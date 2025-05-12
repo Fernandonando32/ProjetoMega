@@ -1407,7 +1407,11 @@
         }
         
         // Configurar informações do usuário
-        document.getElementById('currentUserName').textContent = `${currentUser.name} (${Auth.ACCESS_LEVELS[currentUser.accessLevel].name})`;
+        let displayName = currentUser.name;
+        if (Auth && Auth.ACCESS_LEVELS && currentUser.accessLevel && Auth.ACCESS_LEVELS[currentUser.accessLevel]) {
+            displayName += ` (${Auth.ACCESS_LEVELS[currentUser.accessLevel].name})`;
+        }
+        document.getElementById('currentUserName').textContent = displayName;
 
         // Configurar botão de logout
         document.getElementById('logoutButton').addEventListener('click', () => {
