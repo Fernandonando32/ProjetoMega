@@ -1260,14 +1260,6 @@
                     </div>
                     
                     <div class="form-group">
-                        <label for="taskAssignedTo">Atribuir para</label>
-                        <select id="taskAssignedTo" multiple size="3" required>
-                            <!-- Opções de usuários serão carregadas dinamicamente -->
-                        </select>
-                        <small style="color: var(--light-text); font-size: 12px;">Segure Ctrl (Windows) ou Command (Mac) para selecionar múltiplos usuários</small>
-                    </div>
-                    
-                    <div class="form-group">
                         <label for="taskColor">Cor da Tarefa</label>
                         <div class="color-palette">
                             <div class="color-row">
@@ -1517,10 +1509,10 @@
                 const users = await Auth.getAllUsers();
                 const activeUsers = users.filter(user => user.is_active !== false);
                 
-                // Obter os dois elementos select com o mesmo ID
-                const assignedToSelects = document.querySelectorAll('#taskAssignedTo');
+                // Obter o elemento select
+                const selectElement = document.getElementById('taskAssignedTo');
                 
-                assignedToSelects.forEach(selectElement => {
+                if (selectElement) {
                     // Limpar opções existentes
                     selectElement.innerHTML = '';
                     
@@ -1531,9 +1523,11 @@
                         option.textContent = user.name;
                         selectElement.appendChild(option);
                     });
-                });
-                
-                console.log(`Carregados ${activeUsers.length} usuários para atribuição de tarefas`);
+                    
+                    console.log(`Carregados ${activeUsers.length} usuários para atribuição de tarefas`);
+                } else {
+                    console.error('Elemento select #taskAssignedTo não encontrado');
+                }
             } catch (error) {
                 console.error('Erro ao carregar usuários para atribuição:', error);
             }
