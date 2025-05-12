@@ -1271,10 +1271,27 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
+        // Variáveis globais
         let registros = [];
+        let currentUser = null;
         let editIndex = null;
+        
+        // Inicializar usuário atual
+        try {
+            const userStr = localStorage.getItem('currentUser');
+            if (userStr) {
+                currentUser = JSON.parse(userStr);
+            } else {
+                // Redirecionar para o login se não houver usuário
+                window.location.href = 'login.html';
+            }
+        } catch (error) {
+            console.error('Erro ao carregar dados do usuário:', error);
+            // Redirecionar para o login em caso de erro
+            window.location.href = 'login.html';
+        }
 
-        // Carregar registros do localStorage ao iniciar
+        // Função para carregar registros do localStorage
         function carregarRegistros() {
             const dados = localStorage.getItem('registrosFTTH');
             if (dados) {
