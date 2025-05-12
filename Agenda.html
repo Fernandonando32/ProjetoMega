@@ -1641,10 +1641,25 @@
                         return false;
                     }
                     
-                    // Verificar se a tarefa tem data válida
-                    if (!task.date) {
-                        console.warn('Tarefa sem data será ignorada:', task.title);
+                    // Verificar várias formas de data para garantir compatibilidade
+                    const hasValidDate = 
+                        (task.date && task.date.match(/^\d{4}-\d{2}-\d{2}$/)) || // formato YYYY-MM-DD
+                        (task.start_date && new Date(task.start_date).toString() !== 'Invalid Date') || // data de início válida
+                        (task.end_date && new Date(task.end_date).toString() !== 'Invalid Date');  // data de término válida
+                    
+                    if (!hasValidDate) {
+                        console.warn('Tarefa sem data válida será ignorada:', task.title);
                         return false;
+                    }
+                    
+                    // Se a tarefa não tem date mas tem start_date, criar o campo date
+                    if (!task.date && task.start_date) {
+                        task.date = new Date(task.start_date).toISOString().split('T')[0];
+                    }
+                    
+                    // Se a tarefa não tem date mas tem end_date, criar o campo date
+                    if (!task.date && task.end_date) {
+                        task.date = new Date(task.end_date).toISOString().split('T')[0];
                     }
                     
                     return true;
@@ -1724,69 +1739,63 @@
             const content = document.createElement('div');
             content.className = 'daily-view-content';
             
-            // Formatar a data do dia atual como YYYY-MM-DD para comparação
-            const formattedCurrentDate = currentDate.toISOString().split('T')[0];
-            console.log('Buscando tarefas para visualização diária:', formattedCurrentDate);
+            // Filtrar tarefas para o dia selecionado
+            const currentDateStr = currentDate.toISOString().split('T')[0]; // formato YYYY-MM-DD
             
-            // Filtrar tarefas para o dia atual
-            const dayTasks = tasks.filter(task => {
-                if (!task.date) {
-                    console.log('Tarefa sem data na visualização diária:', task.id, task.title);
-                    return false;
+            // Comparar as datas sem considerar o tempo
+            const isSameDay = (date1, date2) => {
+                // Se a data estiver em formato string ISO, converter para objeto Date
+                const d1 = typeof date1 === 'string' ? new Date(date1) : date1;
+                const d2 = typeof date2 === 'string' ? new Date(date2) : date2;
+                
+                return d1.getFullYear() === d2.getFullYear() &&
+                       d1.getMonth() === d2.getMonth() &&
+                       d1.getDate() === d2.getDate();
+            };
+            
+            // Encontrar tarefas para hoje
+            const todayTasks = tasks.filter(task => {
+                // Verificar a data no formato YYYY-MM-DD (mais confiável)
+                if (task.date === currentDateStr) {
+                    return true;
                 }
                 
-                const matches = task.date === formattedCurrentDate;
-                if (matches) {
-                    console.log('Tarefa encontrada para visualização diária:', task.title);
+                // Verificar também pelo formato original do banco
+                if (task.start_date && isSameDay(new Date(task.start_date), currentDate)) {
+                    return true;
                 }
-                return matches;
+                
+                // Verificar se a data de término está neste dia (caso só tenha data de término)
+                if (!task.start_date && task.end_date && isSameDay(new Date(task.end_date), currentDate)) {
+                    return true;
+                }
+                
+                return false;
             });
             
-            console.log(`Encontradas ${dayTasks.length} tarefas para visualização diária`);
+            console.log(`Tarefas para o dia ${currentDateStr}:`, todayTasks.length);
             
-            if (dayTasks.length === 0) {
-                const emptyMsg = document.createElement('p');
-                emptyMsg.className = 'empty-day-message';
-                emptyMsg.textContent = 'Não há tarefas para este dia.';
-                content.appendChild(emptyMsg);
+            if (todayTasks.length === 0) {
+                const emptyState = document.createElement('div');
+                emptyState.className = 'empty-day';
+                emptyState.textContent = 'Não há tarefas para este dia.';
+                content.appendChild(emptyState);
             } else {
-                // Criar slots de tempo para o dia
-                const timeSlots = document.createElement('div');
-                timeSlots.className = 'time-slots';
+                // Ordenar tarefas por hora
+                todayTasks.sort((a, b) => {
+                    // Priorizar tarefas com hora definida
+                    if (a.startTime && !b.startTime) return -1;
+                    if (!a.startTime && b.startTime) return 1;
+                    if (!a.startTime && !b.startTime) return 0;
+                    
+                    return a.startTime.localeCompare(b.startTime);
+                });
                 
-                // Criar slots de hora para o dia (7h às 22h)
-                for (let hour = 7; hour <= 22; hour++) {
-                    // Slot de tempo (hora)
-                    const timeSlot = document.createElement('div');
-                    timeSlot.className = 'time-slot';
-                    timeSlot.textContent = `${hour}:00`;
-                    timeSlots.appendChild(timeSlot);
-                    
-                    // Conteúdo do slot
-                    const slotContent = document.createElement('div');
-                    slotContent.className = 'time-slot-content';
-                    
-                    // Filtrar tarefas para esta hora
-                    const hourTasks = dayTasks.filter(task => {
-                        if (!task.startTime) return false;
-                        const startTime = task.startTime.split(':');
-                        return parseInt(startTime[0], 10) === hour;
-                    });
-                    
-                    if (hourTasks.length > 0) {
-                        slotContent.classList.add('has-task');
-                        
-                        // Adicionar tarefas deste horário
-                        hourTasks.forEach(task => {
-                            const taskItem = createTaskElement(task);
-                            slotContent.appendChild(taskItem);
-                        });
-                    }
-                    
-                    timeSlots.appendChild(slotContent);
-                }
-                
-                content.appendChild(timeSlots);
+                // Criar timeline
+                todayTasks.forEach(task => {
+                    const taskItem = createTaskElement(task);
+                    content.appendChild(taskItem);
+                });
             }
             
             dailyView.appendChild(content);
@@ -1795,7 +1804,7 @@
 
         // Função para renderizar visualização semanal
         function renderWeeklyView(calendarGrid) {
-            // Criar elemento para visualização semanal
+            // Criar container para visualização semanal
             const weekView = document.createElement('div');
             weekView.className = 'calendar-week';
             
@@ -1811,6 +1820,17 @@
                 dayHeader.textContent = day;
                 weekView.appendChild(dayHeader);
             });
+            
+            // Comparar as datas sem considerar o tempo
+            const isSameDay = (date1, date2) => {
+                // Se a data estiver em formato string ISO, converter para objeto Date
+                const d1 = typeof date1 === 'string' ? new Date(date1) : date1;
+                const d2 = typeof date2 === 'string' ? new Date(date2) : date2;
+                
+                return d1.getFullYear() === d2.getFullYear() &&
+                       d1.getMonth() === d2.getMonth() &&
+                       d1.getDate() === d2.getDate();
+            };
             
             // Criar células para cada dia da semana
             for (let i = 0; i < 7; i++) {
@@ -1834,11 +1854,26 @@
                 dayCell.appendChild(dateDiv);
                 
                 // Filtrar tarefas para este dia
+                const currentDateStr = day.toISOString().split('T')[0]; // formato YYYY-MM-DD
+                
+                // Encontrar tarefas para este dia
                 const dayTasks = tasks.filter(task => {
-                    const taskDate = new Date(task.date);
-                    return taskDate.getDate() === day.getDate() && 
-                           taskDate.getMonth() === day.getMonth() && 
-                           taskDate.getFullYear() === day.getFullYear();
+                    // Verificar a data no formato YYYY-MM-DD (mais confiável)
+                    if (task.date === currentDateStr) {
+                        return true;
+                    }
+                    
+                    // Verificar também pelo formato original do banco
+                    if (task.start_date && isSameDay(new Date(task.start_date), day)) {
+                        return true;
+                    }
+                    
+                    // Verificar se a data de término está neste dia (caso só tenha data de término)
+                    if (!task.start_date && task.end_date && isSameDay(new Date(task.end_date), day)) {
+                        return true;
+                    }
+                    
+                    return false;
                 });
                 
                 // Adicionar tarefas
@@ -2021,53 +2056,81 @@
             
             // Adicionar número do dia
             const dayNumber = document.createElement('div');
-            dayNumber.className = 'calendar-day-number';
+            dayNumber.className = 'day-number';
             dayNumber.textContent = date.getDate();
             dayCell.appendChild(dayNumber);
             
-            // Adicionar container para tarefas
-            const tasksContainer = document.createElement('div');
-            tasksContainer.className = 'calendar-tasks';
-            
-            // Formatar a data do dia atual como YYYY-MM-DD para comparação
-            const formattedCellDate = date.toISOString().split('T')[0];
-            console.log('Buscando tarefas para o dia:', formattedCellDate);
+            // Comparar as datas sem considerar o tempo
+            const isSameDay = (date1, date2) => {
+                // Se a data estiver em formato string ISO, converter para objeto Date
+                const d1 = typeof date1 === 'string' ? new Date(date1) : date1;
+                const d2 = typeof date2 === 'string' ? new Date(date2) : date2;
+                
+                return d1.getFullYear() === d2.getFullYear() &&
+                       d1.getMonth() === d2.getMonth() &&
+                       d1.getDate() === d2.getDate();
+            };
             
             // Filtrar tarefas para este dia
+            const currentDateStr = date.toISOString().split('T')[0]; // formato YYYY-MM-DD
+            
+            // Encontrar tarefas para este dia
             const dayTasks = tasks.filter(task => {
-                // Verificar se a propriedade date existe e corresponde à data da célula
-                if (!task.date) {
-                    console.log('Tarefa sem data:', task.id, task.title);
-                    return false;
+                // Verificar a data no formato YYYY-MM-DD (mais confiável)
+                if (task.date === currentDateStr) {
+                    return true;
                 }
                 
-                // Comparar diretamente as strings de data no formato YYYY-MM-DD
-                const matches = task.date === formattedCellDate;
-                if (matches) {
-                    console.log('Tarefa encontrada para o dia', formattedCellDate, ':', task.title);
+                // Verificar também pelo formato original do banco
+                if (task.start_date && isSameDay(new Date(task.start_date), date)) {
+                    return true;
                 }
-                return matches;
+                
+                // Verificar se a data de término está neste dia (caso só tenha data de término)
+                if (!task.start_date && task.end_date && isSameDay(new Date(task.end_date), date)) {
+                    return true;
+                }
+                
+                return false;
             });
             
-            console.log(`Encontradas ${dayTasks.length} tarefas para o dia ${formattedCellDate}`);
-            
-            // Adicionar tarefas
+            // Adicionar indicador de tarefas
             if (dayTasks.length > 0) {
-                dayCell.classList.add('has-tasks');
+                const tasksCount = document.createElement('div');
+                tasksCount.className = 'tasks-count';
                 
-                dayTasks.forEach(task => {
-                    const taskItem = createTaskElement(task, true);
-                    tasksContainer.appendChild(taskItem);
+                // Adicionar apenas uma prévia com até 3 tarefas
+                const tasksPreview = document.createElement('div');
+                tasksPreview.className = 'tasks-preview';
+                
+                const previewTasks = dayTasks.slice(0, 3);
+                previewTasks.forEach(task => {
+                    const taskDot = document.createElement('div');
+                    taskDot.className = 'task-dot';
+                    taskDot.style.backgroundColor = task.color || '#2a3d66';
+                    tasksPreview.appendChild(taskDot);
+                });
+                
+                // Se houver mais tarefas, adicionar indicador
+                if (dayTasks.length > 3) {
+                    const moreIndicator = document.createElement('div');
+                    moreIndicator.className = 'more-tasks';
+                    moreIndicator.textContent = `+${dayTasks.length - 3}`;
+                    tasksPreview.appendChild(moreIndicator);
+                }
+                
+                tasksCount.appendChild(tasksPreview);
+                dayCell.appendChild(tasksCount);
+                
+                // Adicionar evento para mostrar todas as tarefas do dia
+                dayCell.addEventListener('click', () => {
+                    // Selecionar o dia clicado
+                    currentDate = new Date(date);
+                    
+                    // Mudar para visualização diária
+                    renderCalendar('daily');
                 });
             }
-            
-            dayCell.appendChild(tasksContainer);
-            
-            // Adicionar evento de clique para visualizar detalhes do dia
-            dayCell.addEventListener('click', () => {
-                currentDate = new Date(date);
-                renderCalendar('daily');
-            });
             
             return dayCell;
         }
@@ -2458,98 +2521,137 @@
             const today = new Date();
             const formattedToday = today.toISOString().split('T')[0];
             
-            // Filtrar tarefas para hoje
-            const todayTasks = tasks.filter(task => task.date === formattedToday && !task.completed);
-            const completedTodayTasks = tasks.filter(task => task.date === formattedToday && task.completed);
+            // Comparar as datas sem considerar o tempo
+            const isSameDay = (date1, date2) => {
+                // Se a data estiver em formato string ISO, converter para objeto Date
+                const d1 = typeof date1 === 'string' ? new Date(date1) : date1;
+                const d2 = typeof date2 === 'string' ? new Date(date2) : date2;
+                
+                return d1.getFullYear() === d2.getFullYear() &&
+                       d1.getMonth() === d2.getMonth() &&
+                       d1.getDate() === d2.getDate();
+            };
+            
+            // Filtrar tarefas para hoje com método melhorado
+            const todayTasks = tasks.filter(task => {
+                // Primeiro verificar se está completo ou não
+                const isTaskForToday = 
+                    // Verificar a data no formato YYYY-MM-DD (mais confiável)
+                    (task.date === formattedToday) ||
+                    // Verificar também pelo formato original do banco
+                    (task.start_date && isSameDay(new Date(task.start_date), today)) ||
+                    // Verificar se a data de término está neste dia (caso só tenha data de término)
+                    (!task.start_date && task.end_date && isSameDay(new Date(task.end_date), today));
+                
+                return isTaskForToday;
+            });
+            
+            // Separar tarefas pendentes e concluídas
+            const pendingTasks = todayTasks.filter(task => !task.completed);
+            const completedTodayTasks = todayTasks.filter(task => task.completed);
             
             // Atualizar container de tarefas pendentes
             const dailyTasksContainer = document.getElementById('dailyTasks');
-            dailyTasksContainer.innerHTML = '';
             
-            if (todayTasks.length === 0) {
-                dailyTasksContainer.innerHTML = '<p style="padding: 15px; text-align: center; color: var(--light-text);">Nenhuma tarefa pendente para hoje</p>';
-            } else {
-                // Ordenar por horário de início
-                todayTasks.sort((a, b) => {
-                    if (!a.startTime) return 1;
-                    if (!b.startTime) return -1;
-                    return a.startTime.localeCompare(b.startTime);
-                });
+            if (dailyTasksContainer) {
+                dailyTasksContainer.innerHTML = '';
                 
-                // Adicionar cada tarefa à lista
-                todayTasks.forEach(task => {
-                    const taskItem = document.createElement('div');
-                    taskItem.className = 'task-item';
-                    
-                    // Adicionar classe de prioridade
-                    if (task.priority === 'alta') {
-                        taskItem.classList.add('priority-high');
-                    } else if (task.priority === 'media') {
-                        taskItem.classList.add('priority-medium');
-                    } else {
-                        taskItem.classList.add('priority-low');
-                    }
-                    
-                    // Título da tarefa
-                    const title = document.createElement('h4');
-                    title.textContent = task.title;
-                    taskItem.appendChild(title);
-                    
-                    // Horário da tarefa
-                    if (task.startTime) {
-                        const time = document.createElement('p');
-                        time.style.fontSize = '12px';
-                        time.style.color = 'var(--light-text)';
-                        time.textContent = task.startTime + (task.endTime ? ` - ${task.endTime}` : '');
-                        taskItem.appendChild(time);
-                    }
-                    
-                    // Botão para concluir tarefa
-                    const completeBtn = document.createElement('button');
-                    completeBtn.className = 'btn-success complete-task-btn';
-                    completeBtn.innerHTML = '<i class="fas fa-check"></i> Concluir';
-                    completeBtn.style.marginTop = '5px';
-                    
-                    // Adicionar evento para concluir a tarefa
-                    completeBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        completeTask(task.id);
-                    });
-                    
-                    taskItem.appendChild(completeBtn);
-                    
-                    // Adicionar evento para ver detalhes da tarefa
-                    taskItem.addEventListener('click', () => {
-                        showTaskDetails(task);
-                    });
-                    
-                    dailyTasksContainer.appendChild(taskItem);
-                });
+                if (pendingTasks.length === 0) {
+                    dailyTasksContainer.innerHTML = '<p style="padding: 15px; text-align: center; color: var(--light-text);">Nenhuma tarefa pendente para hoje</p>';
+                } else {
+                    // Ordenar por prioridade e horário
+                    pendingTasks
+                        .sort((a, b) => {
+                            // Primeiro por horário (se tiver)
+                            if (a.startTime && b.startTime) {
+                                return a.startTime.localeCompare(b.startTime);
+                            }
+                            
+                            // Tarefas com horário vêm antes das sem horário
+                            if (a.startTime && !b.startTime) return -1;
+                            if (!a.startTime && b.startTime) return 1;
+                            
+                            // Depois por prioridade
+                            const priorityOrder = { alta: 1, media: 2, baixa: 3, normal: 4 };
+                            return (priorityOrder[a.priority] || 5) - (priorityOrder[b.priority] || 5);
+                        })
+                        .forEach(task => {
+                            const taskItem = document.createElement('div');
+                            taskItem.className = 'task-item';
+                            
+                            // Adicionar classe de prioridade
+                            if (task.priority === 'alta') {
+                                taskItem.classList.add('priority-high');
+                            } else if (task.priority === 'media') {
+                                taskItem.classList.add('priority-medium');
+                            }
+                            
+                            // Adicionar cor personalizada da tarefa
+                            taskItem.style.borderLeft = `3px solid ${task.color || '#2a3d66'}`;
+                            
+                            // Título da tarefa
+                            const title = document.createElement('h4');
+                            title.textContent = task.title;
+                            taskItem.appendChild(title);
+                            
+                            // Horário (se definido)
+                            if (task.startTime) {
+                                const timeInfo = document.createElement('p');
+                                timeInfo.className = 'task-time';
+                                timeInfo.textContent = `${task.startTime}${task.endTime ? ' - ' + task.endTime : ''}`;
+                                taskItem.appendChild(timeInfo);
+                            }
+                            
+                            // Botão para concluir tarefa
+                            const completeBtn = document.createElement('button');
+                            completeBtn.className = 'btn btn-sm';
+                            completeBtn.textContent = 'Concluir';
+                            completeBtn.style.marginTop = '5px';
+                            
+                            // Adicionar evento para concluir a tarefa
+                            completeBtn.addEventListener('click', (e) => {
+                                e.stopPropagation();
+                                completeTask(task.id);
+                            });
+                            
+                            taskItem.appendChild(completeBtn);
+                            
+                            // Adicionar evento para ver detalhes da tarefa
+                            taskItem.addEventListener('click', () => {
+                                showTaskDetails(task);
+                            });
+                            
+                            dailyTasksContainer.appendChild(taskItem);
+                        });
+                }
             }
             
             // Atualizar container de tarefas concluídas
             const completedTasksContainer = document.getElementById('completedTasks');
-            completedTasksContainer.innerHTML = '';
             
-            if (completedTodayTasks.length === 0) {
-                completedTasksContainer.innerHTML = '<p style="padding: 15px; text-align: center; color: var(--light-text);">Nenhuma tarefa concluída hoje</p>';
-            } else {
-                // Adicionar cada tarefa concluída à lista
-                completedTodayTasks.forEach(task => {
-                    const taskItem = document.createElement('div');
-                    taskItem.className = 'task-item completed';
-                    
-                    const title = document.createElement('h4');
-                    title.textContent = task.title;
-                    taskItem.appendChild(title);
-                    
-                    // Adicionar evento para ver detalhes da tarefa
-                    taskItem.addEventListener('click', () => {
-                        showTaskDetails(task);
+            if (completedTasksContainer) {
+                completedTasksContainer.innerHTML = '';
+                
+                if (completedTodayTasks.length === 0) {
+                    completedTasksContainer.innerHTML = '<p style="padding: 15px; text-align: center; color: var(--light-text);">Nenhuma tarefa concluída hoje</p>';
+                } else {
+                    // Adicionar cada tarefa concluída à lista
+                    completedTodayTasks.forEach(task => {
+                        const taskItem = document.createElement('div');
+                        taskItem.className = 'task-item completed';
+                        
+                        const title = document.createElement('h4');
+                        title.textContent = task.title;
+                        taskItem.appendChild(title);
+                        
+                        // Adicionar evento para ver detalhes da tarefa
+                        taskItem.addEventListener('click', () => {
+                            showTaskDetails(task);
+                        });
+                        
+                        completedTasksContainer.appendChild(taskItem);
                     });
-                    
-                    completedTasksContainer.appendChild(taskItem);
-                });
+                }
             }
         }
 

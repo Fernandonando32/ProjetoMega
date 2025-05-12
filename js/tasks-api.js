@@ -392,6 +392,8 @@ const TasksAPI = {
             date: date,
             startTime: startTime,
             endTime: endTime,
+            start_date: dbTask.start_date,  // Manter o formato original para comparações
+            end_date: dbTask.end_date,      // Manter o formato original para comparações
             completed: dbTask.status === 'concluida',
             priority: dbTask.priority || 'normal',
             technicianId: dbTask.technician_id || null,
