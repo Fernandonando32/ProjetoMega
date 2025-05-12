@@ -12,14 +12,17 @@
     <script src="./js/tasks-api.js"></script>
     
     <script type="module">
-        import * as Auth from './js/auth.js';
+        import { Auth, PERMISSIONS, ACCESS_LEVELS } from './js/auth.js';
         
         // Expor Auth globalmente para uso em outros scripts
         window.Auth = Auth;
+        window.PERMISSIONS = PERMISSIONS;
+        window.ACCESS_LEVELS = ACCESS_LEVELS;
         
         // Verificar autenticação
         async function checkAuth() {
-            if (!await Auth.isAuthenticated()) {
+            const isAuth = Auth.isAuthenticated();
+            if (!isAuth) {
                 window.location.href = 'login.html';
                 return;
             }
@@ -28,7 +31,7 @@
             const currentUser = Auth.getCurrentUser();
             
             // Verificar permissão para visualizar tarefas
-            if (!Auth.hasPermission(currentUser, Auth.PERMISSIONS.VIEW_TASKS)) {
+            if (!Auth.hasPermission(currentUser, PERMISSIONS.VIEW_TASKS)) {
                 alert('Você não tem permissão para acessar esta página.');
                 window.location.href = 'login.html';
                 return;
