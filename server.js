@@ -23,6 +23,9 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use(express.static(path.join(__dirname, './')));
 
+// Importar rotas para tarefas
+const tasksRoutes = require('./api-tasks');
+
 // Configuração do PostgreSQL
 const pool = new Pool({
     host: '187.62.153.52',
@@ -360,6 +363,9 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
     }
 });
 
+// Usar as rotas de tarefas
+app.use('/api', authenticateToken, tasksRoutes);
+
 // Rotas de exportação
 app.get('/api/export/users', authenticateToken, async (req, res) => {
     try {
@@ -424,8 +430,6 @@ app.get('/api/export/users', authenticateToken, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
-// Mais rotas de API seriam adicionadas aqui para tarefas, técnicos e manutenção
 
 // Função para inicializar o banco de dados
 async function initializeDatabase() {

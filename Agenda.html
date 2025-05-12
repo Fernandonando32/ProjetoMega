@@ -5,6 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agenda de Tarefas</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./js/pg-config.js"></script>
+    <script src="./js/auth.js"></script>
+    <script src="./js/tasks-api.js"></script>
+    
     <script type="module">
         import * as Auth from './js/auth.js';
         
@@ -1383,6 +1389,23 @@
     </div>
 
     <script>
+        // Verificar e inicializar o usuário atual
+        let currentUser = null;
+        try {
+            // Tentar obter o usuário do localStorage
+            const userStr = localStorage.getItem('currentUser');
+            if (userStr) {
+                currentUser = JSON.parse(userStr);
+            } else {
+                // Redirecionar para o login se não houver usuário
+                window.location.href = 'login.html';
+            }
+        } catch (error) {
+            console.error('Erro ao carregar dados do usuário:', error);
+            // Redirecionar para o login em caso de erro
+            window.location.href = 'login.html';
+        }
+        
         // Configurar informações do usuário
         document.getElementById('currentUserName').textContent = `${currentUser.name} (${Auth.ACCESS_LEVELS[currentUser.accessLevel].name})`;
 
@@ -1458,8 +1481,20 @@
         }
 
         // Chamar a verificação de permissões após o carregamento da página
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             checkPermissions();
+            
+            // Carregar tarefas do banco de dados
+            try {
+                console.log("Carregando tarefas do banco de dados...");
+                tasks = await window.TasksAPI.getAllTasks();
+                console.log(`${tasks.length} tarefas carregadas`);
+            } catch (error) {
+                console.error("Erro ao carregar tarefas:", error);
+                tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+                console.log(`${tasks.length} tarefas carregadas do localStorage (fallback)`);
+            }
+            
             renderCalendar();
             renderDailyTasks();
             setupEventListeners();
@@ -1479,7 +1514,7 @@
         });
 
         // Variáveis globais
-        let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+        let tasks = [];
         let currentDate = new Date();
         let selectedDate = new Date();
         let notificationCheckInterval;
@@ -3444,7 +3479,7 @@
         }
 
         // Manipulação do formulário de tarefas
-        function handleTaskSubmit(e) {
+        async function handleTaskSubmit(e) {
             e.preventDefault();
 
             const taskDate = document.getElementById('taskDate').value;
@@ -3546,216 +3581,45 @@
                         
                     logUserAction('Editou tarefa', changeDetails);
                     
-                    // Remover a tarefa original da lista
-                    tasks = tasks.filter(t => t.id !== parseInt(editingTaskId));
+                    // Atualizar no banco de dados
+                    try {
+                        console.log('Atualizando tarefa no banco de dados...', task);
+                        const updatedTask = await window.TasksAPI.updateTask(task.id.toString(), task);
+                        console.log('Tarefa atualizada com sucesso:', updatedTask);
+                        
+                        // Atualizar a lista local
+                        tasks = tasks.filter(t => t.id !== parseInt(editingTaskId));
+                        tasks.push(updatedTask);
+                    } catch (error) {
+                        console.error('Erro ao atualizar tarefa no banco de dados:', error);
+                        
+                        // Atualizar apenas localmente
+                        tasks = tasks.filter(t => t.id !== parseInt(editingTaskId));
+                        tasks.push(task);
+                    }
                 } else {
                     // Se por algum motivo a tarefa original não for encontrada
                     logUserAction('Editou tarefa', `Tarefa "${taskTitle}" (ID: ${task.id}) foi editada`);
+                    
+                    // Atualizar no banco de dados
+                    try {
+                        console.log('Atualizando tarefa no banco de dados...', task);
+                        const updatedTask = await window.TasksAPI.updateTask(task.id.toString(), task);
+                        console.log('Tarefa atualizada com sucesso:', updatedTask);
+                        
+                        // Atualizar a lista local
+                        tasks = tasks.filter(t => t.id !== parseInt(editingTaskId));
+                        tasks.push(updatedTask);
+                    } catch (error) {
+                        console.error('Erro ao atualizar tarefa no banco de dados:', error);
+                        
+                        // Atualizar apenas localmente
+                        tasks = tasks.filter(t => t.id !== parseInt(editingTaskId));
+                        tasks.push(task);
+                    }
                 }
             } else {
                 // Registrar a criação de uma nova tarefa
-                logUserAction('Criou tarefa', `Tarefa "${taskTitle}" (ID: ${task.id}) foi criada`);
-            }
-            
-            // Adicionar a tarefa à lista e salvar
-            tasks.push(task);
-            saveTasks();
-            
-            // Atualizar a data selecionada para a data da nova tarefa
-            selectedDate = new Date(adjustedDate + 'T12:00:00');
-            // Atualizar também a data atual para mostrar o calendário no mês correto
-            currentDate = new Date(adjustedDate + 'T12:00:00');
-            
-            // Renderizar o calendário e as tarefas do dia
-            renderCalendar();
-            renderDailyTasks();
-            
-            // Resetar o formulário
-            taskForm.reset();
-            document.getElementById('colorSolides').checked = true;
-            document.getElementById('taskColor').value = '#1a2540';
-            weekdaysContainer.style.display = 'none';
-            repeatEndContainer.style.display = 'none';
-            
-            // Atualizar a visualização
-            renderCalendar();
-            
-            // Se a data da nova tarefa for igual à data selecionada, atualizar as tarefas do dia
-            const newTaskDate = new Date(taskDate + 'T12:00:00');
-            const selectedDateObj = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), 12, 0, 0);
-            
-            if (newTaskDate.toDateString() === selectedDateObj.toDateString()) {
-                renderDailyTasks();
-            }
-            
-            alert(`Tarefa adicionada com sucesso${tasksToAdd.length > 1 ? ` com ${tasksToAdd.length} ocorrências` : ''}!`);
-        }
-
-        // Função para marcar tarefa como concluída
-        function completeTask() {
-            // Obter o ID da tarefa que está sendo exibida atualmente no modal
-            const taskId = parseInt(this.dataset.taskId);
-            
-            // Encontrar a tarefa na lista
-            const taskIndex = tasks.findIndex(task => task.id === taskId);
-            
-            if (taskIndex !== -1) {
-                const task = tasks[taskIndex];
-                
-                // Verificar se o usuário atual já concluiu esta tarefa
-                if (task.completedBy && task.completedBy.includes(currentUser.id)) {
-                    alert('Você já marcou esta tarefa como concluída!');
-                    return;
-                }
-                
-                // Adicionar o usuário atual à lista de usuários que concluíram
-                if (!task.completedBy) {
-                    task.completedBy = [];
-                }
-                task.completedBy.push(currentUser.id);
-                
-                // Verificar se todos os usuários atribuídos já concluíram a tarefa
-                const allCompleted = task.assignedTo.every(userId => 
-                    task.completedBy.includes(userId)
-                );
-                
-                // Atualizar o status de conclusão e data apenas se todos concluíram
-                if (allCompleted) {
-                    task.completed = true;
-                    task.completedDate = new Date().toISOString();
-                }
-                
-                // Registrar a ação no histórico
-                logUserAction('Concluiu tarefa', `Tarefa "${task.title}" (ID: ${task.id}) foi marcada como concluída`);
-                
-                // Salvar as alterações
-                saveTasks();
-                
-                // Fechar o modal
-                taskModal.style.display = 'none';
-                
-                // Atualizar as visualizações
-                if (currentView === 'completed') {
-                    renderCompletedView();
-                } else {
-                    renderCalendar();
-                    renderDailyTasks();
-                }
-            
-            // Mostrar mensagem de sucesso
-                if (allCompleted) {
-                    alert('Tarefa totalmente concluída por todos os usuários atribuídos!');
-                } else {
-                    alert('Tarefa marcada como concluída por você!');
-                }
-            }
-        }
-
-        // Exibição dos detalhes da tarefa
-        function showTaskDetails(task) {
-            // Obter os usuários atribuídos à tarefa
-            const users = JSON.parse(localStorage.getItem('users')) || Auth.DEFAULT_USERS;
-            const assignedUsers = users.filter(user => task.assignedTo.includes(user.id));
-            
-            // Identificar quais usuários já concluíram a tarefa
-            const completedUsers = task.completedBy ? users.filter(user => task.completedBy.includes(user.id)) : [];
-            const completedUserIds = task.completedBy || [];
-            
-            // Verificar se o usuário atual já concluiu a tarefa
-            const currentUserCompleted = completedUserIds.includes(currentUser.id);
-            
-            // Determinar se deve mostrar informações detalhadas de atribuição
-            const isAdmin = currentUser.accessLevel === 'ADMIN';
-            
-            modalContent.innerHTML = `
-                <div style="margin-bottom: 15px;">
-                    <h3 style="margin-bottom: 10px; color: ${task.color || '#2a3d66'}">${task.title} ${task.completed ? '<span style="color: var(--accent-color); font-size: 14px;"><i class="fas fa-check-circle"></i> Concluída</span>' : ''}</h3>
-                    <p style="color: var(--light-text);">${task.description || 'Sem descrição'}</p>
-                </div>
-                <div style="display: grid; gap: 10px;">
-                    <div>
-                        <strong>Data:</strong> ${new Date(task.date).toLocaleDateString('pt-BR')}
-                    </div>
-                    <div>
-                        <strong>Horário:</strong> ${task.startTime} - ${task.endTime}
-                    </div>
-                    <div>
-                        <strong>Prioridade:</strong> ${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-                    </div>
-                    <div>
-                        <strong>Categoria:</strong> ${task.category.charAt(0).toUpperCase() + task.category.slice(1)}
-                    </div>
-                    ${isAdmin ? `
-                    <div>
-                        <strong>Atribuído para:</strong>
-                        <ul style="margin-top: 5px; padding-left: 20px;">
-                            ${assignedUsers.map(user => `
-                                <li>
-                                    ${user.name} 
-                                    ${completedUserIds.includes(user.id) ? 
-                                        '<span style="color: var(--accent-color);"><i class="fas fa-check-circle"></i> Concluída</span>' : 
-                                        '<span style="color: var(--light-text);"><i class="fas fa-hourglass-half"></i> Pendente</span>'}
-                                </li>
-                            `).join('')}
-                        </ul>
-                    </div>
-                    ` : task.assignedTo.includes(currentUser.id) ? `
-                    <div>
-                        <strong>Atribuição:</strong> <span>Você está atribuído a esta tarefa</span>
-                        ${currentUserCompleted ? 
-                            '<span style="color: var(--accent-color); margin-left: 10px;"><i class="fas fa-check-circle"></i> Você já concluiu</span>' : 
-                            '<span style="color: var(--light-text); margin-left: 10px;"><i class="fas fa-hourglass-half"></i> Pendente</span>'}
-                    </div>
-                    ` : ''}
-                    <div>
-                        <strong>Cor:</strong> 
-                        <div style="display: inline-block; width: 20px; height: 20px; background-color: ${task.color || '#2a3d66'}; border-radius: 3px; vertical-align: middle; margin-left: 5px;"></div>
-                    </div>
-                    ${task.completed ? `
-                    <div>
-                        <strong>Concluída em:</strong> ${new Date(task.completedDate).toLocaleString('pt-BR')}
-                    </div>
-                    ` : ''}
-                    ${!task.completed && completedUserIds.length > 0 ? `
-                    <div>
-                        <strong>Status de conclusão:</strong> ${isAdmin ? 
-                            `${completedUserIds.length} de ${task.assignedTo.length} usuários concluíram (${Math.round(completedUserIds.length / task.assignedTo.length * 100)}%)` : 
-                            currentUserCompleted ? 'Você já concluiu esta tarefa' : 'Tarefa ainda não concluída'}
-                    </div>
-                    ` : ''}
-                </div>
-            `;
-
-            // Configurar os botões de ação
-            if (task.completed) {
-                // Se a tarefa estiver concluída, mostrar apenas os botões para administradores
-                if (currentUser.accessLevel === 'ADMIN') {
-                    editTaskButton.style.display = 'inline-block';
-                    deleteTaskButton.style.display = 'inline-block';
-                    completeTaskButton.style.display = 'none';
-                    
-                    // Configurar os eventos dos botões
-            editTaskButton.onclick = () => editTask(task);
-            deleteTaskButton.onclick = () => deleteTask(task.id);
-                } else {
-                    // Usuários não administradores não podem editar ou excluir tarefas concluídas
-                    editTaskButton.style.display = 'none';
-                    deleteTaskButton.style.display = 'none';
-                    completeTaskButton.style.display = 'none';
-                }
-            } else {
-                // Se a tarefa não estiver concluída, verificar permissões normais
-                if (Auth.hasPermission(currentUser, Auth.PERMISSIONS.EDIT_TASKS)) {
-                    editTaskButton.style.display = 'inline-block';
-                    editTaskButton.onclick = () => editTask(task);
-                } else {
-                    editTaskButton.style.display = 'none';
-                }
-
-                if (Auth.hasPermission(currentUser, Auth.PERMISSIONS.DELETE_TASKS)) {
-                    deleteTaskButton.style.display = 'inline-block';
-                    deleteTaskButton.onclick = () => deleteTask(task.id);
-                } else {
                     deleteTaskButton.style.display = 'none';
                 }
 
@@ -3808,7 +3672,7 @@
         }
 
         // Exclusão de tarefa
-        function deleteTask(taskId) {
+        async function deleteTask(taskId) {
             const task = tasks.find(t => t.id === taskId);
             
             // Verificar se a tarefa está concluída e se o usuário é administrador
@@ -3821,6 +3685,16 @@
                 // Registrar a ação no histórico antes de excluir
                 logUserAction('Excluiu tarefa', `Tarefa "${task.title}" (ID: ${task.id}) foi excluída`);
                 
+                // Excluir no banco de dados
+                try {
+                    console.log('Excluindo tarefa do banco de dados...', taskId);
+                    await window.TasksAPI.deleteTask(taskId.toString());
+                    console.log('Tarefa excluída com sucesso');
+                } catch (error) {
+                    console.error('Erro ao excluir tarefa do banco de dados:', error);
+                }
+                
+                // Atualizar localmente
                 tasks = tasks.filter(task => task.id !== taskId);
                 saveTasks();
                 taskModal.style.display = 'none';
@@ -3829,9 +3703,14 @@
             }
         }
 
-        // Salvamento das tarefas no localStorage
-        function saveTasks() {
+        // Salvamento das tarefas no localStorage e banco de dados
+        async function saveTasks() {
+            // Salvar no localStorage para fallback
             localStorage.setItem('tasks', JSON.stringify(tasks));
+            
+            // Se estamos usando o banco de dados, tentamos salvar lá também
+            // mas isso é feito individualmente em cada operação CRUD
+            console.log("Tarefas salvas no localStorage");
         }
 
         // Adicionar event listener para o color picker
