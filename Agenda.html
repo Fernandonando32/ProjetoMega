@@ -3620,25 +3620,24 @@
                 }
             } else {
                 // Registrar a criação de uma nova tarefa
-                    deleteTaskButton.style.display = 'none';
-                }
-
-                // Verificar se o usuário atual já concluiu a tarefa
-                if (Auth.hasPermission(currentUser, Auth.PERMISSIONS.COMPLETE_TASKS) && !currentUserCompleted && task.assignedTo.includes(currentUser.id)) {
-                    completeTaskButton.style.display = 'inline-block';
-                    completeTaskButton.dataset.taskId = task.id;
-                    completeTaskButton.textContent = 'Marcar como concluída';
-                } else if (currentUserCompleted) {
-                    completeTaskButton.style.display = 'none';
-                    // Adicionar indicação de que o usuário já concluiu
-                    const completionIndicator = document.createElement('div');
-                    completionIndicator.innerHTML = '<span style="color: var(--accent-color); display: inline-block; margin-right: 10px;"><i class="fas fa-check-circle"></i> Você já concluiu esta tarefa</span>';
-                    document.querySelector('.modal-actions').prepend(completionIndicator);
-                } else {
-                    completeTaskButton.style.display = 'none';
-                }
+                deleteTaskButton.style.display = 'none';
             }
-            
+
+            // Verificar se o usuário atual já concluiu a tarefa
+            if (Auth.hasPermission(currentUser, Auth.PERMISSIONS.COMPLETE_TASKS) && !currentUserCompleted && task.assignedTo.includes(currentUser.id)) {
+                completeTaskButton.style.display = 'inline-block';
+                completeTaskButton.dataset.taskId = task.id;
+                completeTaskButton.textContent = 'Marcar como concluída';
+            } else if (currentUserCompleted) {
+                completeTaskButton.style.display = 'none';
+                // Adicionar indicação de que o usuário já concluiu
+                const completionIndicator = document.createElement('div');
+                completionIndicator.innerHTML = '<span style="color: var(--accent-color); display: inline-block; margin-right: 10px;"><i class="fas fa-check-circle"></i> Você já concluiu esta tarefa</span>';
+                document.querySelector('.modal-actions').prepend(completionIndicator);
+            } else {
+                completeTaskButton.style.display = 'none';
+            }
+
             taskModal.style.display = 'block';
         }
 
