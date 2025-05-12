@@ -1748,9 +1748,9 @@
                 const d1 = typeof date1 === 'string' ? new Date(date1) : date1;
                 const d2 = typeof date2 === 'string' ? new Date(date2) : date2;
                 
-                return d1.getFullYear() === d2.getFullYear() &&
-                       d1.getMonth() === d2.getMonth() &&
-                       d1.getDate() === d2.getDate();
+                return d1.getUTCFullYear() === d2.getUTCFullYear() &&
+                       d1.getUTCMonth() === d2.getUTCMonth() &&
+                       d1.getUTCDate() === d2.getUTCDate();
             };
             
             // Encontrar tarefas para hoje
@@ -1827,9 +1827,9 @@
                 const d1 = typeof date1 === 'string' ? new Date(date1) : date1;
                 const d2 = typeof date2 === 'string' ? new Date(date2) : date2;
                 
-                return d1.getFullYear() === d2.getFullYear() &&
-                       d1.getMonth() === d2.getMonth() &&
-                       d1.getDate() === d2.getDate();
+                return d1.getUTCFullYear() === d2.getUTCFullYear() &&
+                       d1.getUTCMonth() === d2.getUTCMonth() &&
+                       d1.getUTCDate() === d2.getUTCDate();
             };
             
             // Criar células para cada dia da semana
@@ -1840,10 +1840,11 @@
                 const dayCell = document.createElement('div');
                 dayCell.className = 'calendar-day-content';
                 
-                // Destacar o dia atual
-                if (day.getDate() === new Date().getDate() && 
-                    day.getMonth() === new Date().getMonth() && 
-                    day.getFullYear() === new Date().getFullYear()) {
+                // Destacar o dia atual usando UTC
+                const today = new Date();
+                if (day.getUTCDate() === today.getUTCDate() && 
+                    day.getUTCMonth() === today.getUTCMonth() && 
+                    day.getUTCFullYear() === today.getUTCFullYear()) {
                     dayCell.classList.add('today');
                 }
                 
@@ -2047,10 +2048,11 @@
                 dayCell.classList.add('other-month');
             }
             
-            // Destacar o dia atual
-            if (date.getDate() === new Date().getDate() && 
-                date.getMonth() === new Date().getMonth() && 
-                date.getFullYear() === new Date().getFullYear()) {
+            // Destacar o dia atual usando UTC
+            const today = new Date();
+            if (date.getUTCDate() === today.getUTCDate() && 
+                date.getUTCMonth() === today.getUTCMonth() && 
+                date.getUTCFullYear() === today.getUTCFullYear()) {
                 dayCell.classList.add('today');
             }
             
@@ -2066,9 +2068,9 @@
                 const d1 = typeof date1 === 'string' ? new Date(date1) : date1;
                 const d2 = typeof date2 === 'string' ? new Date(date2) : date2;
                 
-                return d1.getFullYear() === d2.getFullYear() &&
-                       d1.getMonth() === d2.getMonth() &&
-                       d1.getDate() === d2.getDate();
+                return d1.getUTCFullYear() === d2.getUTCFullYear() &&
+                       d1.getUTCMonth() === d2.getUTCMonth() &&
+                       d1.getUTCDate() === d2.getUTCDate();
             };
             
             // Filtrar tarefas para este dia
@@ -2519,7 +2521,11 @@
         // Função para atualizar a lista de tarefas diárias na barra lateral
         function updateDailyTasksList() {
             const today = new Date();
-            const formattedToday = today.toISOString().split('T')[0];
+            // Formatar hoje no formato YYYY-MM-DD usando valores UTC
+            const year = today.getUTCFullYear();
+            const month = String(today.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(today.getUTCDate()).padStart(2, '0');
+            const formattedToday = `${year}-${month}-${day}`;
             
             // Comparar as datas sem considerar o tempo
             const isSameDay = (date1, date2) => {
@@ -2527,9 +2533,9 @@
                 const d1 = typeof date1 === 'string' ? new Date(date1) : date1;
                 const d2 = typeof date2 === 'string' ? new Date(date2) : date2;
                 
-                return d1.getFullYear() === d2.getFullYear() &&
-                       d1.getMonth() === d2.getMonth() &&
-                       d1.getDate() === d2.getDate();
+                return d1.getUTCFullYear() === d2.getUTCFullYear() &&
+                       d1.getUTCMonth() === d2.getUTCMonth() &&
+                       d1.getUTCDate() === d2.getUTCDate();
             };
             
             // Filtrar tarefas para hoje com método melhorado

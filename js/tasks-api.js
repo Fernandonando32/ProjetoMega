@@ -248,26 +248,47 @@ const TasksAPI = {
             // Se temos data e hora separadas, combinar
             if (uiTask.startTime) {
                 const [startHours, startMinutes] = uiTask.startTime.split(':');
-                startDate = new Date(uiTask.date);
-                startDate.setHours(parseInt(startHours, 10), parseInt(startMinutes, 10), 0, 0);
+                // Usar UTC para evitar deslocamentos de fuso horário
+                startDate = new Date(Date.UTC(
+                    parseInt(uiTask.date.substring(0, 4), 10),
+                    parseInt(uiTask.date.substring(5, 7), 10) - 1, // Mês em JS é 0-indexed
+                    parseInt(uiTask.date.substring(8, 10), 10),
+                    parseInt(startHours, 10),
+                    parseInt(startMinutes, 10),
+                    0
+                ));
             } else {
                 // Se não temos hora de início, usar 00:00
-                startDate = new Date(uiTask.date);
-                startDate.setHours(0, 0, 0, 0);
+                startDate = new Date(Date.UTC(
+                    parseInt(uiTask.date.substring(0, 4), 10),
+                    parseInt(uiTask.date.substring(5, 7), 10) - 1,
+                    parseInt(uiTask.date.substring(8, 10), 10),
+                    0, 0, 0
+                ));
             }
             
             if (uiTask.endTime) {
                 const [endHours, endMinutes] = uiTask.endTime.split(':');
-                endDate = new Date(uiTask.date);
-                endDate.setHours(parseInt(endHours, 10), parseInt(endMinutes, 10), 0, 0);
+                endDate = new Date(Date.UTC(
+                    parseInt(uiTask.date.substring(0, 4), 10),
+                    parseInt(uiTask.date.substring(5, 7), 10) - 1,
+                    parseInt(uiTask.date.substring(8, 10), 10),
+                    parseInt(endHours, 10),
+                    parseInt(endMinutes, 10),
+                    0
+                ));
             } else if (startDate) {
                 // Se não temos hora de término, usar hora de início + 1 hora
                 endDate = new Date(startDate);
-                endDate.setHours(endDate.getHours() + 1);
+                endDate.setUTCHours(endDate.getUTCHours() + 1);
             } else {
                 // Se nenhuma hora for especificada, usar fim do dia
-                endDate = new Date(uiTask.date);
-                endDate.setHours(23, 59, 59, 999);
+                endDate = new Date(Date.UTC(
+                    parseInt(uiTask.date.substring(0, 4), 10),
+                    parseInt(uiTask.date.substring(5, 7), 10) - 1,
+                    parseInt(uiTask.date.substring(8, 10), 10),
+                    23, 59, 59
+                ));
             }
         }
         
@@ -326,26 +347,37 @@ const TasksAPI = {
         
         // Verificar se temos datas válidas
         if (dbTask.start_date) {
-            // Converter para objeto Date
+            // Converter para objeto Date mantendo o formato UTC
             const startDate = new Date(dbTask.start_date);
             
             // Formatar a data como YYYY-MM-DD para o campo date
-            date = startDate.toISOString().split('T')[0];
+            // Garantir que a data seja baseada no valor UTC original
+            const year = startDate.getUTCFullYear();
+            const month = String(startDate.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(startDate.getUTCDate()).padStart(2, '0');
+            date = `${year}-${month}-${day}`;
             
             // Formatar a hora como HH:MM para o campo startTime
-            startTime = startDate.toTimeString().slice(0, 5);
+            const hours = String(startDate.getUTCHours()).padStart(2, '0');
+            const minutes = String(startDate.getUTCMinutes()).padStart(2, '0');
+            startTime = `${hours}:${minutes}`;
         }
         
         if (dbTask.end_date) {
-            // Converter para objeto Date
+            // Converter para objeto Date mantendo o formato UTC
             const endDate = new Date(dbTask.end_date);
             
             // Formatar a hora como HH:MM para o campo endTime
-            endTime = endDate.toTimeString().slice(0, 5);
+            const hours = String(endDate.getUTCHours()).padStart(2, '0');
+            const minutes = String(endDate.getUTCMinutes()).padStart(2, '0');
+            endTime = `${hours}:${minutes}`;
             
             // Se não temos data de início, usar a data de término
             if (!date) {
-                date = endDate.toISOString().split('T')[0];
+                const year = endDate.getUTCFullYear();
+                const month = String(endDate.getUTCMonth() + 1).padStart(2, '0');
+                const day = String(endDate.getUTCDate()).padStart(2, '0');
+                date = `${year}-${month}-${day}`;
             }
         }
         
