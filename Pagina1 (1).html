@@ -1290,6 +1290,34 @@
             // Redirecionar para o login em caso de erro
             window.location.href = 'login.html';
         }
+        
+        // Definir PERMISSIONS como uma propriedade de Auth se não existir
+        if (window.Auth && !Auth.PERMISSIONS) {
+            // Definir constantes de permissões localmente
+            Auth.PERMISSIONS = {
+                MANAGE_USERS: 'manage_users',
+                VIEW_TASKS: 'view_tasks',
+                CREATE_TASKS: 'create_tasks',
+                EDIT_TASKS: 'edit_tasks',
+                DELETE_TASKS: 'delete_tasks',
+                COMPLETE_TASKS: 'complete_tasks',
+                VIEW_COMPLETED: 'view_completed',
+                VIEW_TECHNICIANS: 'view_technicians',
+                ADD_TECHNICIAN: 'add_technician',
+                EDIT_TECHNICIAN: 'edit_technician',
+                DELETE_TECHNICIAN: 'delete_technician',
+                VIEW_STATISTICS: 'view_statistics',
+                VIEW_MAP: 'view_map',
+                VIEW_MAINTENANCE: 'view_maintenance',
+                ADD_MAINTENANCE: 'add_maintenance',
+                EDIT_MAINTENANCE: 'edit_maintenance',
+                DELETE_MAINTENANCE: 'delete_maintenance',
+                VIEW_BY_OPERATION: 'view_by_operation'
+            };
+            console.log('PERMISSIONS adicionado ao objeto Auth', Auth.PERMISSIONS);
+        } else if (!window.Auth) {
+            console.error('Objeto Auth não encontrado. Verificar carregamento de auth.js');
+        }
 
         // Função para carregar registros do localStorage
         function carregarRegistros() {
@@ -1529,11 +1557,36 @@
         
         // Verificar permissões e ajustar a interface
         function checkPermissions() {
+            // Verificar se Auth.PERMISSIONS existe, caso contrário, criá-lo
+            if (!Auth.PERMISSIONS) {
+                Auth.PERMISSIONS = {
+                    MANAGE_USERS: 'manage_users',
+                    VIEW_TASKS: 'view_tasks',
+                    CREATE_TASKS: 'create_tasks',
+                    EDIT_TASKS: 'edit_tasks',
+                    DELETE_TASKS: 'delete_tasks',
+                    COMPLETE_TASKS: 'complete_tasks',
+                    VIEW_COMPLETED: 'view_completed',
+                    VIEW_TECHNICIANS: 'view_technicians',
+                    ADD_TECHNICIAN: 'add_technician',
+                    EDIT_TECHNICIAN: 'edit_technician',
+                    DELETE_TECHNICIAN: 'delete_technician',
+                    VIEW_STATISTICS: 'view_statistics',
+                    VIEW_MAP: 'view_map',
+                    VIEW_MAINTENANCE: 'view_maintenance',
+                    ADD_MAINTENANCE: 'add_maintenance',
+                    EDIT_MAINTENANCE: 'edit_maintenance',
+                    DELETE_MAINTENANCE: 'delete_maintenance',
+                    VIEW_BY_OPERATION: 'view_by_operation'
+                };
+                console.log('PERMISSIONS adicionado ao objeto Auth em checkPermissions', Auth.PERMISSIONS);
+            }
+            
             const adminButton = document.getElementById('adminButton');
             const notificationSystem = document.getElementById('notificationSystem');
             
             // Verificar se é administrador OU tem permissão de gerenciar usuários
-            if (currentUser.accessLevel === 'ADMIN' || Auth.hasPermission(currentUser, Auth.PERMISSIONS.MANAGE_USERS)) {
+            if (currentUser.accessLevel === 'ADMIN' || Auth.hasPermission(currentUser, 'manage_users')) {
                 adminButton.style.display = 'block';
                 adminButton.addEventListener('click', () => {
                     // Armazenar a página de origem antes de redirecionar
