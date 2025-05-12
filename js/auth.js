@@ -102,28 +102,6 @@ class Auth {
                 return { success: false, message: 'Usuário inativo' };
             }
 
-            // SOLUÇÃO ALTERNATIVA: Como estamos em desenvolvimento, permitir login com qualquer senha
-            // Isso é uma solução temporária até que a autenticação via Supabase esteja funcionando corretamente
-            console.warn('Modo de desenvolvimento - Permitindo login direto sem verificação de senha');
-            
-            // Armazenar dados do usuário
-            const user = {
-                id: userData.id,
-                name: userData.full_name,
-                username: userData.username,
-                email: userData.email,
-                accessLevel: userData.role,
-                permissions: userData.permissions || [],
-                operacao: userData.operacao || ''
-            };
-
-            // Salvar no localStorage
-            localStorage.setItem('currentUser', JSON.stringify(user));
-            localStorage.setItem('authToken', 'dev_mode_token');
-
-            return { success: true, user, mode: 'direct_access' };
-
-            /* COMENTANDO A AUTENTICAÇÃO ORIGINAL DO SUPABASE
             // Tentar fazer login com o email do usuário
             console.log('Tentando autenticação com email:', userData.email);
             const { data, error } = await supabase.auth.signInWithPassword({
@@ -177,7 +155,6 @@ class Auth {
             localStorage.setItem('authToken', data.session.access_token);
 
             return { success: true, user };
-            */
         } catch (error) {
             console.error('Erro no login:', error);
             return { success: false, message: error.message };
@@ -196,24 +173,9 @@ class Auth {
     }
 
     static isAuthenticated() {
-        try {
-            const user = this.getCurrentUser();
-            if (!user) {
-                return false;
-            }
-            
-            // Verificar se há token (podem ser tokens reais ou especiais de desenvolvimento)
-            const token = localStorage.getItem('authToken');
-            
-            // Em desenvolvimento, aceitamos um token especial para permitir login direto
-            const isDevelopmentToken = token === 'dev_mode_token';
-            
-            // Autorizar se tiver um token de qualquer tipo (real ou de desenvolvimento)
-            return !!token;
-        } catch (error) {
-            console.error('Erro ao verificar autenticação:', error);
-            return false;
-        }
+        const user = this.getCurrentUser();
+        const token = localStorage.getItem('authToken');
+        return !!(user && token);
     }
 
     static getCurrentUser() {
@@ -264,7 +226,6 @@ class Auth {
         try {
             console.log('Criando novo usuário:', userData.username, 'Email:', userData.email);
             
-            // Validar email
             if (!userData.email || !userData.email.includes('@')) {
                 console.error('Email inválido fornecido:', userData.email);
                 return { success: false, message: 'Email inválido. Forneça um email válido.' };
@@ -277,24 +238,55 @@ class Auth {
                 console.log('Senha temporária gerada:', userData.password);
             }
 
-            console.log('MODO DE DESENVOLVIMENTO - Criando usuário diretamente na tabela users');
+            let authData;
             
-            // Gerar ID UUID para o novo usuário
-            const userId = crypto.randomUUID ? crypto.randomUUID() : 
-                           `user_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-                           
-            console.log('ID gerado para o novo usuário:', userId);
+            // Verificar se temos permissões de admin
+            if (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.HAS_ADMIN_PERMISSIONS) {
+                console.log('Usando função de admin para criar usuário');
+                // Usar função de admin
+                const { data, error } = await supabase.auth.admin.createUser({
+                    email: userData.email,
+                    password: userData.password,
+                    email_confirm: true
+                });
+                
+                if (error) {
+                    console.error('Erro ao criar usuário na autenticação (admin):', error);
+                    throw error;
+                }
+                
+                console.log('Usuário criado com sucesso na autenticação (admin)');
+                authData = data;
+            } else {
+                console.log('Usando signUp normal para criar usuário');
+                // Usar signUp normal
+                const { data, error } = await supabase.auth.signUp({
+                    email: userData.email,
+                    password: userData.password,
+                    options: {
+                        emailRedirectTo: window.location.origin + '/login.html'
+                    }
+                });
+                
+                if (error) {
+                    console.error('Erro ao criar usuário na autenticação (signUp):', error);
+                    throw error;
+                }
+                
+                console.log('Usuário criado com sucesso na autenticação (signUp)');
+                authData = data;
+            }
 
             // Gerar um placeholder para password_hash (isso normalmente seria feito pelo trigger do Supabase)
             const tempPasswordHash = `temp_hash_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
             console.log('Gerando password_hash temporário para o usuário');
 
-            // Criar registro na tabela users diretamente
+            // Criar registro na tabela users
             console.log('Inserindo usuário na tabela users:', userData.username);
             const { data, error } = await supabase
                 .from('users')
                 .insert([{
-                    id: userId,
+                    id: authData.user.id,
                     username: userData.username,
                     email: userData.email,
                     full_name: userData.name,
@@ -302,9 +294,7 @@ class Auth {
                     permissions: userData.permissions || [],
                     operacao: userData.operacao || '',
                     is_active: true,
-                    password_hash: tempPasswordHash, // Adicionar password_hash temporário
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
+                    password_hash: tempPasswordHash // Adicionar password_hash temporário
                 }])
                 .select();
 
