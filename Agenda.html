@@ -4274,6 +4274,21 @@
                 btnVoltar.remove();
             }
         });
+        
+        // Função para ajustar o calendário quando a janela for redimensionada
+        function ajustarCalendario() {
+            // Verificar a visualização atual e renderizar novamente o calendário
+            if (currentView === 'monthly') {
+                renderCalendar();
+            } else if (currentView === 'weekly') {
+                renderCalendar('weekly');
+            } else if (currentView === 'daily') {
+                renderCalendar('daily');
+            }
+        }
+        
+        // Atualizar a visão do calendário quando a janela for redimensionada
+        window.addEventListener('resize', ajustarCalendario);
     </script>
 </body>
 </html>
