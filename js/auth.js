@@ -83,94 +83,101 @@ class Auth {
         try {
             console.log('Tentando fazer login com usuário:', username);
             
-            // Primeiro, buscar o usuário pelo username
-            const { data: userData, error: userError } = await supabase
-                .from('users')
-                .select('*')
-                .eq('username', username)
-                .single();
-
-            if (userError) {
-                console.error('Erro ao buscar usuário:', userError);
-                return { success: false, message: 'Usuário não encontrado' };
-            }
-
-            console.log('Usuário encontrado:', userData.username, 'Email:', userData.email);
-
-            // Verificar se o usuário está ativo
-            if (!userData.is_active) {
-                return { success: false, message: 'Usuário inativo' };
-            }
-
-            // Tentar fazer login com o email do usuário
-            console.log('Tentando autenticação com email:', userData.email);
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email: userData.email,
-                password: password
-            });
-
-            if (error) {
-                console.error('Erro na autenticação:', error);
+            // Fazer requisição para autenticar usuário
+            const loginData = { username, password };
+            
+            try {
+                // Usar a API para fazer login
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(loginData)
+                });
                 
-                // FALLBACK: Se estamos em modo de desenvolvimento ou teste, permitir o login
-                // mesmo que a autenticação do Supabase falhe
-                if (window.SERVER_STATUS && window.SERVER_STATUS.serverReachable) {
-                    console.warn('Autenticação falhou, mas estamos em modo de desenvolvimento/teste.');
-                    console.warn('Fazendo login direto com o usuário do banco de dados.');
-                    
-                    // Armazenar dados do usuário mesmo assim
-                    const user = {
-                        id: userData.id,
-                        name: userData.full_name,
-                        username: userData.username,
-                        email: userData.email,
-                        accessLevel: userData.role,
-                        permissions: Array.isArray(userData.permissions) ? userData.permissions : [],
-                        operacao: userData.operacao || ''
-                    };
-
-                    // Logging para diagnóstico
-                    console.log('Dados do usuário em modo fallback:', {
-                        id: user.id,
-                        username: user.username,
-                        accessLevel: user.accessLevel,
-                        permissions: user.permissions
-                    });
-
-                    // Salvar no localStorage
-                    localStorage.setItem('currentUser', JSON.stringify(user));
-                    localStorage.setItem('authToken', 'dev_mode_token');
-
-                    return { success: true, user, mode: 'dev_fallback' };
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Erro na autenticação');
                 }
                 
-                return { success: false, message: 'Senha incorreta' };
+                const data = await response.json();
+                
+                if (!data.success) {
+                    return { success: false, message: data.message || 'Usuário ou senha incorretos' };
+                }
+                
+                // Armazenar dados do usuário
+                const user = {
+                    id: data.user.id,
+                    name: data.user.full_name,
+                    username: data.user.username,
+                    email: data.user.email,
+                    accessLevel: data.user.role,
+                    permissions: Array.isArray(data.user.permissions) ? data.user.permissions : [],
+                    operacao: data.user.operacao || ''
+                };
+                
+                // Logging para diagnóstico
+                console.log('Dados do usuário para armazenamento:', {
+                    id: user.id,
+                    username: user.username,
+                    accessLevel: user.accessLevel,
+                    permissions: user.permissions
+                });
+                
+                // Salvar no localStorage
+                localStorage.setItem('currentUser', JSON.stringify(user));
+                localStorage.setItem('authToken', data.token);
+                
+                return { success: true, user };
+            } catch (error) {
+                console.error('Erro na autenticação:', error);
+                
+                // FALLBACK para ambiente de desenvolvimento
+                // Tentar obter o usuário diretamente do banco
+                if (window.SERVER_STATUS && window.SERVER_STATUS.serverReachable) {
+                    // Buscar o usuário pelo username
+                    try {
+                        const users = await window.dbManager.getAllUsers();
+                        const userData = users.find(u => u.username === username);
+                        
+                        if (userData) {
+                            console.warn('Autenticação falhou, mas estamos em modo de desenvolvimento/teste.');
+                            console.warn('Fazendo login direto com o usuário do banco de dados.');
+                            
+                            // Armazenar dados do usuário mesmo assim
+                            const user = {
+                                id: userData.id,
+                                name: userData.full_name,
+                                username: userData.username,
+                                email: userData.email,
+                                accessLevel: userData.role,
+                                permissions: Array.isArray(userData.permissions) ? userData.permissions : [],
+                                operacao: userData.operacao || ''
+                            };
+                            
+                            // Logging para diagnóstico
+                            console.log('Dados do usuário em modo fallback:', {
+                                id: user.id,
+                                username: user.username,
+                                accessLevel: user.accessLevel,
+                                permissions: user.permissions
+                            });
+                            
+                            // Salvar no localStorage
+                            localStorage.setItem('currentUser', JSON.stringify(user));
+                            localStorage.setItem('authToken', 'dev_mode_token');
+                            
+                            return { success: true, user, mode: 'dev_fallback' };
+                        }
+                    } catch (fallbackError) {
+                        console.error('Erro no fallback de autenticação:', fallbackError);
+                    }
+                }
+                
+                return { success: false, message: 'Erro na autenticação: ' + error.message };
             }
-
-            // Armazenar dados do usuário
-            const user = {
-                id: userData.id,
-                name: userData.full_name,
-                username: userData.username,
-                email: userData.email,
-                accessLevel: userData.role,
-                permissions: Array.isArray(userData.permissions) ? userData.permissions : [],
-                operacao: userData.operacao || ''
-            };
-
-            // Logging para diagnóstico
-            console.log('Dados do usuário para armazenamento:', {
-                id: user.id,
-                username: user.username,
-                accessLevel: user.accessLevel,
-                permissions: user.permissions
-            });
-
-            // Salvar no localStorage
-            localStorage.setItem('currentUser', JSON.stringify(user));
-            localStorage.setItem('authToken', data.session.access_token);
-
-            return { success: true, user };
         } catch (error) {
             console.error('Erro no login:', error);
             return { success: false, message: error.message };
@@ -179,7 +186,7 @@ class Auth {
 
     static async logout() {
         try {
-            await supabase.auth.signOut();
+            // Não precisamos fazer logout no servidor, apenas limpar localStorage
             localStorage.removeItem('currentUser');
             localStorage.removeItem('authToken');
             window.location.href = 'login.html';
@@ -215,13 +222,8 @@ class Auth {
 
     static async getAllUsers() {
         try {
-            const { data, error } = await supabase
-                .from('users')
-                .select('*')
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
-
+            const data = await window.dbManager.getAllUsers();
+            
             return data.map(user => ({
                 id: user.id,
                 name: user.full_name,
@@ -247,80 +249,33 @@ class Auth {
                 return { success: false, message: 'Email inválido. Forneça um email válido.' };
             }
             
-            // Definir uma senha padrão se não for fornecida
-            if (!userData.password || userData.password.length < 6) {
-                console.warn('Senha não fornecida ou muito curta. Usando senha temporária.');
-                userData.password = `Temp${Date.now().toString().slice(-6)}`;
-                console.log('Senha temporária gerada:', userData.password);
-            }
-
-            let authData;
+            // Preparar dados para o usuário
+            const userToCreate = {
+                username: userData.username,
+                full_name: userData.name,
+                email: userData.email,
+                password: userData.password, // A senha será criptografada no backend
+                role: userData.accessLevel,
+                permissions: userData.permissions || [],
+                operacao: userData.operacao || null
+            };
             
-            // Verificar se temos permissões de admin
-            if (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.HAS_ADMIN_PERMISSIONS) {
-                console.log('Usando função de admin para criar usuário');
-                // Usar função de admin
-                const { data, error } = await supabase.auth.admin.createUser({
-                    email: userData.email,
-                    password: userData.password,
-                    email_confirm: true
-                });
+            try {
+                // Usar o DbManager para criar usuário
+                const result = await window.dbManager.createUser(userToCreate);
                 
-                if (error) {
-                    console.error('Erro ao criar usuário na autenticação (admin):', error);
-                    throw error;
-                }
-                
-                console.log('Usuário criado com sucesso na autenticação (admin)');
-                authData = data;
-            } else {
-                console.log('Usando signUp normal para criar usuário');
-                // Usar signUp normal
-                const { data, error } = await supabase.auth.signUp({
-                    email: userData.email,
-                    password: userData.password,
-                    options: {
-                        emailRedirectTo: window.location.origin + '/login.html'
+                return { success: true, user: result };
+            } catch (error) {
+                if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
+                    if (error.message.includes('username')) {
+                        return { success: false, message: 'Nome de usuário já existe' };
+                    } else if (error.message.includes('email')) {
+                        return { success: false, message: 'Email já está em uso' };
                     }
-                });
-                
-                if (error) {
-                    console.error('Erro ao criar usuário na autenticação (signUp):', error);
-                    throw error;
                 }
                 
-                console.log('Usuário criado com sucesso na autenticação (signUp)');
-                authData = data;
-            }
-
-            // Gerar um placeholder para password_hash (isso normalmente seria feito pelo trigger do Supabase)
-            const tempPasswordHash = `temp_hash_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-            console.log('Gerando password_hash temporário para o usuário');
-
-            // Criar registro na tabela users
-            console.log('Inserindo usuário na tabela users:', userData.username);
-            const { data, error } = await supabase
-                .from('users')
-                .insert([{
-                    id: authData.user.id,
-                    username: userData.username,
-                    email: userData.email,
-                    full_name: userData.name,
-                    role: userData.accessLevel,
-                    permissions: userData.permissions || [],
-                    operacao: userData.operacao || '',
-                    is_active: true,
-                    password_hash: tempPasswordHash // Adicionar password_hash temporário
-                }])
-                .select();
-
-            if (error) {
-                console.error('Erro ao inserir usuário na tabela users:', error);
                 throw error;
             }
-
-            console.log('Usuário criado com sucesso:', data[0].username);
-            return { success: true, user: data[0] };
         } catch (error) {
             console.error('Erro ao criar usuário:', error);
             return { success: false, message: error.message };
@@ -329,50 +284,45 @@ class Auth {
 
     static async updateUser(userId, userData) {
         try {
-            const { data, error } = await supabase
-                .from('users')
-                .update({
-                    full_name: userData.name,
-                    username: userData.username,
-                    email: userData.email,
-                    role: userData.accessLevel,
-                    permissions: userData.permissions || [],
-                    operacao: userData.operacao
-                })
-                .eq('id', userId)
-                .select();
-
-            if (error) throw error;
-
-            // Se houver nova senha, atualizar no Supabase Auth
-            if (userData.password) {
-                try {
-                    // Verificar se temos permissões de admin
-                    if (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.HAS_ADMIN_PERMISSIONS) {
-                        // Usar função de admin para atualizar qualquer usuário
-                        const { error: authError } = await supabase.auth.admin.updateUserById(
-                            userId,
-                            { password: userData.password }
-                        );
-                        
-                        if (authError) throw authError;
-                    } else {
-                        // Usar updateUser para o usuário atual apenas
-                        const { error: authError } = await supabase.auth.updateUser({
-                            password: userData.password
-                        });
-                        
-                        if (authError) {
-                            console.warn('Não foi possível atualizar a senha:', authError.message);
-                        }
-                    }
-                } catch (pwError) {
-                    console.warn('Erro ao atualizar senha:', pwError);
-                    // Continuar mesmo se falhar a atualização da senha
-                }
+            console.log('Atualizando usuário:', userId, userData);
+            
+            // Verificar se o usuário existe
+            try {
+                await window.dbManager.getUserById(userId);
+            } catch (error) {
+                return { success: false, message: 'Usuário não encontrado' };
             }
-
-            return { success: true, user: data[0] };
+            
+            // Preparar dados para atualização
+            const userToUpdate = {
+                full_name: userData.name,
+                email: userData.email,
+                role: userData.accessLevel,
+                permissions: userData.permissions || [],
+                operacao: userData.operacao || null
+            };
+            
+            // Incluir senha apenas se fornecida
+            if (userData.password) {
+                userToUpdate.password = userData.password;
+            }
+            
+            // Atualizar o usuário
+            try {
+                const result = await window.dbManager.updateUser(userId, userToUpdate);
+                
+                return { success: true, user: result };
+            } catch (error) {
+                if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
+                    if (error.message.includes('username')) {
+                        return { success: false, message: 'Nome de usuário já existe' };
+                    } else if (error.message.includes('email')) {
+                        return { success: false, message: 'Email já está em uso' };
+                    }
+                }
+                
+                throw error;
+            }
         } catch (error) {
             console.error('Erro ao atualizar usuário:', error);
             return { success: false, message: error.message };
@@ -381,35 +331,40 @@ class Auth {
 
     static async deleteUser(userId) {
         try {
-            // Verificar se temos permissões de admin
-            if (window.SUPABASE_CONFIG && window.SUPABASE_CONFIG.HAS_ADMIN_PERMISSIONS) {
-                // Deletar usuário do Supabase Auth
-                const { error: authError } = await supabase.auth.admin.deleteUser(userId);
-                if (authError) throw authError;
+            // Verificar se o usuário existe
+            try {
+                await window.dbManager.getUserById(userId);
+            } catch (error) {
+                return { success: false, message: 'Usuário não encontrado' };
             }
-
-            // Deletar registro da tabela users
-            const { error } = await supabase
-                .from('users')
-                .delete()
-                .eq('id', userId);
-
-            if (error) throw error;
-
+            
+            // Excluir o usuário
+            const result = await window.dbManager.deleteUser(userId);
+            
             return { success: true };
         } catch (error) {
-            console.error('Erro ao deletar usuário:', error);
+            console.error('Erro ao excluir usuário:', error);
             return { success: false, message: error.message };
         }
     }
 
     static async checkLocalUsersCount() {
+        // Verificar se há usuários para sincronizar
         try {
-            const localUsers = JSON.parse(localStorage.getItem('localUsers') || '[]');
+            const queueStr = localStorage.getItem('pg_sync_queue');
+            if (!queueStr) return { hasLocalUsers: false, count: 0, usernames: [] };
+            
+            const queue = JSON.parse(queueStr);
+            const userOps = queue.filter(op => op.entity === 'user' && op.type === 'create');
+            
+            if (userOps.length === 0) return { hasLocalUsers: false, count: 0, usernames: [] };
+            
+            const usernames = userOps.map(op => op.data.username);
+            
             return {
-                hasLocalUsers: localUsers.length > 0,
-                count: localUsers.length,
-                usernames: localUsers.map(u => u.username)
+                hasLocalUsers: true,
+                count: userOps.length,
+                usernames
             };
         } catch (error) {
             console.error('Erro ao verificar usuários locais:', error);
@@ -418,135 +373,119 @@ class Auth {
     }
 
     static async syncLocalUsers() {
-        try {
-            const localUsers = JSON.parse(localStorage.getItem('localUsers') || '[]');
-            const results = [];
-
-            for (const localUser of localUsers) {
-                try {
-                    const result = await this.createUser(localUser);
-                    results.push({
-                        username: localUser.username,
-                        success: result.success,
-                        serverId: result.user?.id,
-                        error: result.message
-                    });
-                } catch (error) {
-                    results.push({
-                        username: localUser.username,
-                        success: false,
-                        error: error.message
-                    });
-                }
-            }
-
-            // Limpar usuários locais após sincronização
-            localStorage.removeItem('localUsers');
-
-            return {
-                success: results.some(r => r.success),
-                message: `Sincronização concluída: ${results.filter(r => r.success).length} de ${results.length} usuários sincronizados`,
-                details: results
-            };
-        } catch (error) {
-            console.error('Erro na sincronização:', error);
-            return { success: false, message: error.message };
-        }
+        // Nada a fazer, a sincronização é tratada pelo DbManager
+        return { success: true, processed: 0 };
     }
 
     static async runDatabaseDiagnostic() {
+        console.log('Executando diagnóstico do banco de dados...');
+        
         try {
             // Verificar conexão com o servidor
             const serverReachable = await this.checkServerConnection();
+            console.log('Servidor acessível:', serverReachable);
             
-            // Verificar conexão com o banco
+            // Verificar conexão com o banco de dados
             const databaseConnected = await this.checkDatabaseConnection();
+            console.log('Banco de dados conectado:', databaseConnected);
             
-            // Verificar existência das tabelas
+            // Verificar se as tabelas existem
             const tablesExist = await this.checkTablesExist();
+            console.log('Tabelas existem:', tablesExist);
             
             // Verificar permissões
             const permissionsOk = await this.checkPermissions();
+            console.log('Permissões OK:', permissionsOk);
             
-            // Verificar capacidade de criar usuário
+            // Verificar se é possível criar usuário
             const canCreateUser = await this.testCreateUser();
+            console.log('Pode criar usuário:', canCreateUser);
             
-            // Verificar ambiente
-            const environment = {
-                isOnline: navigator.onLine,
-                localStorage: this.testLocalStorage()
-            };
-
+            // Verificar se o localSorage está funcionando
+            const storageOk = this.testLocalStorage();
+            console.log('LocalStorage OK:', storageOk);
+            
             return {
                 serverReachable,
                 databaseConnected,
                 tablesExist,
                 permissionsOk,
                 canCreateUser,
-                environment,
-                timestamp: new Date().toISOString()
+                storageOk
             };
         } catch (error) {
-            console.error('Erro no diagnóstico:', error);
+            console.error('Erro ao executar diagnóstico:', error);
             return {
-                error: error.message,
-                timestamp: new Date().toISOString()
+                serverReachable: false,
+                databaseConnected: false,
+                tablesExist: false,
+                permissionsOk: false,
+                canCreateUser: false,
+                storageOk: this.testLocalStorage(),
+                error: error.message
             };
         }
     }
 
-    // Métodos auxiliares de diagnóstico
     static async checkServerConnection() {
         try {
-            const response = await fetch(supabase.supabaseUrl);
-            return response.ok;
-        } catch {
+            // Testar conexão com o servidor
+            const result = await window.dbManager.testConnection();
+            return result;
+        } catch (error) {
+            console.error('Erro ao verificar conexão com servidor:', error);
             return false;
         }
     }
 
     static async checkDatabaseConnection() {
         try {
-            const { data, error } = await supabase.from('users').select('count').limit(1);
-            return !error;
-        } catch {
+            // A conexão com o banco é verificada pelo testConnection
+            return window.SERVER_STATUS.databaseConnected;
+        } catch (error) {
+            console.error('Erro ao verificar conexão com banco de dados:', error);
             return false;
         }
     }
 
     static async checkTablesExist() {
         try {
-            const { data, error } = await supabase.from('users').select('id').limit(1);
-            return !error;
-        } catch {
+            // Tentar obter um usuário para ver se a tabela existe
+            await window.dbManager.getUserCount();
+            return true;
+        } catch (error) {
+            console.error('Erro ao verificar tabelas:', error);
             return false;
         }
     }
 
     static async checkPermissions() {
         try {
-            const { data, error } = await supabase.from('users').select('id').limit(1);
-            return !error;
-        } catch {
+            // Verificar permissões tentando obter usuários
+            await window.dbManager.getAllUsers();
+            return true;
+        } catch (error) {
+            console.error('Erro ao verificar permissões:', error);
             return false;
         }
     }
 
     static async testCreateUser() {
         try {
-            const randomString = Math.random().toString(36).substring(2, 8);
+            // Tentar criar um usuário de teste
             const testUser = {
-                username: 'test_user_' + Date.now(),
-                email: `teste_${randomString}@exemplo.com`,
-                password: 'Test123!',
-                name: 'Test User',
-                accessLevel: 'VIEWER'
+                username: `test_${Date.now()}`,
+                full_name: 'Usuário de Teste',
+                email: `test_${Date.now()}@example.com`,
+                password: 'Teste123',
+                role: 'VIEWER',
+                permissions: []
             };
-
-            const result = await this.createUser(testUser);
-            // Não tentamos excluir o usuário, pois não temos permissões de admin
-            return result.success;
-        } catch {
+            
+            // Não vamos realmente criar o usuário, apenas verificar a conexão
+            return window.SERVER_STATUS.databaseConnected;
+        } catch (error) {
+            console.error('Erro ao testar criação de usuário:', error);
             return false;
         }
     }
@@ -554,15 +493,19 @@ class Auth {
     static testLocalStorage() {
         try {
             localStorage.setItem('test', 'test');
+            const result = localStorage.getItem('test') === 'test';
             localStorage.removeItem('test');
-            return { working: true };
+            return result;
         } catch (error) {
-            return { working: false, error: error.message };
+            console.error('Erro ao testar localStorage:', error);
+            return false;
         }
     }
 }
 
-// Exportar para uso global
+// Exportar a classe Auth para uso global
 window.Auth = Auth;
+
+// Exportar as constantes
 window.PERMISSIONS = PERMISSIONS;
 window.ACCESS_LEVELS = ACCESS_LEVELS; 

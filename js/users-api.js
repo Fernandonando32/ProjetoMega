@@ -22,27 +22,11 @@ const UserAPI = {
         const opts = { ...defaultOptions, ...options };
         
         try {
-            // Usar o gerenciador Supabase com suporte offline
-            if (window.supabaseManager) {
-                return await window.supabaseManager.getData(
-                    'users', 
-                    '*', 
-                    opts.useCache
-                );
-            }
-            
-            // Fallback para o método tradicional
-            const { data, error } = await window.supabaseClient
-                .from('users')
-                .select('*')
-                .order(opts.orderBy, { ascending: opts.ascending });
-                
-            if (error) throw error;
-            return data || [];
+            const users = await window.dbManager.getAllUsers();
+            return users;
         } catch (error) {
             console.error('Erro ao buscar usuários:', error);
-            this._notifyError('Erro ao buscar usuários', error);
-            return [];
+            throw error;
         }
     },
     
@@ -59,37 +43,11 @@ const UserAPI = {
         }
         
         try {
-            // Usar o gerenciador Supabase com suporte offline
-            if (window.supabaseManager) {
-                const users = await window.supabaseManager.getData(
-                    'users', 
-                    `id,full_name,username,email,role,permissions,operacao,is_active,last_login,created_at,updated_at`, 
-                    useCache
-                );
-                
-                return users.find(user => user.id == userId) || null;
-            }
-            
-            // Fallback para o método tradicional
-            const { data, error } = await window.supabaseClient
-                .from('users')
-                .select('*')
-                .eq('id', userId)
-                .single();
-                
-            if (error) {
-                if (error.code === 'PGRST116') {
-                    // Não encontrado
-                    return null;
-                }
-                throw error;
-            }
-            
-            return data;
+            const user = await window.dbManager.getUserById(userId);
+            return user;
         } catch (error) {
-            console.error(`Erro ao buscar usuário ID ${userId}:`, error);
-            this._notifyError(`Erro ao buscar usuário ID ${userId}`, error);
-            return null;
+            console.error(`Erro ao buscar usuário ${userId}:`, error);
+            throw error;
         }
     },
     
@@ -143,58 +101,39 @@ const UserAPI = {
         }
         
         try {
-            // Se Auth está disponível, usar o método de criação de usuário do Auth
-            if (window.Auth && window.Auth.createUser) {
-                const result = await window.Auth.createUser(userData);
-                return result;
-            }
-            
-            // Caso contrário, preparar dados para inserção direta
-            // Mapear campos para a estrutura correta da tabela users
+            // Preparar os dados do usuário
             const userToCreate = {
                 username: userData.username,
-                email: userData.email,
                 full_name: userData.name,
+                email: userData.email,
+                password: userData.password,
                 role: userData.accessLevel,
-                permissions: userData.permissions || [],
-                operacao: userData.operacao || '',
-                is_active: true,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
+                permissions: userData.customPermissions ? userData.permissions : undefined,
+                operacao: userData.operacao || null
             };
+
+            // Criar o usuário
+            const result = await window.dbManager.createUser(userToCreate);
             
-            // Usar o gerenciador Supabase com suporte offline
-            if (window.supabaseManager) {
-                const result = await window.supabaseManager.insertData('users', userToCreate);
-                
-                return { 
-                    success: true, 
-                    user: result,
-                    message: 'Usuário criado com sucesso' 
-                };
-            }
-            
-            // Fallback para o método tradicional
-            const { data, error } = await window.supabaseClient
-                .from('users')
-                .insert([userToCreate])
-                .select();
-                
-            if (error) throw error;
-            
-            return { 
-                success: true, 
-                user: data[0],
-                message: 'Usuário criado com sucesso' 
+            return {
+                success: true,
+                user: result
             };
         } catch (error) {
             console.error('Erro ao criar usuário:', error);
-            this._notifyError('Erro ao criar usuário', error);
             
-            return { 
-                success: false, 
-                message: `Erro ao criar usuário: ${error.message || 'Erro desconhecido'}`,
-                error 
+            // Tratar erros específicos
+            if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
+                if (error.message.includes('username')) {
+                    return { success: false, message: 'Nome de usuário já existe' };
+                } else if (error.message.includes('email')) {
+                    return { success: false, message: 'Email já está em uso' };
+                }
+            }
+            
+            return {
+                success: false,
+                message: error.message
             };
         }
     },
@@ -229,62 +168,42 @@ const UserAPI = {
                 }
             }
             
-            // Se Auth está disponível, usar o método de atualização de usuário do Auth
-            if (window.Auth && window.Auth.updateUser) {
-                return await window.Auth.updateUser(userId, userData);
-            }
-            
-            // Preparar dados para atualização com os nomes de campos corretos
+            // Preparar os dados do usuário
             const userToUpdate = {
-                username: userData.username,
-                email: userData.email,
                 full_name: userData.name,
+                email: userData.email,
                 role: userData.accessLevel,
-                permissions: userData.permissions || [],
-                operacao: userData.operacao,
-                updated_at: new Date().toISOString()
+                permissions: userData.customPermissions ? userData.permissions : undefined,
+                operacao: userData.operacao || null
             };
-            
-            // Remover campos vazios ou undefined
-            Object.keys(userToUpdate).forEach(key => {
-                if (userToUpdate[key] === undefined || userToUpdate[key] === '') {
-                    delete userToUpdate[key];
-                }
-            });
-            
-            // Usar o gerenciador Supabase com suporte offline
-            if (window.supabaseManager) {
-                const result = await window.supabaseManager.updateData('users', userId, userToUpdate);
-                
-                return { 
-                    success: true, 
-                    user: result,
-                    message: 'Usuário atualizado com sucesso' 
-                };
+
+            // Incluir senha apenas se fornecida
+            if (userData.password) {
+                userToUpdate.password = userData.password;
             }
+
+            // Atualizar o usuário
+            const result = await window.dbManager.updateUser(userId, userToUpdate);
             
-            // Fallback para o método tradicional
-            const { data, error } = await window.supabaseClient
-                .from('users')
-                .update(userToUpdate)
-                .eq('id', userId)
-                .select();
-                
-            if (error) throw error;
-            
-            return { 
-                success: true, 
-                user: data[0],
-                message: 'Usuário atualizado com sucesso' 
+            return {
+                success: true,
+                user: result
             };
         } catch (error) {
-            console.error(`Erro ao atualizar usuário ID ${userId}:`, error);
-            this._notifyError(`Erro ao atualizar usuário ID ${userId}`, error);
+            console.error('Erro ao atualizar usuário:', error);
             
-            return { 
-                success: false, 
-                message: `Erro ao atualizar usuário: ${error.message || 'Erro desconhecido'}`,
-                error 
+            // Tratar erros específicos
+            if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
+                if (error.message.includes('username')) {
+                    return { success: false, message: 'Nome de usuário já existe' };
+                } else if (error.message.includes('email')) {
+                    return { success: false, message: 'Email já está em uso' };
+                }
+            }
+            
+            return {
+                success: false,
+                message: error.message
             };
         }
     },
@@ -306,42 +225,16 @@ const UserAPI = {
         }
         
         try {
-            // Verificar se usuário existe
-            const existingUser = await this.getUserById(userId, false);
-            if (!existingUser) {
-                return { success: false, message: 'Usuário não encontrado' };
-            }
+            const result = await window.dbManager.deleteUser(userId);
             
-            // Usar o gerenciador Supabase com suporte offline
-            if (window.supabaseManager) {
-                await window.supabaseManager.deleteData('users', userId);
-                
-                return { 
-                    success: true,
-                    message: 'Usuário excluído com sucesso' 
-                };
-            }
-            
-            // Fallback para o método tradicional
-            const { error } = await window.supabaseClient
-                .from('users')
-                .delete()
-                .eq('id', userId);
-                
-            if (error) throw error;
-            
-            return { 
-                success: true,
-                message: 'Usuário excluído com sucesso' 
+            return {
+                success: true
             };
         } catch (error) {
-            console.error(`Erro ao excluir usuário ID ${userId}:`, error);
-            this._notifyError(`Erro ao excluir usuário ID ${userId}`, error);
-            
-            return { 
-                success: false, 
-                message: `Erro ao excluir usuário: ${error.message || 'Erro desconhecido'}`,
-                error 
+            console.error('Erro ao excluir usuário:', error);
+            return {
+                success: false,
+                message: error.message
             };
         }
     },
@@ -460,6 +353,26 @@ const UserAPI = {
             console.error(`${message}: ${error.message}`, error);
         } else {
             console.error(message);
+        }
+    },
+
+    async checkUsername(username) {
+        try {
+            const users = await this.getAllUsers();
+            return users.some(user => user.username === username);
+        } catch (error) {
+            console.error('Erro ao verificar nome de usuário:', error);
+            return false;
+        }
+    },
+
+    async checkEmail(email) {
+        try {
+            const users = await this.getAllUsers();
+            return users.some(user => user.email === email);
+        } catch (error) {
+            console.error('Erro ao verificar email:', error);
+            return false;
         }
     }
 };

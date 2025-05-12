@@ -3,38 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <title>Sistema de Gestão FTTH</title>
-    <!-- Import do Supabase Service -->
-    <script type="module">
-        import supabaseService from './js/supabase-service.js';
-        window.supabaseService = supabaseService;
-    </script>
     
     <!-- Resto do head -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="js/auth.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <script type="module">
-        import * as Auth from './js/auth.js';
-        
+    
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./js/db-config.js"></script>
+    <script src="./js/auth.js"></script>
+    
+    <script>
         // Verificar autenticação
         async function checkAuth() {
-            if (!await Auth.isAuthenticated()) {
+            if (!Auth.isAuthenticated()) {
+                console.log('Usuário não autenticado. Redirecionando para login...');
                 window.location.href = 'login.html';
-                return;
+                return false;
             }
             
             // Obter usuário atual
             const currentUser = Auth.getCurrentUser();
+            console.log('Usuário autenticado:', currentUser);
             
             // Garantir que administradores tenham a permissão MANAGE_USERS
             if (currentUser && currentUser.accessLevel === 'ADMIN') {
-                // Se o usuário tiver permissões personalizadas, garantir que MANAGE_USERS esteja incluída
-                if (currentUser.customPermissions && Array.isArray(currentUser.permissions)) {
-                    if (!currentUser.permissions.includes(Auth.PERMISSIONS.MANAGE_USERS)) {
-                        currentUser.permissions.push(Auth.PERMISSIONS.MANAGE_USERS);
-                        // Atualizar o sessionStorage para persistir a alteração
-                        sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+                // Se o usuário tiver permissões, garantir que MANAGE_USERS esteja incluída
+                if (Array.isArray(currentUser.permissions)) {
+                    if (!currentUser.permissions.includes('manage_users')) {
+                        currentUser.permissions.push('manage_users');
+                        // Atualizar o localStorage para persistir a alteração
+                        localStorage.setItem('currentUser', JSON.stringify(currentUser));
                     }
                 }
             }
@@ -48,33 +48,45 @@
                     // Gerentes de técnicos são da operação BJ Fibra por padrão
                     currentUser.operacao = 'BJ Fibra';
                 }
+                
+                // Atualizar o objeto do usuário no localStorage
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
             }
             
-            // Atualizar o objeto do usuário no sessionStorage
-            if (currentUser) {
-                sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
-            }
-            
-            // Configurar elementos da interface após carregamento
-            document.addEventListener('DOMContentLoaded', setupUI);
-            
-            // Configurar manipulador do importador CSV
-            document.addEventListener('DOMContentLoaded', configureCSVImporter);
+            return true;
         }
         
-        // Iniciar verificação de autenticação
-        checkAuth().catch(error => {
-            console.error('Erro na autenticação:', error);
-            window.location.href = 'login.html';
-        });
-        
-        // Função para configurar a interface do usuário
+        // Configurar elementos da interface após carregamento
         function setupUI() {
             const currentUser = Auth.getCurrentUser();
             if (currentUser) {
-                // Configurar elementos da interface com base no usuário atual
-                // Código para atualizar a UI com informações do usuário...
+                // Atualizar nome do usuário no cabeçalho
+                const userNameElement = document.getElementById('userName');
+                if (userNameElement) {
+                    userNameElement.textContent = currentUser.name;
+                }
+                
+                // Atualizar operação se disponível
+                const userOperationElement = document.getElementById('userOperation');
+                if (userOperationElement && currentUser.operacao) {
+                    userOperationElement.textContent = `(${currentUser.operacao})`;
+                }
+                
+                // Verificar permissões para exibir/ocultar elementos
+                const isAdmin = currentUser.accessLevel === 'ADMIN';
+                const canManageUsers = isAdmin || (currentUser.permissions && currentUser.permissions.includes('manage_users'));
+                
+                // Exibir/ocultar elementos com base nas permissões
+                const adminElements = document.querySelectorAll('.admin-only');
+                adminElements.forEach(el => {
+                    el.style.display = canManageUsers ? 'block' : 'none';
+                });
             }
+        }
+        
+        // Função para logout
+        function logout() {
+            Auth.logout();
         }
         
         // Função para configurar o importador de CSV
@@ -94,6 +106,29 @@
                 }
             });
         }
+        
+        // Configurar event listeners quando o DOM estiver carregado
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                // Verificar autenticação
+                const isAuthenticated = await checkAuth();
+                if (!isAuthenticated) return;
+                
+                // Configurar interface
+                setupUI();
+                
+                // Configurar importador CSV
+                configureCSVImporter();
+                
+                // Adicionar handler para logout
+                const logoutButton = document.getElementById('logoutButton');
+                if (logoutButton) {
+                    logoutButton.addEventListener('click', logout);
+                }
+            } catch (error) {
+                console.error('Erro ao inicializar página:', error);
+            }
+        });
         
         // Função para importar dados do CSV
         function importCSVData(text) {
@@ -189,11 +224,6 @@
                 updateDisplay();
             }
         }
-        
-        // Expor Auth e funções de importação CSV globalmente para uso em outros scripts inline
-        window.Auth = Auth;
-        window.importCSVData = importCSVData;
-        window.configureCSVImporter = configureCSVImporter;
     </script>
     <style>
         :root {
