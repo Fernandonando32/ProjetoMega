@@ -1510,6 +1510,90 @@
             Auth.logout();
             // O redirecionamento agora é feito diretamente na função Auth.logout()
         });
+
+        // Configurar o botão de exibir/ocultar formulário de nova tarefa
+        document.addEventListener('DOMContentLoaded', function() {
+            const formToggler = document.getElementById('formToggler');
+            const taskFormContainer = document.getElementById('taskFormContainer');
+            const chevronIcon = formToggler.querySelector('.fa-chevron-down');
+            
+            // Inicialmente o formulário está oculto, então vamos verificar se o usuário tem permissão para criar tarefas
+            if (Auth.hasPermission(currentUser, PERMISSIONS.CREATE_TASKS)) {
+                formToggler.addEventListener('click', function() {
+                    if (taskFormContainer.style.display === 'none') {
+                        taskFormContainer.style.display = 'block';
+                        chevronIcon.style.transform = 'rotate(180deg)';
+                    } else {
+                        taskFormContainer.style.display = 'none';
+                        chevronIcon.style.transform = 'rotate(0deg)';
+                    }
+                });
+            } else {
+                // Se o usuário não tem permissão, ocultar o toggler também
+                formToggler.style.display = 'none';
+            }
+        });
+
+        // Função para controlar a exibição das opções de repetição
+        function toggleRepeatOptions() {
+            const repeatType = document.getElementById('taskRepeat').value;
+            const weekdaysContainer = document.getElementById('weekdaysContainer');
+            const repeatEndContainer = document.getElementById('repeatEndContainer');
+            
+            // Mostrar/esconder dias da semana
+            if (repeatType === 'weekly' || repeatType === 'custom') {
+                weekdaysContainer.style.display = 'block';
+                
+                // Se for semanal, selecionar automaticamente o dia da semana da data selecionada
+                if (repeatType === 'weekly') {
+                    const taskDate = document.getElementById('taskDate').value;
+                    if (taskDate) {
+                        const date = new Date(taskDate);
+                        const dayOfWeek = date.getDay();
+                        document.getElementById(`weekday-${dayOfWeek}`).checked = true;
+                    }
+                }
+            } else {
+                weekdaysContainer.style.display = 'none';
+                // Desmarcar todos os dias da semana
+                for (let i = 0; i < 7; i++) {
+                    document.getElementById(`weekday-${i}`).checked = false;
+                }
+            }
+            
+            // Mostrar/esconder opções de término
+            if (repeatType === 'none') {
+                repeatEndContainer.style.display = 'none';
+            } else {
+                repeatEndContainer.style.display = 'block';
+            }
+        }
+        
+        // Função para controlar as opções de término da repetição
+        function toggleEndDateField() {
+            const endType = document.getElementById('repeatEndType').value;
+            const endDateContainer = document.getElementById('endDateContainer');
+            const occurrencesContainer = document.getElementById('occurrencesContainer');
+            
+            if (endType === 'on') {
+                endDateContainer.style.display = 'block';
+                occurrencesContainer.style.display = 'none';
+                
+                // Definir data padrão (1 mês a partir da data inicial)
+                const taskDate = document.getElementById('taskDate').value;
+                if (taskDate) {
+                    const date = new Date(taskDate);
+                    date.setMonth(date.getMonth() + 1);
+                    document.getElementById('repeatEndDate').value = date.toISOString().split('T')[0];
+                }
+            } else if (endType === 'after') {
+                endDateContainer.style.display = 'none';
+                occurrencesContainer.style.display = 'block';
+            } else {
+                endDateContainer.style.display = 'none';
+                occurrencesContainer.style.display = 'none';
+            }
+        }
     </script>
 </body>
 </html>
