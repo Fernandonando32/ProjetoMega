@@ -2569,10 +2569,56 @@
             // Adicionar event listener para o formulário de nova tarefa
             const taskForm = document.getElementById('taskForm');
             if (taskForm) {
+                // Configurar os event listeners para as opções de cores
+                document.querySelectorAll('input[name="taskColorOption"]').forEach(radio => {
+                    radio.addEventListener('change', function() {
+                        // Atualizar o campo oculto quando uma cor for selecionada
+                        document.getElementById('taskColor').value = this.value;
+                        console.log('Cor selecionada:', this.value);
+                    });
+                });
+                
+                // Configurar o botão de cor personalizada
+                const showCustomColorBtn = document.getElementById('showCustomColor');
+                const customColorContainer = document.getElementById('customColorContainer');
+                const customColorPicker = document.getElementById('customColorPicker');
+                const applyCustomColorBtn = document.getElementById('applyCustomColor');
+                
+                if (showCustomColorBtn && customColorContainer && customColorPicker) {
+                    showCustomColorBtn.addEventListener('click', function() {
+                        customColorContainer.style.display = 
+                            customColorContainer.style.display === 'none' ? 'block' : 'none';
+                    });
+                    
+                    // Aplicar cor personalizada quando o botão for clicado
+                    if (applyCustomColorBtn) {
+                        applyCustomColorBtn.addEventListener('click', function() {
+                            const customColor = customColorPicker.value;
+                            document.getElementById('taskColor').value = customColor;
+                            console.log('Cor personalizada aplicada:', customColor);
+                            
+                            // Desmarcar todas as outras opções
+                            document.querySelectorAll('input[name="taskColorOption"]').forEach(radio => {
+                                radio.checked = false;
+                            });
+                        });
+                    }
+                    
+                    // Também atualizar quando o usuário selecionar uma cor diretamente no color picker
+                    customColorPicker.addEventListener('change', function() {
+                        document.getElementById('taskColor').value = this.value;
+                        console.log('Cor personalizada selecionada:', this.value);
+                    });
+                }
+                
                 taskForm.addEventListener('submit', async function(event) {
                     event.preventDefault();
                     
                     try {
+                        // Garantir que a cor foi definida
+                        const taskColor = document.getElementById('taskColor').value;
+                        console.log('Cor final da tarefa:', taskColor);
+                        
                         // Coletar dados do formulário
                         const taskData = {
                             title: document.getElementById('taskTitle').value,
@@ -2582,7 +2628,7 @@
                             endTime: document.getElementById('taskEndTime').value,
                             priority: document.getElementById('taskPriority').value,
                             category: document.getElementById('taskCategory').value,
-                            color: document.getElementById('taskColor').value,
+                            color: taskColor, // Usar a cor selecionada
                             operacao: document.getElementById('taskOperacao').value,
                             completed: false
                         };

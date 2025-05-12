@@ -223,6 +223,61 @@ const TasksAPI = {
     },
     
     /**
+     * Marca uma tarefa como concluída
+     * @param {string} taskId - ID da tarefa a ser concluída
+     * @returns {Promise<Object>} Resultado da operação
+     */
+    async completeTask(taskId) {
+        try {
+            // Buscar a tarefa atual
+            const localTasks = JSON.parse(localStorage.getItem('tasks') || '[]');
+            const taskIndex = localTasks.findIndex(t => t.id === taskId);
+            
+            if (taskIndex === -1) {
+                return { success: false, message: 'Tarefa não encontrada' };
+            }
+            
+            // Verificar se o dbManager está disponível
+            if (!window.dbManager) {
+                console.error('dbManager não está disponível');
+                
+                // Atualizar localmente
+                localTasks[taskIndex].completed = true;
+                localTasks[taskIndex].completedAt = new Date().toISOString();
+                localTasks[taskIndex].status = 'concluida';
+                localStorage.setItem('tasks', JSON.stringify(localTasks));
+                
+                return { success: true, message: 'Tarefa concluída (modo offline)' };
+            }
+            
+            // Atualizar no banco de dados
+            const taskData = {
+                ...localTasks[taskIndex],
+                completed: true,
+                status: 'concluida',
+                completedAt: new Date().toISOString()
+            };
+            
+            // Converter para formato do banco
+            const dbTaskData = this._convertToDbFormat(taskData);
+            
+            // Atualizar no banco
+            const result = await window.dbManager.updateTask(taskId, dbTaskData);
+            
+            // Atualizar no localStorage
+            localTasks[taskIndex].completed = true;
+            localTasks[taskIndex].status = 'concluida';
+            localTasks[taskIndex].completedAt = new Date().toISOString();
+            localStorage.setItem('tasks', JSON.stringify(localTasks));
+            
+            return { success: true, result };
+        } catch (error) {
+            console.error(`Erro ao concluir tarefa ${taskId}:`, error);
+            return { success: false, message: error.message };
+        }
+    },
+    
+    /**
      * Sincroniza tarefas locais com o banco de dados
      * @returns {Promise<Object>} Resultado da sincronização
      */
