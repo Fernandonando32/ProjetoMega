@@ -1629,15 +1629,42 @@
         async function loadTasks() {
             try {
                 // Buscar tarefas da API
+                console.log('Iniciando carregamento de tarefas...');
                 const tasksData = await TasksAPI.getAllTasks();
-                tasks = tasksData;
-                console.log('Tarefas carregadas:', tasks.length);
+                console.log('Dados de tarefas recebidos:', tasksData.length);
+                
+                // Validar e processar as tarefas
+                tasks = tasksData.filter(task => {
+                    // Garantir que todas as tarefas tenham os campos necessários
+                    if (!task.id || !task.title) {
+                        console.warn('Tarefa ignorada - faltam campos obrigatórios:', task);
+                        return false;
+                    }
+                    
+                    // Verificar se a tarefa tem data válida
+                    if (!task.date) {
+                        console.warn('Tarefa sem data será ignorada:', task.title);
+                        return false;
+                    }
+                    
+                    return true;
+                });
+                
+                console.log('Tarefas válidas carregadas:', tasks.length);
+                
+                // Exemplo de tarefa para depuração
+                if (tasks.length > 0) {
+                    console.log('Exemplo de tarefa:', JSON.stringify(tasks[0]));
+                }
                 
                 // Atualizar o calendário com as novas tarefas
                 renderCalendar(currentView);
                 
                 // Atualizar timestamp de última atualização
                 document.getElementById('lastRefreshTime').textContent = new Date().toLocaleTimeString();
+                
+                // Atualizar lista de tarefas do dia
+                updateDailyTasksList();
             } catch (error) {
                 console.error('Erro ao carregar tarefas:', error);
             }
@@ -1697,13 +1724,25 @@
             const content = document.createElement('div');
             content.className = 'daily-view-content';
             
+            // Formatar a data do dia atual como YYYY-MM-DD para comparação
+            const formattedCurrentDate = currentDate.toISOString().split('T')[0];
+            console.log('Buscando tarefas para visualização diária:', formattedCurrentDate);
+            
             // Filtrar tarefas para o dia atual
             const dayTasks = tasks.filter(task => {
-                const taskDate = new Date(task.date);
-                return taskDate.getDate() === currentDate.getDate() && 
-                       taskDate.getMonth() === currentDate.getMonth() && 
-                       taskDate.getFullYear() === currentDate.getFullYear();
+                if (!task.date) {
+                    console.log('Tarefa sem data na visualização diária:', task.id, task.title);
+                    return false;
+                }
+                
+                const matches = task.date === formattedCurrentDate;
+                if (matches) {
+                    console.log('Tarefa encontrada para visualização diária:', task.title);
+                }
+                return matches;
             });
+            
+            console.log(`Encontradas ${dayTasks.length} tarefas para visualização diária`);
             
             if (dayTasks.length === 0) {
                 const emptyMsg = document.createElement('p');
@@ -1729,8 +1768,9 @@
                     
                     // Filtrar tarefas para esta hora
                     const hourTasks = dayTasks.filter(task => {
+                        if (!task.startTime) return false;
                         const startTime = task.startTime.split(':');
-                        return parseInt(startTime[0]) === hour;
+                        return parseInt(startTime[0], 10) === hour;
                     });
                     
                     if (hourTasks.length > 0) {
@@ -1989,13 +2029,27 @@
             const tasksContainer = document.createElement('div');
             tasksContainer.className = 'calendar-tasks';
             
+            // Formatar a data do dia atual como YYYY-MM-DD para comparação
+            const formattedCellDate = date.toISOString().split('T')[0];
+            console.log('Buscando tarefas para o dia:', formattedCellDate);
+            
             // Filtrar tarefas para este dia
             const dayTasks = tasks.filter(task => {
-                const taskDate = new Date(task.date);
-                return taskDate.getDate() === date.getDate() && 
-                       taskDate.getMonth() === date.getMonth() && 
-                       taskDate.getFullYear() === date.getFullYear();
+                // Verificar se a propriedade date existe e corresponde à data da célula
+                if (!task.date) {
+                    console.log('Tarefa sem data:', task.id, task.title);
+                    return false;
+                }
+                
+                // Comparar diretamente as strings de data no formato YYYY-MM-DD
+                const matches = task.date === formattedCellDate;
+                if (matches) {
+                    console.log('Tarefa encontrada para o dia', formattedCellDate, ':', task.title);
+                }
+                return matches;
             });
+            
+            console.log(`Encontradas ${dayTasks.length} tarefas para o dia ${formattedCellDate}`);
             
             // Adicionar tarefas
             if (dayTasks.length > 0) {
@@ -2020,6 +2074,8 @@
 
         // Função auxiliar para criar elemento de tarefa
         function createTaskElement(task, isCompact = false) {
+            console.log('Renderizando tarefa:', task.id, task.title, 'Data:', task.date);
+            
             const taskElement = document.createElement('div');
             taskElement.className = 'calendar-task';
             taskElement.dataset.id = task.id;
@@ -2395,6 +2451,132 @@
             
             // Carregar tarefas e renderizar calendário
             loadTasks();
+        });
+
+        // Função para atualizar a lista de tarefas diárias na barra lateral
+        function updateDailyTasksList() {
+            const today = new Date();
+            const formattedToday = today.toISOString().split('T')[0];
+            
+            // Filtrar tarefas para hoje
+            const todayTasks = tasks.filter(task => task.date === formattedToday && !task.completed);
+            const completedTodayTasks = tasks.filter(task => task.date === formattedToday && task.completed);
+            
+            // Atualizar container de tarefas pendentes
+            const dailyTasksContainer = document.getElementById('dailyTasks');
+            dailyTasksContainer.innerHTML = '';
+            
+            if (todayTasks.length === 0) {
+                dailyTasksContainer.innerHTML = '<p style="padding: 15px; text-align: center; color: var(--light-text);">Nenhuma tarefa pendente para hoje</p>';
+            } else {
+                // Ordenar por horário de início
+                todayTasks.sort((a, b) => {
+                    if (!a.startTime) return 1;
+                    if (!b.startTime) return -1;
+                    return a.startTime.localeCompare(b.startTime);
+                });
+                
+                // Adicionar cada tarefa à lista
+                todayTasks.forEach(task => {
+                    const taskItem = document.createElement('div');
+                    taskItem.className = 'task-item';
+                    
+                    // Adicionar classe de prioridade
+                    if (task.priority === 'alta') {
+                        taskItem.classList.add('priority-high');
+                    } else if (task.priority === 'media') {
+                        taskItem.classList.add('priority-medium');
+                    } else {
+                        taskItem.classList.add('priority-low');
+                    }
+                    
+                    // Título da tarefa
+                    const title = document.createElement('h4');
+                    title.textContent = task.title;
+                    taskItem.appendChild(title);
+                    
+                    // Horário da tarefa
+                    if (task.startTime) {
+                        const time = document.createElement('p');
+                        time.style.fontSize = '12px';
+                        time.style.color = 'var(--light-text)';
+                        time.textContent = task.startTime + (task.endTime ? ` - ${task.endTime}` : '');
+                        taskItem.appendChild(time);
+                    }
+                    
+                    // Botão para concluir tarefa
+                    const completeBtn = document.createElement('button');
+                    completeBtn.className = 'btn-success complete-task-btn';
+                    completeBtn.innerHTML = '<i class="fas fa-check"></i> Concluir';
+                    completeBtn.style.marginTop = '5px';
+                    
+                    // Adicionar evento para concluir a tarefa
+                    completeBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        completeTask(task.id);
+                    });
+                    
+                    taskItem.appendChild(completeBtn);
+                    
+                    // Adicionar evento para ver detalhes da tarefa
+                    taskItem.addEventListener('click', () => {
+                        showTaskDetails(task);
+                    });
+                    
+                    dailyTasksContainer.appendChild(taskItem);
+                });
+            }
+            
+            // Atualizar container de tarefas concluídas
+            const completedTasksContainer = document.getElementById('completedTasks');
+            completedTasksContainer.innerHTML = '';
+            
+            if (completedTodayTasks.length === 0) {
+                completedTasksContainer.innerHTML = '<p style="padding: 15px; text-align: center; color: var(--light-text);">Nenhuma tarefa concluída hoje</p>';
+            } else {
+                // Adicionar cada tarefa concluída à lista
+                completedTodayTasks.forEach(task => {
+                    const taskItem = document.createElement('div');
+                    taskItem.className = 'task-item completed';
+                    
+                    const title = document.createElement('h4');
+                    title.textContent = task.title;
+                    taskItem.appendChild(title);
+                    
+                    // Adicionar evento para ver detalhes da tarefa
+                    taskItem.addEventListener('click', () => {
+                        showTaskDetails(task);
+                    });
+                    
+                    completedTasksContainer.appendChild(taskItem);
+                });
+            }
+        }
+
+        // Configurar eventos de alternância entre abas na lista de tarefas da barra lateral
+        document.addEventListener('DOMContentLoaded', function() {
+            const pendingTasksTab = document.getElementById('pendingTasksTab');
+            const completedTasksTab = document.getElementById('completedTasksTab');
+            const dailyTasksContainer = document.getElementById('dailyTasks');
+            const completedTasksContainer = document.getElementById('completedTasks');
+            
+            if (pendingTasksTab && completedTasksTab) {
+                pendingTasksTab.addEventListener('click', function() {
+                    pendingTasksTab.classList.add('active');
+                    completedTasksTab.classList.remove('active');
+                    dailyTasksContainer.style.display = 'block';
+                    completedTasksContainer.style.display = 'none';
+                });
+                
+                completedTasksTab.addEventListener('click', function() {
+                    completedTasksTab.classList.add('active');
+                    pendingTasksTab.classList.remove('active');
+                    completedTasksContainer.style.display = 'block';
+                    dailyTasksContainer.style.display = 'none';
+                });
+            } else {
+                console.error('Elementos de abas não encontrados');
+            }
         });
     </script>
 </body>

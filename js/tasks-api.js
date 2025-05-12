@@ -16,11 +16,19 @@ const TasksAPI = {
                 
                 // Fallback para localStorage se o dbManager não estiver disponível
                 const localTasks = localStorage.getItem('tasks');
-                return localTasks ? JSON.parse(localTasks) : [];
+                const parsed = localTasks ? JSON.parse(localTasks) : [];
+                console.log('Carregadas tarefas do localStorage:', parsed.length);
+                return parsed;
             }
             
             // Buscar tarefas do banco de dados usando dbManager
-            const tasks = await window.dbManager.getAllTasks();
+            console.log('Buscando tarefas do banco de dados via dbManager...');
+            const dbTasks = await window.dbManager.getAllTasks();
+            console.log('Tarefas recebidas do banco:', dbTasks.length);
+            
+            // Converter para o formato da UI
+            const tasks = Array.isArray(dbTasks) ? dbTasks.map(task => this._convertFromDbFormat(task)) : [];
+            console.log('Tarefas convertidas para formato UI:', tasks.length);
             
             // Também armazenar no localStorage para fallback offline
             localStorage.setItem('tasks', JSON.stringify(tasks));
@@ -31,7 +39,9 @@ const TasksAPI = {
             
             // Em caso de erro, tentar carregar do localStorage
             const localTasks = localStorage.getItem('tasks');
-            return localTasks ? JSON.parse(localTasks) : [];
+            const fallbackTasks = localTasks ? JSON.parse(localTasks) : [];
+            console.log('Usando fallback do localStorage:', fallbackTasks.length);
+            return fallbackTasks;
         }
     },
     
@@ -233,18 +243,31 @@ const TasksAPI = {
         let startDate = null;
         let endDate = null;
         
+        // Certificar-se de que as datas sejam convertidas corretamente
         if (uiTask.date) {
             // Se temos data e hora separadas, combinar
             if (uiTask.startTime) {
                 const [startHours, startMinutes] = uiTask.startTime.split(':');
                 startDate = new Date(uiTask.date);
-                startDate.setHours(parseInt(startHours), parseInt(startMinutes), 0, 0);
+                startDate.setHours(parseInt(startHours, 10), parseInt(startMinutes, 10), 0, 0);
+            } else {
+                // Se não temos hora de início, usar 00:00
+                startDate = new Date(uiTask.date);
+                startDate.setHours(0, 0, 0, 0);
             }
             
             if (uiTask.endTime) {
                 const [endHours, endMinutes] = uiTask.endTime.split(':');
                 endDate = new Date(uiTask.date);
-                endDate.setHours(parseInt(endHours), parseInt(endMinutes), 0, 0);
+                endDate.setHours(parseInt(endHours, 10), parseInt(endMinutes, 10), 0, 0);
+            } else if (startDate) {
+                // Se não temos hora de término, usar hora de início + 1 hora
+                endDate = new Date(startDate);
+                endDate.setHours(endDate.getHours() + 1);
+            } else {
+                // Se nenhuma hora for especificada, usar fim do dia
+                endDate = new Date(uiTask.date);
+                endDate.setHours(23, 59, 59, 999);
             }
         }
         
@@ -257,17 +280,25 @@ const TasksAPI = {
             endDate = new Date(uiTask.end_date);
         }
         
-        // Converter assigned_to para formato adequado (array para string ou JSONB)
+        // Tratar atribuição a múltiplos usuários
         let assignedTo = uiTask.assignedTo;
-        if (Array.isArray(assignedTo)) {
-            assignedTo = assignedTo.length > 0 ? assignedTo[0] : null;
+        if (Array.isArray(assignedTo) && assignedTo.length > 0) {
+            // O banco de dados atualmente suporta apenas um único usuário atribuído
+            // Se houver mais, pegar apenas o primeiro da lista
+            assignedTo = assignedTo[0];
+        }
+        
+        // Serializar o padrão de repetição se disponível
+        let repeatPattern = null;
+        if (uiTask.repeat || uiTask.repeatPattern) {
+            repeatPattern = JSON.stringify(uiTask.repeat || uiTask.repeatPattern);
         }
         
         return {
             title: uiTask.title,
             description: uiTask.description || '',
-            start_date: startDate?.toISOString(),
-            end_date: endDate?.toISOString(),
+            start_date: startDate ? startDate.toISOString() : null,
+            end_date: endDate ? endDate.toISOString() : null,
             status: uiTask.completed ? 'concluida' : 'pendente',
             priority: uiTask.priority || 'normal',
             technician_id: uiTask.technicianId || null,
@@ -275,7 +306,7 @@ const TasksAPI = {
             assigned_to: assignedTo,
             operacao: uiTask.operacao || null,
             color: uiTask.color || '#3788d8',
-            repeat_pattern: uiTask.repeatPattern ? JSON.stringify(uiTask.repeatPattern) : null,
+            repeat_pattern: repeatPattern,
             location: uiTask.location ? JSON.stringify(uiTask.location) : null,
             attachments: uiTask.attachments ? JSON.stringify(uiTask.attachments) : null
         };
@@ -293,45 +324,65 @@ const TasksAPI = {
         let startTime = null;
         let endTime = null;
         
+        // Verificar se temos datas válidas
         if (dbTask.start_date) {
+            // Converter para objeto Date
             const startDate = new Date(dbTask.start_date);
+            
+            // Formatar a data como YYYY-MM-DD para o campo date
             date = startDate.toISOString().split('T')[0];
-            startTime = startDate.toTimeString().substr(0, 5);
+            
+            // Formatar a hora como HH:MM para o campo startTime
+            startTime = startDate.toTimeString().slice(0, 5);
         }
         
         if (dbTask.end_date) {
+            // Converter para objeto Date
             const endDate = new Date(dbTask.end_date);
+            
+            // Formatar a hora como HH:MM para o campo endTime
+            endTime = endDate.toTimeString().slice(0, 5);
+            
+            // Se não temos data de início, usar a data de término
             if (!date) {
                 date = endDate.toISOString().split('T')[0];
             }
-            endTime = endDate.toTimeString().substr(0, 5);
         }
         
-        // Converter repeat_pattern, location e attachments de volta para objetos
+        // Extrair padrão de repetição
         let repeatPattern = null;
-        let location = null;
-        let attachments = null;
-        
-        try {
-            if (dbTask.repeat_pattern) {
+        if (dbTask.repeat_pattern) {
+            try {
                 repeatPattern = typeof dbTask.repeat_pattern === 'string' 
                     ? JSON.parse(dbTask.repeat_pattern) 
                     : dbTask.repeat_pattern;
+            } catch (error) {
+                console.error('Erro ao converter padrão de repetição:', error);
             }
-            
-            if (dbTask.location) {
+        }
+        
+        // Extrair localização
+        let location = null;
+        if (dbTask.location) {
+            try {
                 location = typeof dbTask.location === 'string' 
                     ? JSON.parse(dbTask.location) 
                     : dbTask.location;
+            } catch (error) {
+                console.error('Erro ao converter localização:', error);
             }
-            
-            if (dbTask.attachments) {
+        }
+        
+        // Extrair anexos
+        let attachments = null;
+        if (dbTask.attachments) {
+            try {
                 attachments = typeof dbTask.attachments === 'string' 
                     ? JSON.parse(dbTask.attachments) 
                     : dbTask.attachments;
+            } catch (error) {
+                console.error('Erro ao converter anexos:', error);
             }
-        } catch (error) {
-            console.error('Erro ao converter campos JSON:', error);
         }
         
         return {
@@ -352,7 +403,8 @@ const TasksAPI = {
             location: location,
             attachments: attachments,
             created_at: dbTask.created_at,
-            updated_at: dbTask.updated_at
+            updated_at: dbTask.updated_at,
+            completedAt: dbTask.status === 'concluida' ? dbTask.updated_at : null
         };
     }
 };
