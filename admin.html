@@ -882,21 +882,21 @@
                 <div id="diagnosticReportContainer">
                     <!-- O relatório de diagnóstico será exibido aqui -->
                 </div>
-                            </div>
+            </div>
             <div class="modal-footer">
                 <button type="button" class="button" id="btnCloseDiagnostic">Fechar</button>
                 <button type="button" class="button btn-primary" id="btnAdvancedDiagnostic">Diagnóstico Avançado</button>
-                            </div>
-                            </div>
-                        </div>
-                        
+            </div>
+        </div>
+    </div>
+    
     <!-- Modal de Diagnóstico da Tabela Users -->
     <div id="tableInspectorModal" class="modal" style="display: none;">
         <div class="modal-content" style="max-width: 800px; width: 90%;">
             <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
                 <h5 class="modal-title">Diagnóstico da Tabela Users</h5>
                 <span class="close">&times;</span>
-                            </div>
+            </div>
             <div class="modal-body">
                 <div id="tableInspectorContainer">
                     <!-- O relatório de inspeção da tabela será exibido aqui -->
@@ -1039,78 +1039,80 @@
             });
         }
 
-        // Carregar lista de usuários
+        // Carregar usuários
         async function loadUsers() {
             try {
-                // Usar a nova API de usuários
-                users = await UserAPI.getAllUsers({
-                    useCache: false, // Forçar busca atualizada
-                    orderBy: 'name',
-                    ascending: true
-                });
+                userTableBody.innerHTML = '<tr><td colspan="7" class="loading">Carregando usuários...</td></tr>';
+                
+                // Obter usuários do servidor usando UserAPI
+                users = await UserAPI.getAllUsers();
+                console.log('Usuários carregados:', users);
                 
                 // Renderizar tabela
                 renderUserTable();
+                
+                // Verificar se há usuários locais
+                checkLocalUsers();
             } catch (error) {
                 console.error('Erro ao carregar usuários:', error);
-                userTableBody.innerHTML = `
-                    <tr>
-                        <td colspan="7" style="text-align: center; padding: 20px; color: #c0392b;">
-                            <i class="fas fa-exclamation-triangle" style="font-size: 24px;"></i>
-                            <p style="margin-top: 10px;">Erro ao carregar usuários. Tente novamente mais tarde.</p>
-                        </td>
-                    </tr>
-                `;
+                userTableBody.innerHTML = `<tr><td colspan="7" class="error">Erro ao carregar usuários: ${error.message}</td></tr>`;
             }
         }
 
         // Renderizar tabela de usuários
         function renderUserTable() {
+            // Limpar tabela
             userTableBody.innerHTML = '';
             
-            if (users.length === 0) {
+            // Ordenar usuários por nome
+            const sortedUsers = [...users].sort((a, b) => a.full_name.localeCompare(b.full_name));
+            
+            // Se não houver usuários, mostrar mensagem
+            if (sortedUsers.length === 0) {
                 userTableBody.innerHTML = `
                     <tr>
                         <td colspan="7" style="text-align: center; padding: 20px;">
-                            <i class="fas fa-users-slash" style="font-size: 24px; color: #666;"></i>
-                            <p style="margin-top: 10px;">Nenhum usuário encontrado.</p>
+                            <i class="fas fa-users" style="font-size: 24px; color: #ccc;"></i>
+                            <p style="margin-top: 10px;">Nenhum usuário cadastrado.</p>
                         </td>
                     </tr>
                 `;
                 return;
             }
             
-            users.forEach(user => {
+            // Obter o usuário atual
+            const currentUser = Auth.getCurrentUser();
+            console.log('Usuário atual:', currentUser);
+            
+            // Adicionar usuários à tabela
+            sortedUsers.forEach(user => {
                 const tr = document.createElement('tr');
                 
-                // Determinar qual badge usar baseado no nível de acesso
-                let badgeClass = '';
-                switch(user.role) {
-                    case 'ADMIN':
-                        badgeClass = 'badge-admin';
-                        break;
-                    case 'USER':
-                        badgeClass = 'badge-user';
-                        break;
-                    case 'VIEWER':
-                        badgeClass = 'badge-viewer';
-                        break;
+                // Aplicar classe se for o usuário atual
+                if (String(user.id) === String(currentUser.id)) {
+                    tr.classList.add('current-user');
                 }
                 
-                const currentUser = Auth.getCurrentUser();
+                // Determinar a classe do badge baseado no nível de acesso
+                let badgeClass = 'badge-primary';
+                if (user.role === 'ADMIN') badgeClass = 'badge-danger';
+                if (user.role === 'TECH_MANAGER' || user.role === 'MAINTENANCE_MANAGER') badgeClass = 'badge-warning';
+                if (user.role === 'VIEWER') badgeClass = 'badge-secondary';
                 
+                // Criar HTML da linha
+                const userIdStr = String(user.id); // Garantir que seja string
                 tr.innerHTML = `
-                    <td>${user.id}</td>
+                    <td>${userIdStr}</td>
                     <td>${user.full_name}</td>
                     <td>${user.username}</td>
                     <td>${user.email || '-'}</td>
                     <td>${window.ACCESS_LEVELS[user.role].name} <span class="badge ${badgeClass}">${user.role}</span></td>
                     <td>${user.operacao || '-'}</td>
                     <td class="user-actions">
-                        <button class="button btn-primary edit-user" data-id="${user.id}">
+                        <button class="button btn-primary edit-user" data-id="${userIdStr}">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="button btn-danger delete-user" data-id="${user.id}" ${user.id === currentUser.id ? 'disabled' : ''}>
+                        <button class="button btn-danger delete-user" data-id="${userIdStr}" ${String(user.id) === String(currentUser.id) ? 'disabled' : ''}>
                             <i class="fas fa-trash-alt"></i>
                         </button>
                     </td>
@@ -1121,18 +1123,24 @@
             
             // Adicionar eventos de edição e exclusão
             document.querySelectorAll('.edit-user').forEach(button => {
-                button.addEventListener('click', () => {
-                    const userId = parseInt(button.dataset.id);
+                button.addEventListener('click', (event) => {
+                    event.preventDefault(); // Evitar comportamento padrão
+                    const userId = button.dataset.id;
+                    console.log('Clique no botão editar para usuário:', userId);
                     editUser(userId);
                 });
             });
             
             document.querySelectorAll('.delete-user').forEach(button => {
-                button.addEventListener('click', () => {
-                    const userId = parseInt(button.dataset.id);
+                button.addEventListener('click', (event) => {
+                    event.preventDefault(); // Evitar comportamento padrão
+                    const userId = button.dataset.id;
+                    console.log('Clique no botão excluir para usuário:', userId);
                     const currentUser = Auth.getCurrentUser();
-                    if (userId !== currentUser.id) {
+                    if (String(userId) !== String(currentUser.id)) {
                         openDeleteConfirmation(userId);
+                    } else {
+                        alert('Você não pode excluir seu próprio usuário!');
                     }
                 });
             });
@@ -1153,8 +1161,8 @@
                 currentEditingUserId = userId;
                 modalTitle.textContent = 'Editar Usuário';
                 
-                // Encontrar o usuário
-                const user = users.find(u => u.id === userId);
+                // Encontrar o usuário - comparar strings
+                const user = users.find(u => String(u.id) === String(userId));
                 if (user) {
                     // Preencher o formulário
                     document.getElementById('userId').value = user.id;
@@ -1209,11 +1217,14 @@
 
         // Editar usuário
         function editUser(userId) {
+            console.log('Editando usuário com ID:', userId, 'Tipo:', typeof userId);
+            console.log('Lista de usuários:', users.map(u => ({id: u.id, tipo: typeof u.id, nome: u.full_name})));
             openUserModal(userId);
         }
 
         // Abrir confirmação de exclusão
         function openDeleteConfirmation(userId) {
+            console.log('Preparando exclusão do usuário com ID:', userId, 'Tipo:', typeof userId);
             // Armazenar o ID do usuário a ser excluído
             confirmDeleteButton.dataset.userId = userId;
             
@@ -1231,7 +1242,7 @@
         async function deleteUser(userId) {
             // Não permitir excluir o próprio usuário
             const currentUser = Auth.getCurrentUser();
-            if (userId === currentUser.id) {
+            if (String(userId) === String(currentUser.id)) {
                 alert('Você não pode excluir seu próprio usuário!');
                 return;
             }
@@ -1246,7 +1257,7 @@
                 
                 if (result.success) {
                     // Remover o usuário da lista local
-                    users = users.filter(user => user.id !== userId);
+                    users = users.filter(user => String(user.id) !== String(userId));
                     
                     // Atualizar a tabela
                     renderUserTable();
@@ -1434,248 +1445,8 @@
                     </ul>
                     <p>Deseja sincronizar estes usuários com o servidor?</p>
                 `;
-                document.getElementById('btnStartSync').style.display = 'block';
-            } else {
-                document.getElementById('syncStatus').innerHTML = `
-                    <div class="alert alert-info" role="alert">
-                        Não há usuários locais para sincronizar.
-                    </div>
-                `;
-            }
-        });
-        
-        // Fechar modal
-        document.querySelector('#syncModal .close').addEventListener('click', function() {
-            document.getElementById('syncModal').style.display = 'none';
-        });
-
-        document.getElementById('btnCloseSync').addEventListener('click', function() {
-            document.getElementById('syncModal').style.display = 'none';
-        });
-
-        // Fechar modal ao clicar fora dele
-        window.addEventListener('click', function(event) {
-            const syncModal = document.getElementById('syncModal');
-            if (event.target === syncModal) {
-                syncModal.style.display = 'none';
-            }
-        });
-
-        // Iniciar sincronização
-        document.getElementById('btnStartSync').addEventListener('click', async function() {
-            try {
-                // Atualizar UI para mostrar progresso
-                const btnStartSync = document.getElementById('btnStartSync');
-                if (btnStartSync) {
-                    btnStartSync.style.display = 'none';
-                }
-                
-                const syncStatus = document.getElementById('syncStatus');
-                if (syncStatus) {
-                    syncStatus.innerHTML = `
-                        <p>Sincronizando usuários locais com o servidor...</p>
-                        <div class="progress-bar" style="height: 10px; width: 100%; background-color: #2a3d66; border-radius: 5px; margin-bottom: 15px;"></div>
-                    `;
-                }
-                
-                // Executar sincronização
-                const result = await Auth.syncLocalUsers();
-                
-                // Mostrar resultados
-                const syncStatusAfter = document.getElementById('syncStatus');
-                if (syncStatusAfter) {
-                    syncStatusAfter.style.display = 'none';
-                }
-                
-                const syncResults = document.getElementById('syncResults');
-                if (syncResults) {
-                    syncResults.style.display = 'block';
-                    
-                    const alertElement = syncResults.querySelector('.alert');
-                    if (alertElement) {
-                        if (result.success) {
-                            alertElement.className = 'alert alert-success';
-                            alertElement.textContent = result.message;
-                        } else {
-                            alertElement.className = 'alert alert-danger';
-                            alertElement.textContent = `Erro: ${result.message || 'Falha na sincronização'}`;
-                        }
-                        
-                        // Mostrar detalhes se houver
-                        const detailsList = syncResults.querySelector('.sync-details ul');
-                        if (detailsList) {
-                            detailsList.innerHTML = '';
-                            
-                            if (result.details && result.details.length > 0) {
-                                result.details.forEach(item => {
-                                    const li = document.createElement('li');
-                                    li.className = `list-group-item ${item.success ? 'list-group-item-success' : 'list-group-item-danger'}`;
-                                    li.innerHTML = `
-                                        <strong>${item.username}</strong>: 
-                                        ${item.success 
-                                            ? `Sincronizado com sucesso (ID: ${item.serverId})` 
-                                            : `Falha: ${item.error || 'Erro desconhecido'}`}
-                                    `;
-                                    detailsList.appendChild(li);
-                                });
-                            } else {
-                                detailsList.innerHTML = '<li class="list-group-item">Nenhum detalhe disponível</li>';
-                            }
-                        }
-                    }
-                }
-                
-                // Atualizar contagem de usuários locais
-                await checkForLocalUsers();
-            } catch (error) {
-                console.error('Erro ao sincronizar:', error);
-                
-                const syncStatusError = document.getElementById('syncStatus');
-                if (syncStatusError) {
-                    syncStatusError.style.display = 'none';
-                }
-                
-                const syncResultsError = document.getElementById('syncResults');
-                if (syncResultsError) {
-                    syncResultsError.style.display = 'block';
-                    
-                    const alertElement = syncResultsError.querySelector('.alert');
-                    if (alertElement) {
-                        alertElement.className = 'alert alert-danger';
-                        alertElement.textContent = `Erro: ${error.message || 'Erro desconhecido durante a sincronização'}`;
-                    }
-                }
-            }
-        });
-
-        // Diagnóstico do banco de dados
-        document.getElementById('btnDiagnostic').addEventListener('click', async function() {
-            // Abrir modal
-            document.getElementById('diagnosticModal').style.display = 'block';
-            
-            // Iniciar o diagnóstico usando o helper
-            DiagnosticHelper.displayDiagnosticReport('diagnosticReportContainer');
-        });
-
-        // Fechar modal de diagnóstico
-        document.querySelector('#diagnosticModal .close').addEventListener('click', function() {
-            document.getElementById('diagnosticModal').style.display = 'none';
-        });
-
-        document.getElementById('btnCloseDiagnostic').addEventListener('click', function() {
-            document.getElementById('diagnosticModal').style.display = 'none';
-        });
-
-        // Botão de diagnóstico avançado
-        document.getElementById('btnAdvancedDiagnostic').addEventListener('click', async function() {
-            try {
-                // Executar as correções automáticas
-                const fixes = await DiagnosticHelper.attemptFixes();
-                
-                // Atualizar o relatório
-                DiagnosticHelper.displayDiagnosticReport('diagnosticReportContainer');
-                
-                // Exibir resultados
-                alert(`${fixes.successful.filter(f => f.success).length} de ${fixes.actionsAttempted.length} tentativas de correção foram bem-sucedidas.`);
-            } catch (error) {
-                console.error('Erro ao executar diagnóstico avançado:', error);
-                alert('Ocorreu um erro ao tentar o diagnóstico avançado: ' + error.message);
-            }
-        });
-
-        // Fechar modal ao clicar fora
-        window.addEventListener('click', function(event) {
-            const diagnosticModal = document.getElementById('diagnosticModal');
-            if (event.target === diagnosticModal) {
-                diagnosticModal.style.display = 'none';
-            }
-        });
-        
-        // Diagnóstico da tabela users
-        document.getElementById('btnTableInspector').addEventListener('click', function() {
-            // Abrir modal
-            document.getElementById('tableInspectorModal').style.display = 'block';
-            
-            // Iniciar análise da tabela
-            if (window.TableInspector) {
-                window.TableInspector.displayReport('tableInspectorContainer');
-            } else {
-                document.getElementById('tableInspectorContainer').innerHTML = 
-                    '<div class="alert alert-danger">Ferramenta de diagnóstico da tabela não disponível</div>';
-            }
-        });
-        
-        // Fechar modal de diagnóstico da tabela
-        document.querySelector('#tableInspectorModal .close').addEventListener('click', function() {
-            document.getElementById('tableInspectorModal').style.display = 'none';
-        });
-        
-        document.getElementById('btnCloseTableInspector').addEventListener('click', function() {
-            document.getElementById('tableInspectorModal').style.display = 'none';
-        });
-        
-        // Executar testes na tabela
-        document.getElementById('btnRunTableTests').addEventListener('click', async function() {
-            this.disabled = true;
-            this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando testes...';
-            
-            if (window.TableInspector) {
-                const testResults = await window.TableInspector.testUserCreation();
-                window.TableInspector.displayReport('tableInspectorContainer');
-            }
-            
-            this.disabled = false;
-            this.innerHTML = 'Executar Testes';
-        });
-        
-        // Fechar modal ao clicar fora
-        window.addEventListener('click', function(event) {
-            const tableInspectorModal = document.getElementById('tableInspectorModal');
-            if (event.target === tableInspectorModal) {
-                tableInspectorModal.style.display = 'none';
-            }
-        });
-        
-        // Botão de sincronização manual
-        document.getElementById('btnForceSync').addEventListener('click', async function() {
-            try {
-                // Desabilitar botão durante sincronização
-            this.disabled = true;
-                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
-                
-                // Forçar sincronização
-                const result = await SyncManager.forceSyncNow();
-                
-                if (result.success) {
-                    // Atualizar lista de usuários
-                    await loadUsers();
-                    
-                    // Mostrar mensagem de sucesso
-                    NotificationSystem.showSuccess(
-                        'Sincronização concluída',
-                        `${result.operationsProcessed || 0} operações processadas. ${result.operationsRemaining || 0} operações pendentes.`
-                    );
-                    } else {
-                    // Mostrar mensagem de erro
-                    NotificationSystem.showError(
-                        'Falha na sincronização',
-                        result.message || 'Não foi possível completar a sincronização.'
-                    );
-                }
-            } catch (error) {
-                console.error('Erro ao sincronizar dados:', error);
-                
-                // Mostrar mensagem de erro
-                NotificationSystem.showError(
-                    'Erro na sincronização',
-                    error.message || 'Ocorreu um erro durante a sincronização.'
-                );
-            } finally {
-                // Restaurar botão
-                this.disabled = false;
-                this.innerHTML = '<i class="fas fa-sync-alt"></i> Sincronizar Dados';
             }
         });
     </script>
 </body>
-</html> 
+</html>
