@@ -475,7 +475,7 @@ async function initializeDatabase() {
 
 // Inicializar o banco de dados e depois iniciar o servidor
 initializeDatabase().then(() => {
-    app.listen(port, () => {
-        console.log(`Servidor rodando na porta ${port}`);
+    app.listen(port, '0.0.0.0', () => {
+        console.log(`Servidor rodando na porta ${port} e acessível em todas as interfaces de rede (http://192.168.68.189:3000)`);
     });
 }); 

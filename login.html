@@ -182,7 +182,8 @@
         function showServerAddress() {
             const serverAddressElement = document.getElementById('server-address');
             const currentLocation = window.location;
-            serverAddressElement.textContent = `${currentLocation.protocol}//${currentLocation.hostname}:${currentLocation.port}`;
+            const ip = '192.168.68.189'; // IP fixo do servidor na rede
+            serverAddressElement.textContent = `http://${ip}:3000`;
         }
 
         // Redirecionar usuário com base nas permissões

@@ -4,9 +4,11 @@
 const getBaseApiUrl = () => {
     const protocol = window.location.protocol;
     const hostname = window.location.hostname;
+    // Se estiver rodando localmente, use o IP local em vez de localhost
+    const useHostname = hostname === 'localhost' ? '192.168.68.189' : hostname;
     const port = "3000"; // Porta fixa do servidor
     
-    return `${protocol}//${hostname}:${port}`;
+    return `${protocol}//${useHostname}:${port}`;
 };
 
 // URLs da API

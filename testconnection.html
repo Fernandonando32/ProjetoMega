@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Conexão</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        button {
+            background-color: #2a3d66;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        pre {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Teste de Conexão com o Servidor</h1>
+    
+    <div class="card">
+        <h2>Status do Servidor</h2>
+        <p id="server-status">Verificando...</p>
+        <button id="check-server">Testar Conexão</button>
+    </div>
+    
+    <div class="card">
+        <h2>Informações de Rede</h2>
+        <p>IP da máquina local: <span id="local-ip">carregando...</span></p>
+        <p>URL atual: <span id="current-url"></span></p>
+        <p>Hostname: <span id="hostname"></span></p>
+        <p>Teste de Ping: <button id="ping-server">Ping ao Servidor</button></p>
+        <div id="ping-result"></div>
+    </div>
+    
+    <div class="card">
+        <h2>Instruções de Acesso</h2>
+        <p>Para acessar o sistema de outros dispositivos na mesma rede, use o endereço:</p>
+        <p><strong>http://192.168.68.189:3000</strong></p>
+        <p>Se não estiver conseguindo acessar, verifique:</p>
+        <ul>
+            <li>Se o servidor está em execução</li>
+            <li>Se o firewall do Windows está permitindo conexões na porta 3000</li>
+            <li>Se os dispositivos estão na mesma rede</li>
+        </ul>
+        <p>Para liberar a porta no firewall, execute como administrador:</p>
+        <pre>netsh advfirewall firewall add rule name="Allow Node.js Server" dir=in action=allow protocol=TCP localport=3000</pre>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Preencher informações de URL
+            document.getElementById('current-url').textContent = window.location.href;
+            document.getElementById('hostname').textContent = window.location.hostname;
+            
+            // Tentar obter IP local
+            fetch('https://api.ipify.org?format=json')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('local-ip').textContent = data.ip + ' (IP público)';
+                })
+                .catch(err => {
+                    document.getElementById('local-ip').textContent = '192.168.68.189 (IP local)';
+                });
+            
+            // Função para verificar o servidor
+            function checkServer() {
+                const statusElement = document.getElementById('server-status');
+                statusElement.textContent = 'Verificando conexão...';
+                statusElement.className = '';
+                
+                fetch('http://192.168.68.189:3000/api/health')
+                    .then(response => {
+                        if (response.ok) return response.json();
+                        throw new Error('Falha na resposta do servidor: ' + response.status);
+                    })
+                    .then(data => {
+                        statusElement.textContent = 'Conectado! Servidor online, banco de dados conectado.';
+                        statusElement.className = 'success';
+                        console.log('Detalhes da resposta:', data);
+                    })
+                    .catch(error => {
+                        statusElement.textContent = 'Erro de conexão: ' + error.message;
+                        statusElement.className = 'error';
+                        console.error('Erro:', error);
+                    });
+            }
+            
+            // Verificar automaticamente
+            checkServer();
+            
+            // Configurar botão de teste
+            document.getElementById('check-server').addEventListener('click', checkServer);
+            
+            // Botão de ping
+            document.getElementById('ping-server').addEventListener('click', function() {
+                const pingResult = document.getElementById('ping-result');
+                pingResult.innerHTML = '<p>Testando resposta do servidor...</p>';
+                
+                const startTime = new Date().getTime();
+                
+                fetch('http://192.168.68.189:3000/api/health')
+                    .then(response => {
+                        const endTime = new Date().getTime();
+                        const responseTime = endTime - startTime;
+                        
+                        if (response.ok) {
+                            pingResult.innerHTML = `<p class="success">Resposta recebida em ${responseTime}ms</p>`;
+                            return response.json();
+                        }
+                        throw new Error('Falha na resposta do servidor: ' + response.status);
+                    })
+                    .then(data => {
+                        pingResult.innerHTML += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                    })
+                    .catch(error => {
+                        pingResult.innerHTML = `<p class="error">Falha no ping: ${error.message}</p>`;
+                    });
+            });
+        });
+    </script>
+</body>
+</html> 
