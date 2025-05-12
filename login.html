@@ -178,10 +178,17 @@
         // Redirecionar usuário com base nas permissões
         function redirectLoggedInUser() {
             const currentUser = Auth.getCurrentUser();
+            console.log('Redirecionando usuário:', currentUser);
             
-            if (currentUser && currentUser.permissions && currentUser.permissions.includes('manage_users')) {
+            // Verificar se o usuário é administrador ou tem permissão específica para gerenciar usuários
+            if (currentUser && 
+               (currentUser.accessLevel === 'ADMIN' || 
+               (currentUser.permissions && Array.isArray(currentUser.permissions) && 
+                currentUser.permissions.includes('manage_users')))) {
+                console.log('Usuário é admin ou tem permissão para gerenciar usuários. Redirecionando para admin.html');
                 window.location.href = 'admin.html';
             } else {
+                console.log('Usuário não tem permissão para gerenciar usuários. Redirecionando para Pagina1 (1).html');
                 window.location.href = 'Pagina1 (1).html';
             }
         }

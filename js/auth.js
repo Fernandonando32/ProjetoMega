@@ -125,9 +125,17 @@ class Auth {
                         username: userData.username,
                         email: userData.email,
                         accessLevel: userData.role,
-                        permissions: userData.permissions || [],
+                        permissions: Array.isArray(userData.permissions) ? userData.permissions : [],
                         operacao: userData.operacao || ''
                     };
+
+                    // Logging para diagnóstico
+                    console.log('Dados do usuário em modo fallback:', {
+                        id: user.id,
+                        username: user.username,
+                        accessLevel: user.accessLevel,
+                        permissions: user.permissions
+                    });
 
                     // Salvar no localStorage
                     localStorage.setItem('currentUser', JSON.stringify(user));
@@ -146,9 +154,17 @@ class Auth {
                 username: userData.username,
                 email: userData.email,
                 accessLevel: userData.role,
-                permissions: userData.permissions || [],
+                permissions: Array.isArray(userData.permissions) ? userData.permissions : [],
                 operacao: userData.operacao || ''
             };
+
+            // Logging para diagnóstico
+            console.log('Dados do usuário para armazenamento:', {
+                id: user.id,
+                username: user.username,
+                accessLevel: user.accessLevel,
+                permissions: user.permissions
+            });
 
             // Salvar no localStorage
             localStorage.setItem('currentUser', JSON.stringify(user));
