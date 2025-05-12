@@ -9,9 +9,10 @@ async function testUserCreation() {
     
     // Gerar dados de teste com timestamp único
     const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 8);
     const testUser = {
         username: `test_user_${timestamp}`,
-        email: `test${timestamp}@example.com`,
+        email: `test${randomString}@exemplo.com`,
         password: 'Test123!',
         name: 'Test User',
         full_name: 'Test User',
@@ -30,7 +31,7 @@ async function testUserCreation() {
         if (window.Auth && window.Auth.createUser) {
             const result = await window.Auth.createUser({
                 username: testUser.username + '_1',
-                email: `test${timestamp}_1@example.com`,
+                email: `teste_1_${randomString}@exemplo.com`,
                 password: testUser.password,
                 name: testUser.name,
                 accessLevel: testUser.accessLevel,
@@ -52,7 +53,7 @@ async function testUserCreation() {
         if (window.UserAPI && window.UserAPI.createUser) {
             const result = await window.UserAPI.createUser({
                 username: testUser.username + '_2',
-                email: `test${timestamp}_2@example.com`,
+                email: `teste_2_${randomString}@exemplo.com`,
                 password: testUser.password,
                 name: testUser.name,
                 accessLevel: testUser.accessLevel,

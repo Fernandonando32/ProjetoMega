@@ -448,9 +448,10 @@ class Auth {
 
     static async testCreateUser() {
         try {
+            const randomString = Math.random().toString(36).substring(2, 8);
             const testUser = {
                 username: 'test_user_' + Date.now(),
-                email: `test${Date.now()}@example.com`,
+                email: `teste_${randomString}@exemplo.com`,
                 password: 'Test123!',
                 name: 'Test User',
                 accessLevel: 'VIEWER'
