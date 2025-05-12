@@ -15,9 +15,13 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: '*', // Permite qualquer origem
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(bodyParser.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, './')));
 
 // Configuração do PostgreSQL
 const pool = new Pool({
@@ -423,7 +427,51 @@ app.get('/api/export/users', authenticateToken, async (req, res) => {
 
 // Mais rotas de API seriam adicionadas aqui para tarefas, técnicos e manutenção
 
-// Iniciar o servidor
-app.listen(port, () => {
-    console.log(`Servidor rodando na porta ${port}`);
+// Função para inicializar o banco de dados
+async function initializeDatabase() {
+    try {
+        console.log('Verificando tabelas do banco de dados...');
+        
+        const client = await pool.connect();
+        
+        // Verificar se a tabela de usuários existe
+        const tableCheckResult = await client.query(`
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'users'
+            );
+        `);
+        
+        // Se a tabela não existir, executar o script de criação
+        if (!tableCheckResult.rows[0].exists) {
+            console.log('Tabelas não encontradas. Criando tabelas...');
+            
+            // Ler o script SQL do arquivo
+            const sqlScriptPath = path.join(__dirname, 'sql', 'create_tables_postgres.sql');
+            
+            if (fs.existsSync(sqlScriptPath)) {
+                const sqlScript = fs.readFileSync(sqlScriptPath, 'utf8');
+                
+                // Executar o script SQL
+                await client.query(sqlScript);
+                console.log('Tabelas criadas com sucesso!');
+            } else {
+                console.error('Arquivo SQL não encontrado:', sqlScriptPath);
+            }
+        } else {
+            console.log('Tabelas já existem no banco de dados.');
+        }
+        
+        client.release();
+    } catch (error) {
+        console.error('Erro ao inicializar o banco de dados:', error);
+    }
+}
+
+// Inicializar o banco de dados e depois iniciar o servidor
+initializeDatabase().then(() => {
+    app.listen(port, () => {
+        console.log(`Servidor rodando na porta ${port}`);
+    });
 }); 
