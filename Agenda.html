@@ -14,6 +14,9 @@
     <script type="module">
         import * as Auth from './js/auth.js';
         
+        // Expor Auth globalmente para uso em outros scripts
+        window.Auth = Auth;
+        
         // Verificar autenticação
         async function checkAuth() {
             if (!await Auth.isAuthenticated()) {
@@ -43,12 +46,28 @@
             const currentUser = Auth.getCurrentUser();
             if (currentUser) {
                 // Configurar elementos da interface com base no usuário atual
-                // Código para atualizar a UI com informações do usuário...
+                // Verificar se o usuário pode ver todas as operações
+                let podeVerTodasOperacoes = false;
+                try {
+                    podeVerTodasOperacoes = Auth.hasPermission(currentUser, Auth.PERMISSIONS.VIEW_BY_OPERATION);
+                } catch (error) {
+                    console.error('Erro ao verificar permissão VIEW_BY_OPERATION:', error);
+                }
+                
+                if (!podeVerTodasOperacoes && currentUser.operacao) {
+                    // Definir a operação padrão no formulário
+                    setTimeout(() => {
+                        if (document.getElementById('taskOperacao')) {
+                            document.getElementById('taskOperacao').value = currentUser.operacao;
+                            
+                            // Se o usuário não tem permissão, desabilitar seleção de operação no formulário
+                            document.getElementById('taskOperacao').disabled = true;
+                            document.getElementById('taskOperacao').style.backgroundColor = '#f0f0f0';
+                        }
+                    }, 500); // Pequeno atraso para garantir que o DOM esteja pronto
+                }
             }
         }
-        
-        // Expor Auth globalmente para uso em outros scripts inline
-        window.Auth = Auth;
     </script>
     <style>
         :root {
@@ -4195,95 +4214,8 @@
 
         // Adicionar um aviso visual se o usuário não puder ver todas as operações
         window.addEventListener('load', function() {
-            // Verificar se o objeto Auth e suas propriedades existem
-            if (!window.Auth || !window.Auth.PERMISSIONS || !window.Auth.hasPermission) {
-                console.error('Objeto Auth não está completamente carregado');
-                return;
-            }
-
-            // Verificar se o usuário pode ver todas as operações
-            let podeVerTodasOperacoes = false;
-            try {
-                podeVerTodasOperacoes = Auth.hasPermission(currentUser, Auth.PERMISSIONS.VIEW_BY_OPERATION);
-            } catch (error) {
-                console.error('Erro ao verificar permissão VIEW_BY_OPERATION:', error);
-            }
-            
-            if (!podeVerTodasOperacoes && currentUser.operacao) {
-                // Definir a operação padrão no formulário
-                if (document.getElementById('taskOperacao')) {
-                    document.getElementById('taskOperacao').value = currentUser.operacao;
-                }
-            }
-            
-            // Se o usuário não tem permissão, desabilitar seleção de operação no formulário
-            if (!podeVerTodasOperacoes && currentUser.operacao && document.getElementById('taskOperacao')) {
-                document.getElementById('taskOperacao').value = currentUser.operacao;
-                document.getElementById('taskOperacao').disabled = true;
-                document.getElementById('taskOperacao').style.backgroundColor = '#f0f0f0';
-            }
-        });
-        
-        // Atualizar a visão do calendário quando a janela for redimensionada
-        window.addEventListener('resize', ajustarCalendario);
-        
-        // Menu interativo - efeito de hover
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('Configurando comportamento do menu');
-            const menuItems = document.querySelectorAll('.menu-item');
-            
-            if (menuItems.length === 0) {
-                console.error('Nenhum item de menu encontrado!');
-            } else {
-                console.log(`${menuItems.length} itens de menu encontrados`);
-            }
-            
-            menuItems.forEach(item => {
-                const indicator = item.querySelector('.menu-hover-indicator');
-                
-                // Certifica que o menu esteja visível
-                const menuNav = document.querySelector('.main-menu');
-                if (menuNav) {
-                    menuNav.style.display = 'block';
-                    menuNav.style.visibility = 'visible';
-                }
-                
-                // Efeito hover
-                item.addEventListener('mouseenter', function() {
-                    if (!item.classList.contains('active')) {
-                        indicator.style.width = '100%';
-                    }
-                });
-                
-                item.addEventListener('mouseleave', function() {
-                    if (!item.classList.contains('active')) {
-                        indicator.style.width = '0';
-                    }
-                });
-                
-                // Efeito de clique
-                item.addEventListener('click', function() {
-                    // Remove a classe active de todos os itens
-                    menuItems.forEach(mi => {
-                        mi.classList.remove('active');
-                        mi.querySelector('.menu-hover-indicator').style.width = '0';
-                        mi.querySelector('a').style.background = 'transparent';
-                        mi.querySelector('a').style.color = 'var(--text-color)';
-                    });
-                    
-                    // Adiciona a classe active ao item clicado
-                    item.classList.add('active');
-                    indicator.style.width = '100%';
-                    item.querySelector('a').style.background = 'var(--secondary-color)';
-                    item.querySelector('a').style.color = 'var(--primary-color)';
-                });
-            });
-            
-            // Remova o comportamento do botão voltar se ainda existir
-            const btnVoltar = document.getElementById('btnVoltar');
-            if (btnVoltar) {
-                btnVoltar.remove();
-            }
+            // Esta lógica foi movida para o módulo Auth (função setupUI)
+            // para garantir que Auth esteja completamente carregado
         });
         
         // Função para ajustar o calendário quando a janela for redimensionada
@@ -4300,6 +4232,29 @@
         
         // Atualizar a visão do calendário quando a janela for redimensionada
         window.addEventListener('resize', ajustarCalendario);
+        
+        // Menu interativo - efeito de hover
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Configurando comportamento do menu');
+            const menuItems = document.querySelectorAll('.menu-item');
+            
+            menuItems.forEach(item => {
+                const indicator = item.querySelector('.menu-hover-indicator');
+                
+                // Efeito hover
+                item.addEventListener('mouseenter', function() {
+                    if (!item.classList.contains('active')) {
+                        indicator.style.width = '100%';
+                    }
+                });
+                
+                item.addEventListener('mouseleave', function() {
+                    if (!item.classList.contains('active')) {
+                        indicator.style.width = '0';
+                    }
+                });
+            });
+        });
     </script>
 </body>
 </html>
