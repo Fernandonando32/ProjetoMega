@@ -1619,6 +1619,693 @@
                 occurrencesContainer.style.display = 'none';
             }
         }
+
+        // Variáveis para controlar o calendário
+        let currentDate = new Date();
+        let currentView = 'daily'; // Valores possíveis: 'daily', 'weekly', 'monthly'
+        let tasks = [];
+
+        // Função para carregar tarefas
+        async function loadTasks() {
+            try {
+                // Buscar tarefas da API
+                const tasksData = await TasksAPI.getAllTasks();
+                tasks = tasksData;
+                console.log('Tarefas carregadas:', tasks.length);
+                
+                // Atualizar o calendário com as novas tarefas
+                renderCalendar(currentView);
+                
+                // Atualizar timestamp de última atualização
+                document.getElementById('lastRefreshTime').textContent = new Date().toLocaleTimeString();
+            } catch (error) {
+                console.error('Erro ao carregar tarefas:', error);
+            }
+        }
+
+        // Função principal para renderizar o calendário
+        function renderCalendar(view = currentView) {
+            currentView = view;
+            
+            // Atualizar botões de visualização
+            document.querySelectorAll('.view-selector button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            const calendarGrid = document.getElementById('calendarGrid');
+            
+            // Limpar conteúdo atual
+            calendarGrid.innerHTML = '';
+            
+            // Renderizar de acordo com a visualização selecionada
+            if (view === 'daily') {
+                document.getElementById('dailyView').classList.add('active');
+                renderDailyView(calendarGrid);
+            } else if (view === 'weekly') {
+                document.getElementById('weeklyView').classList.add('active');
+                renderWeeklyView(calendarGrid);
+            } else if (view === 'monthly') {
+                document.getElementById('monthlyView').classList.add('active');
+                renderMonthlyView(calendarGrid);
+            } else if (view === 'completed') {
+                document.getElementById('completedView').classList.add('active');
+                renderCompletedView(calendarGrid);
+            }
+            
+            // Atualizar o título do período
+            updatePeriodTitle();
+        }
+
+        // Função para renderizar visualização diária
+        function renderDailyView(calendarGrid) {
+            // Criar elemento para visualização diária
+            const dailyView = document.createElement('div');
+            dailyView.className = 'daily-view';
+            
+            // Cabeçalho da visualização diária
+            const header = document.createElement('div');
+            header.className = 'daily-view-header';
+            header.textContent = currentDate.toLocaleDateString('pt-BR', { 
+                weekday: 'long', 
+                day: 'numeric', 
+                month: 'long', 
+                year: 'numeric' 
+            });
+            dailyView.appendChild(header);
+            
+            // Conteúdo da visualização diária
+            const content = document.createElement('div');
+            content.className = 'daily-view-content';
+            
+            // Filtrar tarefas para o dia atual
+            const dayTasks = tasks.filter(task => {
+                const taskDate = new Date(task.date);
+                return taskDate.getDate() === currentDate.getDate() && 
+                       taskDate.getMonth() === currentDate.getMonth() && 
+                       taskDate.getFullYear() === currentDate.getFullYear();
+            });
+            
+            if (dayTasks.length === 0) {
+                const emptyMsg = document.createElement('p');
+                emptyMsg.className = 'empty-day-message';
+                emptyMsg.textContent = 'Não há tarefas para este dia.';
+                content.appendChild(emptyMsg);
+            } else {
+                // Criar slots de tempo para o dia
+                const timeSlots = document.createElement('div');
+                timeSlots.className = 'time-slots';
+                
+                // Criar slots de hora para o dia (7h às 22h)
+                for (let hour = 7; hour <= 22; hour++) {
+                    // Slot de tempo (hora)
+                    const timeSlot = document.createElement('div');
+                    timeSlot.className = 'time-slot';
+                    timeSlot.textContent = `${hour}:00`;
+                    timeSlots.appendChild(timeSlot);
+                    
+                    // Conteúdo do slot
+                    const slotContent = document.createElement('div');
+                    slotContent.className = 'time-slot-content';
+                    
+                    // Filtrar tarefas para esta hora
+                    const hourTasks = dayTasks.filter(task => {
+                        const startTime = task.startTime.split(':');
+                        return parseInt(startTime[0]) === hour;
+                    });
+                    
+                    if (hourTasks.length > 0) {
+                        slotContent.classList.add('has-task');
+                        
+                        // Adicionar tarefas deste horário
+                        hourTasks.forEach(task => {
+                            const taskItem = createTaskElement(task);
+                            slotContent.appendChild(taskItem);
+                        });
+                    }
+                    
+                    timeSlots.appendChild(slotContent);
+                }
+                
+                content.appendChild(timeSlots);
+            }
+            
+            dailyView.appendChild(content);
+            calendarGrid.appendChild(dailyView);
+        }
+
+        // Função para renderizar visualização semanal
+        function renderWeeklyView(calendarGrid) {
+            // Criar elemento para visualização semanal
+            const weekView = document.createElement('div');
+            weekView.className = 'calendar-week';
+            
+            // Obter o primeiro dia da semana (domingo)
+            const weekStart = new Date(currentDate);
+            weekStart.setDate(currentDate.getDate() - currentDate.getDay());
+            
+            // Criar cabeçalhos para os dias da semana
+            const weekdays = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+            weekdays.forEach((day, index) => {
+                const dayHeader = document.createElement('div');
+                dayHeader.className = 'calendar-day-header';
+                dayHeader.textContent = day;
+                weekView.appendChild(dayHeader);
+            });
+            
+            // Criar células para cada dia da semana
+            for (let i = 0; i < 7; i++) {
+                const day = new Date(weekStart);
+                day.setDate(weekStart.getDate() + i);
+                
+                const dayCell = document.createElement('div');
+                dayCell.className = 'calendar-day-content';
+                
+                // Destacar o dia atual
+                if (day.getDate() === new Date().getDate() && 
+                    day.getMonth() === new Date().getMonth() && 
+                    day.getFullYear() === new Date().getFullYear()) {
+                    dayCell.classList.add('today');
+                }
+                
+                // Adicionar data
+                const dateDiv = document.createElement('div');
+                dateDiv.className = 'calendar-day-number';
+                dateDiv.textContent = day.getDate();
+                dayCell.appendChild(dateDiv);
+                
+                // Filtrar tarefas para este dia
+                const dayTasks = tasks.filter(task => {
+                    const taskDate = new Date(task.date);
+                    return taskDate.getDate() === day.getDate() && 
+                           taskDate.getMonth() === day.getMonth() && 
+                           taskDate.getFullYear() === day.getFullYear();
+                });
+                
+                // Adicionar tarefas
+                if (dayTasks.length > 0) {
+                    const tasksContainer = document.createElement('div');
+                    tasksContainer.className = 'calendar-tasks';
+                    
+                    dayTasks.forEach(task => {
+                        const taskItem = createTaskElement(task, true);
+                        tasksContainer.appendChild(taskItem);
+                    });
+                    
+                    dayCell.appendChild(tasksContainer);
+                }
+                
+                weekView.appendChild(dayCell);
+            }
+            
+            calendarGrid.appendChild(weekView);
+        }
+
+        // Função para renderizar visualização mensal
+        function renderMonthlyView(calendarGrid) {
+            // Criar cabeçalho da semana
+            const weekdaysRow = document.createElement('div');
+            weekdaysRow.className = 'calendar-weekdays';
+            
+            const weekdays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+            weekdays.forEach(day => {
+                const dayHeader = document.createElement('div');
+                dayHeader.textContent = day;
+                weekdaysRow.appendChild(dayHeader);
+            });
+            
+            calendarGrid.appendChild(weekdaysRow);
+            
+            // Criar grid de dias
+            const daysGrid = document.createElement('div');
+            daysGrid.className = 'calendar-days';
+            
+            // Obter o primeiro dia do mês
+            const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+            
+            // Obter o último dia do mês
+            const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+            
+            // Obter dias do mês anterior para preencher a primeira semana
+            const firstDayOfWeek = firstDay.getDay();
+            const prevMonthDays = firstDayOfWeek;
+            
+            // Obter dias do mês seguinte para preencher a última semana
+            const lastDayOfWeek = lastDay.getDay();
+            const nextMonthDays = 6 - lastDayOfWeek;
+            
+            // Adicionar dias do mês anterior
+            const prevMonthLastDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0).getDate();
+            
+            for (let i = prevMonthDays - 1; i >= 0; i--) {
+                const day = prevMonthLastDay - i;
+                const dayCell = createDayCell(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, day), true);
+                daysGrid.appendChild(dayCell);
+            }
+            
+            // Adicionar dias do mês atual
+            for (let i = 1; i <= lastDay.getDate(); i++) {
+                const dayCell = createDayCell(new Date(currentDate.getFullYear(), currentDate.getMonth(), i), false);
+                daysGrid.appendChild(dayCell);
+            }
+            
+            // Adicionar dias do mês seguinte
+            for (let i = 1; i <= nextMonthDays; i++) {
+                const dayCell = createDayCell(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, i), true);
+                daysGrid.appendChild(dayCell);
+            }
+            
+            calendarGrid.appendChild(daysGrid);
+        }
+
+        // Função para renderizar visualização de tarefas concluídas
+        function renderCompletedView(calendarGrid) {
+            // Criar container para tarefas concluídas
+            const completedContainer = document.createElement('div');
+            completedContainer.className = 'task-list';
+            
+            // Título da seção
+            const title = document.createElement('h3');
+            title.textContent = 'Tarefas Concluídas';
+            completedContainer.appendChild(title);
+            
+            // Filtrar tarefas concluídas
+            const completedTasks = tasks.filter(task => task.completed);
+            
+            if (completedTasks.length === 0) {
+                const emptyMsg = document.createElement('p');
+                emptyMsg.className = 'empty-list-message';
+                emptyMsg.textContent = 'Não há tarefas concluídas.';
+                completedContainer.appendChild(emptyMsg);
+            } else {
+                // Ordenar por data de conclusão (mais recentes primeiro)
+                completedTasks.sort((a, b) => {
+                    const dateA = a.completedAt ? new Date(a.completedAt) : new Date(0);
+                    const dateB = b.completedAt ? new Date(b.completedAt) : new Date(0);
+                    return dateB - dateA;
+                });
+                
+                // Adicionar cada tarefa concluída
+                completedTasks.forEach(task => {
+                    const taskItem = document.createElement('div');
+                    taskItem.className = 'task-item completed';
+                    
+                    if (task.priority === 'alta') {
+                        taskItem.classList.add('priority-high');
+                    } else if (task.priority === 'media') {
+                        taskItem.classList.add('priority-medium');
+                    } else {
+                        taskItem.classList.add('priority-low');
+                    }
+                    
+                    // Detalhes da tarefa
+                    const taskDetails = document.createElement('div');
+                    
+                    // Título e data de conclusão
+                    const taskHeader = document.createElement('div');
+                    taskHeader.style.display = 'flex';
+                    taskHeader.style.justifyContent = 'space-between';
+                    
+                    const taskTitle = document.createElement('h4');
+                    taskTitle.textContent = task.title;
+                    taskHeader.appendChild(taskTitle);
+                    
+                    if (task.completedAt) {
+                        const completionDate = document.createElement('span');
+                        completionDate.className = 'task-completion-status';
+                        completionDate.textContent = `Concluída em ${new Date(task.completedAt).toLocaleDateString()}`;
+                        taskHeader.appendChild(completionDate);
+                    }
+                    
+                    taskDetails.appendChild(taskHeader);
+                    
+                    // Data original
+                    const taskDate = document.createElement('p');
+                    taskDate.textContent = `Data: ${new Date(task.date).toLocaleDateString()}`;
+                    taskDetails.appendChild(taskDate);
+                    
+                    // Descrição
+                    if (task.description) {
+                        const taskDesc = document.createElement('p');
+                        taskDesc.textContent = task.description;
+                        taskDetails.appendChild(taskDesc);
+                    }
+                    
+                    taskItem.appendChild(taskDetails);
+                    
+                    // Evento de clique
+                    taskItem.addEventListener('click', () => showTaskDetails(task));
+                    
+                    completedContainer.appendChild(taskItem);
+                });
+            }
+            
+            calendarGrid.appendChild(completedContainer);
+        }
+
+        // Função auxiliar para criar célula de dia
+        function createDayCell(date, isOtherMonth) {
+            const dayCell = document.createElement('div');
+            dayCell.className = 'calendar-day';
+            dayCell.dataset.date = date.toISOString().split('T')[0];
+            
+            if (isOtherMonth) {
+                dayCell.classList.add('other-month');
+            }
+            
+            // Destacar o dia atual
+            if (date.getDate() === new Date().getDate() && 
+                date.getMonth() === new Date().getMonth() && 
+                date.getFullYear() === new Date().getFullYear()) {
+                dayCell.classList.add('today');
+            }
+            
+            // Adicionar número do dia
+            const dayNumber = document.createElement('div');
+            dayNumber.className = 'calendar-day-number';
+            dayNumber.textContent = date.getDate();
+            dayCell.appendChild(dayNumber);
+            
+            // Adicionar container para tarefas
+            const tasksContainer = document.createElement('div');
+            tasksContainer.className = 'calendar-tasks';
+            
+            // Filtrar tarefas para este dia
+            const dayTasks = tasks.filter(task => {
+                const taskDate = new Date(task.date);
+                return taskDate.getDate() === date.getDate() && 
+                       taskDate.getMonth() === date.getMonth() && 
+                       taskDate.getFullYear() === date.getFullYear();
+            });
+            
+            // Adicionar tarefas
+            if (dayTasks.length > 0) {
+                dayCell.classList.add('has-tasks');
+                
+                dayTasks.forEach(task => {
+                    const taskItem = createTaskElement(task, true);
+                    tasksContainer.appendChild(taskItem);
+                });
+            }
+            
+            dayCell.appendChild(tasksContainer);
+            
+            // Adicionar evento de clique para visualizar detalhes do dia
+            dayCell.addEventListener('click', () => {
+                currentDate = new Date(date);
+                renderCalendar('daily');
+            });
+            
+            return dayCell;
+        }
+
+        // Função auxiliar para criar elemento de tarefa
+        function createTaskElement(task, isCompact = false) {
+            const taskElement = document.createElement('div');
+            taskElement.className = 'calendar-task';
+            taskElement.dataset.id = task.id;
+            
+            // Definir cor de fundo
+            taskElement.style.backgroundColor = task.color || '#2a3d66';
+            
+            // Adicionar classes de prioridade
+            if (task.priority === 'alta') {
+                taskElement.classList.add('priority-high');
+            } else if (task.priority === 'media') {
+                taskElement.classList.add('priority-medium');
+            } else {
+                taskElement.classList.add('priority-low');
+            }
+            
+            // Marcar como concluída se for o caso
+            if (task.completed) {
+                taskElement.classList.add('completed');
+            }
+            
+            // Conteúdo da tarefa
+            if (isCompact) {
+                taskElement.textContent = task.title;
+            } else {
+                // Título
+                const title = document.createElement('div');
+                title.className = 'task-title';
+                title.textContent = task.title;
+                taskElement.appendChild(title);
+                
+                // Horário
+                if (task.startTime && task.endTime) {
+                    const time = document.createElement('div');
+                    time.className = 'task-time';
+                    time.textContent = `${task.startTime} - ${task.endTime}`;
+                    taskElement.appendChild(time);
+                }
+                
+                // Categoria
+                if (task.category) {
+                    const category = document.createElement('div');
+                    category.className = 'task-category';
+                    category.textContent = task.category;
+                    taskElement.appendChild(category);
+                }
+            }
+            
+            // Adicionar evento de clique para visualizar detalhes
+            taskElement.addEventListener('click', (e) => {
+                e.stopPropagation(); // Evitar que o clique se propague para o dia
+                showTaskDetails(task);
+            });
+            
+            return taskElement;
+        }
+
+        // Função para mostrar detalhes da tarefa
+        function showTaskDetails(task) {
+            const modal = document.getElementById('taskModal');
+            const modalContent = document.getElementById('modalContent');
+            const modalTitle = document.getElementById('modalTitle');
+            
+            // Definir título do modal
+            modalTitle.textContent = task.title;
+            
+            // Limpar conteúdo anterior
+            modalContent.innerHTML = '';
+            
+            // Criar conteúdo do modal
+            const content = document.createElement('div');
+            
+            // Data e hora
+            const dateTime = document.createElement('p');
+            dateTime.innerHTML = `<strong>Data:</strong> ${new Date(task.date).toLocaleDateString()}<br>
+                                 <strong>Horário:</strong> ${task.startTime || ''} - ${task.endTime || ''}`;
+            content.appendChild(dateTime);
+            
+            // Descrição
+            if (task.description) {
+                const description = document.createElement('p');
+                description.innerHTML = `<strong>Descrição:</strong> ${task.description}`;
+                content.appendChild(description);
+            }
+            
+            // Categoria
+            if (task.category) {
+                const category = document.createElement('p');
+                category.innerHTML = `<strong>Categoria:</strong> ${task.category}`;
+                content.appendChild(category);
+            }
+            
+            // Prioridade
+            const priority = document.createElement('p');
+            priority.innerHTML = `<strong>Prioridade:</strong> ${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}`;
+            content.appendChild(priority);
+            
+            // Atribuída para
+            if (task.assignedTo && task.assignedTo.length > 0) {
+                const assignedTo = document.createElement('p');
+                assignedTo.innerHTML = `<strong>Atribuída para:</strong> ${task.assignedTo.join(', ')}`;
+                content.appendChild(assignedTo);
+            }
+            
+            // Status de conclusão
+            if (task.completed) {
+                const completed = document.createElement('p');
+                completed.className = 'task-completion-status';
+                completed.innerHTML = `Concluída em ${new Date(task.completedAt || '').toLocaleDateString()}`;
+                content.appendChild(completed);
+            }
+            
+            modalContent.appendChild(content);
+            
+            // Configurar visibilidade dos botões de ação
+            const completeButton = document.getElementById('completeTask');
+            const editButton = document.getElementById('editTask');
+            const deleteButton = document.getElementById('deleteTask');
+            
+            // Esconder botão de completar se a tarefa já estiver concluída
+            completeButton.style.display = task.completed ? 'none' : 'block';
+            
+            // Adicionar eventos aos botões
+            completeButton.onclick = () => completeTask(task.id);
+            editButton.onclick = () => editTask(task.id);
+            deleteButton.onclick = () => deleteTask(task.id);
+            
+            // Mostrar modal
+            modal.style.display = 'block';
+            
+            // Configurar fechamento do modal
+            const closeBtn = modal.querySelector('.close');
+            closeBtn.onclick = () => {
+                modal.style.display = 'none';
+            };
+            
+            // Fechar o modal ao clicar fora dele
+            window.onclick = (event) => {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            };
+        }
+
+        // Função para atualizar o título do período
+        function updatePeriodTitle() {
+            const titleElement = document.getElementById('currentPeriod');
+            const options = { month: 'long', year: 'numeric' };
+            
+            if (currentView === 'daily') {
+                titleElement.textContent = currentDate.toLocaleDateString('pt-BR', { 
+                    day: 'numeric', 
+                    month: 'long', 
+                    year: 'numeric'
+                });
+            } else if (currentView === 'weekly') {
+                // Obter o primeiro e último dia da semana
+                const weekStart = new Date(currentDate);
+                weekStart.setDate(currentDate.getDate() - currentDate.getDay());
+                
+                const weekEnd = new Date(weekStart);
+                weekEnd.setDate(weekStart.getDate() + 6);
+                
+                // Formatar string para "X a Y de Mês de Ano"
+                titleElement.textContent = `${weekStart.getDate()} a ${weekEnd.getDate()} de ${weekEnd.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
+            } else if (currentView === 'monthly') {
+                titleElement.textContent = currentDate.toLocaleDateString('pt-BR', options);
+            } else if (currentView === 'completed') {
+                titleElement.textContent = 'Tarefas Concluídas';
+            }
+        }
+
+        // Função para avançar período
+        function nextPeriod() {
+            if (currentView === 'daily') {
+                currentDate.setDate(currentDate.getDate() + 1);
+            } else if (currentView === 'weekly') {
+                currentDate.setDate(currentDate.getDate() + 7);
+            } else if (currentView === 'monthly') {
+                currentDate.setMonth(currentDate.getMonth() + 1);
+            }
+            
+            renderCalendar();
+        }
+
+        // Função para retroceder período
+        function prevPeriod() {
+            if (currentView === 'daily') {
+                currentDate.setDate(currentDate.getDate() - 1);
+            } else if (currentView === 'weekly') {
+                currentDate.setDate(currentDate.getDate() - 7);
+            } else if (currentView === 'monthly') {
+                currentDate.setMonth(currentDate.getMonth() - 1);
+            }
+            
+            renderCalendar();
+        }
+
+        // Funções para gerenciar tarefas
+        async function completeTask(taskId) {
+            try {
+                const result = await TasksAPI.completeTask(taskId);
+                if (result.success) {
+                    // Buscar tarefas atualizadas
+                    await loadTasks();
+                    
+                    // Fechar modal
+                    document.getElementById('taskModal').style.display = 'none';
+                    
+                    // Mostrar mensagem de sucesso
+                    alert('Tarefa concluída com sucesso!');
+                } else {
+                    alert('Erro ao concluir tarefa: ' + result.message);
+                }
+            } catch (error) {
+                console.error('Erro ao concluir tarefa:', error);
+                alert('Erro ao concluir tarefa: ' + error.message);
+            }
+        }
+
+        async function editTask(taskId) {
+            // Obter a tarefa atual
+            const task = tasks.find(t => t.id === taskId);
+            if (!task) return;
+            
+            // Aqui você pode implementar a lógica para editar a tarefa
+            // Poderia mostrar um formulário pré-preenchido
+            alert('Edição de tarefa não implementada ainda');
+        }
+
+        async function deleteTask(taskId) {
+            if (confirm('Tem certeza que deseja excluir esta tarefa?')) {
+                try {
+                    const result = await TasksAPI.deleteTask(taskId);
+                    if (result.success) {
+                        // Buscar tarefas atualizadas
+                        await loadTasks();
+                        
+                        // Fechar modal
+                        document.getElementById('taskModal').style.display = 'none';
+                        
+                        // Mostrar mensagem de sucesso
+                        alert('Tarefa excluída com sucesso!');
+                    } else {
+                        alert('Erro ao excluir tarefa: ' + result.message);
+                    }
+                } catch (error) {
+                    console.error('Erro ao excluir tarefa:', error);
+                    alert('Erro ao excluir tarefa: ' + error.message);
+                }
+            }
+        }
+
+        // Função para ajustar o calendário quando a janela for redimensionada
+        function ajustarCalendario() {
+            // Verificar a visualização atual e renderizar novamente o calendário
+            if (currentView === 'monthly') {
+                renderCalendar();
+            } else if (currentView === 'weekly') {
+                renderCalendar('weekly');
+            } else if (currentView === 'daily') {
+                renderCalendar('daily');
+            }
+        }
+        
+        // Atualizar a visão do calendário quando a janela for redimensionada
+        window.addEventListener('resize', ajustarCalendario);
+
+        // Inicializar calendário quando a página for carregada
+        document.addEventListener('DOMContentLoaded', function() {
+            // Configurar eventos de navegação
+            document.getElementById('prevPeriod').addEventListener('click', prevPeriod);
+            document.getElementById('nextPeriod').addEventListener('click', nextPeriod);
+            
+            // Configurar eventos de seleção de visualização
+            document.getElementById('dailyView').addEventListener('click', () => renderCalendar('daily'));
+            document.getElementById('weeklyView').addEventListener('click', () => renderCalendar('weekly'));
+            document.getElementById('monthlyView').addEventListener('click', () => renderCalendar('monthly'));
+            document.getElementById('completedView').addEventListener('click', () => renderCalendar('completed'));
+            
+            // Configurar evento de atualização manual
+            document.getElementById('manualRefresh').addEventListener('click', loadTasks);
+            
+            // Carregar tarefas e renderizar calendário
+            loadTasks();
+        });
     </script>
 </body>
 </html>
