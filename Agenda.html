@@ -1511,6 +1511,37 @@
             // O redirecionamento agora é feito diretamente na função Auth.logout()
         });
 
+        // Função para carregar usuários disponíveis para atribuição de tarefas
+        async function loadUsersForAssignment() {
+            try {
+                const users = await Auth.getAllUsers();
+                const activeUsers = users.filter(user => user.is_active !== false);
+                
+                // Obter os dois elementos select com o mesmo ID
+                const assignedToSelects = document.querySelectorAll('#taskAssignedTo');
+                
+                assignedToSelects.forEach(selectElement => {
+                    // Limpar opções existentes
+                    selectElement.innerHTML = '';
+                    
+                    // Adicionar cada usuário como uma opção
+                    activeUsers.forEach(user => {
+                        const option = document.createElement('option');
+                        option.value = user.id;
+                        option.textContent = user.name;
+                        selectElement.appendChild(option);
+                    });
+                });
+                
+                console.log(`Carregados ${activeUsers.length} usuários para atribuição de tarefas`);
+            } catch (error) {
+                console.error('Erro ao carregar usuários para atribuição:', error);
+            }
+        }
+
+        // Carregar usuários ao inicializar a página
+        loadUsersForAssignment();
+
         // Configurar o botão de exibir/ocultar formulário de nova tarefa
         document.addEventListener('DOMContentLoaded', function() {
             const formToggler = document.getElementById('formToggler');
