@@ -143,33 +143,33 @@ class Auth {
                         const userData = users.find(u => u.username === username);
                         
                         if (userData) {
-                            console.warn('Autenticação falhou, mas estamos em modo de desenvolvimento/teste.');
-                            console.warn('Fazendo login direto com o usuário do banco de dados.');
-                            
-                            // Armazenar dados do usuário mesmo assim
-                            const user = {
-                                id: userData.id,
-                                name: userData.full_name,
-                                username: userData.username,
-                                email: userData.email,
-                                accessLevel: userData.role,
-                                permissions: Array.isArray(userData.permissions) ? userData.permissions : [],
-                                operacao: userData.operacao || ''
-                            };
-                            
-                            // Logging para diagnóstico
-                            console.log('Dados do usuário em modo fallback:', {
-                                id: user.id,
-                                username: user.username,
-                                accessLevel: user.accessLevel,
-                                permissions: user.permissions
-                            });
-                            
-                            // Salvar no localStorage
-                            localStorage.setItem('currentUser', JSON.stringify(user));
-                            localStorage.setItem('authToken', 'dev_mode_token');
-                            
-                            return { success: true, user, mode: 'dev_fallback' };
+                    console.warn('Autenticação falhou, mas estamos em modo de desenvolvimento/teste.');
+                    console.warn('Fazendo login direto com o usuário do banco de dados.');
+                    
+                    // Armazenar dados do usuário mesmo assim
+                    const user = {
+                        id: userData.id,
+                        name: userData.full_name,
+                        username: userData.username,
+                        email: userData.email,
+                        accessLevel: userData.role,
+                        permissions: Array.isArray(userData.permissions) ? userData.permissions : [],
+                        operacao: userData.operacao || ''
+                    };
+
+                    // Logging para diagnóstico
+                    console.log('Dados do usuário em modo fallback:', {
+                        id: user.id,
+                        username: user.username,
+                        accessLevel: user.accessLevel,
+                        permissions: user.permissions
+                    });
+
+                    // Salvar no localStorage
+                    localStorage.setItem('currentUser', JSON.stringify(user));
+                    localStorage.setItem('authToken', 'dev_mode_token');
+
+                    return { success: true, user, mode: 'dev_fallback' };
                         } else if (username === 'admin') {
                             // Criar um usuário admin temporário para desenvolvimento
                             console.warn('Criando usuário admin temporário para desenvolvimento');
@@ -241,7 +241,7 @@ class Auth {
     static async getAllUsers() {
         try {
             const data = await window.dbManager.getAllUsers();
-            
+
             return data.map(user => ({
                 id: user.id,
                 name: user.full_name,
@@ -313,10 +313,10 @@ class Auth {
             
             // Preparar dados para atualização
             const userToUpdate = {
-                full_name: userData.name,
-                email: userData.email,
-                role: userData.accessLevel,
-                permissions: userData.permissions || [],
+                    full_name: userData.name,
+                    email: userData.email,
+                    role: userData.accessLevel,
+                    permissions: userData.permissions || [],
                 operacao: userData.operacao || null
             };
             
@@ -358,7 +358,7 @@ class Auth {
             
             // Excluir o usuário
             const result = await window.dbManager.deleteUser(userId);
-            
+
             return { success: true };
         } catch (error) {
             console.error('Erro ao excluir usuário:', error);
@@ -422,7 +422,7 @@ class Auth {
             // Verificar se o localSorage está funcionando
             const storageOk = this.testLocalStorage();
             console.log('LocalStorage OK:', storageOk);
-            
+
             return {
                 serverReachable,
                 databaseConnected,
