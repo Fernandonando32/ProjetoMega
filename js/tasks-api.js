@@ -182,7 +182,7 @@ const TasksAPI = {
     /**
      * Exclui uma tarefa
      * @param {string} taskId - ID da tarefa a ser excluída
-     * @returns {Promise<boolean>} true se excluída com sucesso
+     * @returns {Promise<Object>} Resultado da operação
      */
     async deleteTask(taskId) {
         try {
@@ -196,7 +196,7 @@ const TasksAPI = {
                 
                 localStorage.setItem('tasks', JSON.stringify(filteredTasks));
                 
-                return true;
+                return { success: true, message: 'Tarefa excluída (modo offline)' };
             }
             
             // Excluir tarefa no banco de dados
@@ -208,17 +208,21 @@ const TasksAPI = {
             
             localStorage.setItem('tasks', JSON.stringify(filteredTasks));
             
-            return true;
+            return { success: true, message: 'Tarefa excluída com sucesso' };
         } catch (error) {
             console.error(`Erro ao excluir tarefa ${taskId}:`, error);
             
             // Em caso de erro, tentar excluir apenas localmente
-            const localTasks = JSON.parse(localStorage.getItem('tasks') || '[]');
-            const filteredTasks = localTasks.filter(t => t.id !== taskId);
-            
-            localStorage.setItem('tasks', JSON.stringify(filteredTasks));
-            
-            return true;
+            try {
+                const localTasks = JSON.parse(localStorage.getItem('tasks') || '[]');
+                const filteredTasks = localTasks.filter(t => t.id !== taskId);
+                
+                localStorage.setItem('tasks', JSON.stringify(filteredTasks));
+                
+                return { success: true, message: 'Tarefa excluída apenas localmente' };
+            } catch (localError) {
+                return { success: false, message: error.message || 'Erro ao excluir tarefa' };
+            }
         }
     },
     

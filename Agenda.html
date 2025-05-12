@@ -2506,11 +2506,74 @@
         async function editTask(taskId) {
             // Obter a tarefa atual
             const task = tasks.find(t => t.id === taskId);
-            if (!task) return;
+            if (!task) {
+                alert('Tarefa não encontrada.');
+                return;
+            }
             
-            // Aqui você pode implementar a lógica para editar a tarefa
-            // Poderia mostrar um formulário pré-preenchido
-            alert('Edição de tarefa não implementada ainda');
+            // Fechar o modal de detalhes
+            document.getElementById('taskModal').style.display = 'none';
+            
+            // Preencher o formulário de tarefas com os dados da tarefa atual
+            document.getElementById('taskTitle').value = task.title || '';
+            document.getElementById('taskDescription').value = task.description || '';
+            document.getElementById('taskDate').value = task.date || '';
+            document.getElementById('taskStartTime').value = task.startTime || '';
+            document.getElementById('taskEndTime').value = task.endTime || '';
+            document.getElementById('taskPriority').value = task.priority || 'normal';
+            document.getElementById('taskCategory').value = task.category || 'trabalho';
+            document.getElementById('taskColor').value = task.color || '#3788d8';
+            
+            // Se a operação estiver disponível, definir
+            if (task.operacao && document.getElementById('taskOperacao')) {
+                document.getElementById('taskOperacao').value = task.operacao;
+            }
+            
+            // Se tiver usuários atribuídos, selecionar no formulário
+            if (task.assignedTo && task.assignedTo.length > 0) {
+                const selectElement = document.getElementById('taskAssignedTo');
+                if (selectElement) {
+                    Array.from(selectElement.options).forEach(option => {
+                        option.selected = task.assignedTo.includes(option.value);
+                    });
+                }
+            }
+            
+            // Mostrar o formulário
+            document.getElementById('taskFormContainer').style.display = 'block';
+            // Rolar para o formulário
+            document.getElementById('taskFormContainer').scrollIntoView({ behavior: 'smooth' });
+            
+            // Atualizar título do formulário e botão de envio para indicar edição
+            const formTitle = document.querySelector('#formToggler h2');
+            if (formTitle) {
+                formTitle.innerHTML = `<i class="fas fa-edit" style="margin-right: 10px;"></i> Editar Tarefa`;
+            }
+            
+            // Alterar o texto do botão de envio
+            const submitButton = document.querySelector('#taskForm button[type="submit"]');
+            if (submitButton) {
+                submitButton.textContent = 'Atualizar Tarefa';
+            }
+            
+            // Adicionar ID da tarefa em um campo oculto para o envio
+            let taskIdField = document.getElementById('editTaskId');
+            if (!taskIdField) {
+                taskIdField = document.createElement('input');
+                taskIdField.type = 'hidden';
+                taskIdField.id = 'editTaskId';
+                document.getElementById('taskForm').appendChild(taskIdField);
+            }
+            taskIdField.value = taskId;
+            
+            // Também adicionar sinal visual de que estamos editando, não criando
+            document.getElementById('taskForm').classList.add('editing');
+            
+            // Abrir o formulário se estiver fechado
+            const chevronIcon = document.querySelector('#formToggler .fa-chevron-down');
+            if (chevronIcon) {
+                chevronIcon.style.transform = 'rotate(180deg)';
+            }
         }
 
         async function deleteTask(taskId) {
@@ -2669,33 +2732,83 @@
                             }
                         }
                         
-                        console.log('Enviando dados da tarefa:', taskData);
+                        // Verificar se estamos em modo de edição ou criação
+                        const editTaskId = document.getElementById('editTaskId')?.value;
                         
-                        // Enviar para a API
-                        const result = await TasksAPI.createTask(taskData);
-                        
-                        if (result.id) {
-                            // Limpar formulário
-                            taskForm.reset();
+                        // Se houver um ID, estamos editando
+                        if (editTaskId) {
+                            console.log('Atualizando tarefa ID:', editTaskId);
+                            const result = await TasksAPI.updateTask(editTaskId, taskData);
                             
-                            // Esconder formulário
-                            document.getElementById('taskFormContainer').style.display = 'none';
-                            const chevronIcon = document.querySelector('#formToggler .fa-chevron-down');
-                            if (chevronIcon) {
-                                chevronIcon.style.transform = 'rotate(0deg)';
+                            if (result && result.id) {
+                                // Limpar formulário
+                                taskForm.reset();
+                                
+                                // Remover ID da tarefa em edição
+                                if (document.getElementById('editTaskId')) {
+                                    document.getElementById('editTaskId').value = '';
+                                }
+                                
+                                // Restaurar título do formulário e botão de envio
+                                const formTitle = document.querySelector('#formToggler h2');
+                                if (formTitle) {
+                                    formTitle.innerHTML = `<i class="fas fa-tasks" style="margin-right: 10px;"></i> Nova Tarefa`;
+                                }
+                                
+                                // Restaurar o texto do botão de envio
+                                const submitButton = document.querySelector('#taskForm button[type="submit"]');
+                                if (submitButton) {
+                                    submitButton.textContent = 'Adicionar Tarefa';
+                                }
+                                
+                                // Remover classe de edição
+                                document.getElementById('taskForm').classList.remove('editing');
+                                
+                                // Esconder formulário
+                                document.getElementById('taskFormContainer').style.display = 'none';
+                                const chevronIcon = document.querySelector('#formToggler .fa-chevron-down');
+                                if (chevronIcon) {
+                                    chevronIcon.style.transform = 'rotate(0deg)';
+                                }
+                                
+                                // Recarregar tarefas e atualizar calendário
+                                await loadTasks();
+                                
+                                // Mostrar mensagem de sucesso
+                                alert('Tarefa atualizada com sucesso!');
+                            } else {
+                                alert('Erro ao atualizar tarefa. Tente novamente.');
                             }
-                            
-                            // Recarregar tarefas e atualizar calendário
-                            await loadTasks();
-                            
-                            // Mostrar mensagem de sucesso
-                            alert('Tarefa criada com sucesso!');
                         } else {
-                            alert('Erro ao criar tarefa. Tente novamente.');
+                            // Criar nova tarefa
+                            console.log('Enviando dados da tarefa:', taskData);
+                            
+                            // Enviar para a API
+                            const result = await TasksAPI.createTask(taskData);
+                            
+                            if (result.id) {
+                                // Limpar formulário
+                                taskForm.reset();
+                                
+                                // Esconder formulário
+                                document.getElementById('taskFormContainer').style.display = 'none';
+                                const chevronIcon = document.querySelector('#formToggler .fa-chevron-down');
+                                if (chevronIcon) {
+                                    chevronIcon.style.transform = 'rotate(0deg)';
+                                }
+                                
+                                // Recarregar tarefas e atualizar calendário
+                                await loadTasks();
+                                
+                                // Mostrar mensagem de sucesso
+                                alert('Tarefa criada com sucesso!');
+                            } else {
+                                alert('Erro ao criar tarefa. Tente novamente.');
+                            }
                         }
                     } catch (error) {
                         console.error('Erro ao enviar formulário:', error);
-                        alert('Erro ao criar tarefa: ' + error.message);
+                        alert('Erro ao processar tarefa: ' + error.message);
                     }
                 });
             } else {
