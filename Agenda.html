@@ -11,16 +11,9 @@
     <script src="./js/auth.js"></script>
     <script src="./js/tasks-api.js"></script>
     
-    <script type="module">
-        import { Auth, PERMISSIONS, ACCESS_LEVELS } from './js/auth.js';
-        
-        // Expor Auth globalmente para uso em outros scripts
-        window.Auth = Auth;
-        window.PERMISSIONS = PERMISSIONS;
-        window.ACCESS_LEVELS = ACCESS_LEVELS;
-        
+    <script>
         // Verificar autenticação
-        async function checkAuth() {
+        function checkAuth() {
             const isAuth = Auth.isAuthenticated();
             if (!isAuth) {
                 window.location.href = 'login.html';
@@ -38,7 +31,11 @@
             }
             
             // Configurar elementos da interface após carregamento
-            document.addEventListener('DOMContentLoaded', setupUI);
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', setupUI);
+            } else {
+                setupUI();
+            }
         }
         
         // Iniciar verificação de autenticação
@@ -48,11 +45,19 @@
         function setupUI() {
             const currentUser = Auth.getCurrentUser();
             if (currentUser) {
-                // Configurar elementos da interface com base no usuário atual
+                // Atualizar o nome do usuário atual
+                const displayName = currentUser.name;
+                if (currentUser.accessLevel && ACCESS_LEVELS[currentUser.accessLevel]) {
+                    document.getElementById('currentUserName').textContent = 
+                        `${displayName} (${ACCESS_LEVELS[currentUser.accessLevel].name})`;
+                } else {
+                    document.getElementById('currentUserName').textContent = displayName;
+                }
+                
                 // Verificar se o usuário pode ver todas as operações
                 let podeVerTodasOperacoes = false;
                 try {
-                    podeVerTodasOperacoes = Auth.hasPermission(currentUser, Auth.PERMISSIONS.VIEW_BY_OPERATION);
+                    podeVerTodasOperacoes = Auth.hasPermission(currentUser, PERMISSIONS.VIEW_BY_OPERATION);
                 } catch (error) {
                     console.error('Erro ao verificar permissão VIEW_BY_OPERATION:', error);
                 }

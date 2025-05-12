@@ -521,5 +521,9 @@ class Auth {
     }
 }
 
-// Exportar para uso como módulo
-export { Auth, PERMISSIONS, ACCESS_LEVELS }; 
+// Exportar a classe Auth para uso global
+window.Auth = Auth;
+
+// Exportar as constantes
+window.PERMISSIONS = PERMISSIONS;
+window.ACCESS_LEVELS = ACCESS_LEVELS; 
