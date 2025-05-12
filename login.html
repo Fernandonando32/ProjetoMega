@@ -201,19 +201,61 @@
             loginError.style.display = 'none';
             
             try {
+                console.log('Tentando fazer login com usuário:', username);
+                
+                // Validar entrada
+                if (!username || !password) {
+                    loginError.textContent = 'Por favor, preencha o nome de usuário e senha';
+                    loginError.style.display = 'block';
+                    loginButton.disabled = false;
+                    loginButton.textContent = 'Entrar';
+                    return;
+                }
+                
+                // Fazer login
                 const result = await Auth.login(username, password);
                 
+                console.log('Resultado do login:', result);
+                
                 if (result.success) {
+                    if (result.mode === 'dev_fallback') {
+                        console.warn('Login realizado em modo de fallback para desenvolvimento');
+                    }
+                    
+                    console.log('Login bem-sucedido. Redirecionando...');
                     redirectLoggedInUser();
                 } else {
-                    loginError.textContent = result.message || 'Usuário ou senha incorretos';
+                    console.error('Falha no login:', result.message);
+                    
+                    // Personalizar mensagem de erro
+                    let errorMessage = result.message || 'Usuário ou senha incorretos';
+                    
+                    if (result.message === 'Senha incorreta') {
+                        errorMessage = 'A senha fornecida está incorreta. Por favor, verifique se o CAPS LOCK está ativado e tente novamente.';
+                    } else if (result.message === 'Usuário não encontrado') {
+                        errorMessage = 'Usuário não encontrado. Verifique se o nome de usuário está correto.';
+                    } else if (result.message.includes('Email') || result.message.includes('email')) {
+                        errorMessage = 'Problema com o email associado à conta. Contate o administrador.';
+                    }
+                    
+                    loginError.textContent = errorMessage;
                     loginError.style.display = 'block';
                     loginButton.disabled = false;
                     loginButton.textContent = 'Entrar';
                 }
             } catch (error) {
-                console.error('Erro ao fazer login:', error);
-                loginError.textContent = 'Erro ao conectar ao servidor. Tente novamente mais tarde.';
+                console.error('Erro não esperado ao fazer login:', error);
+                
+                // Fornecer informações detalhadas sobre o erro
+                let errorMessage = 'Erro ao conectar ao servidor. Tente novamente mais tarde.';
+                
+                if (error.message && error.message.includes('network')) {
+                    errorMessage = 'Falha na conexão com o servidor. Verifique sua conexão com a internet.';
+                } else if (error.message && error.message.includes('auth')) {
+                    errorMessage = 'Erro no sistema de autenticação. Contate o administrador.';
+                }
+                
+                loginError.textContent = errorMessage;
                 loginError.style.display = 'block';
                 loginButton.disabled = false;
                 loginButton.textContent = 'Entrar';
