@@ -2303,6 +2303,96 @@
             // Configurar evento de atualização manual
             document.getElementById('manualRefresh').addEventListener('click', loadTasks);
             
+            // Adicionar event listener para o formulário de nova tarefa
+            const taskForm = document.getElementById('taskForm');
+            if (taskForm) {
+                taskForm.addEventListener('submit', async function(event) {
+                    event.preventDefault();
+                    
+                    try {
+                        // Coletar dados do formulário
+                        const taskData = {
+                            title: document.getElementById('taskTitle').value,
+                            description: document.getElementById('taskDescription').value,
+                            date: document.getElementById('taskDate').value,
+                            startTime: document.getElementById('taskStartTime').value,
+                            endTime: document.getElementById('taskEndTime').value,
+                            priority: document.getElementById('taskPriority').value,
+                            category: document.getElementById('taskCategory').value,
+                            color: document.getElementById('taskColor').value,
+                            operacao: document.getElementById('taskOperacao').value,
+                            completed: false
+                        };
+                        
+                        // Obter usuários atribuídos
+                        const assignedToSelect = document.getElementById('taskAssignedTo');
+                        const selectedOptions = Array.from(assignedToSelect.selectedOptions);
+                        taskData.assignedTo = selectedOptions.map(option => option.value);
+                        
+                        // Verificar configurações de repetição
+                        const repeatType = document.getElementById('taskRepeat').value;
+                        if (repeatType !== 'none') {
+                            taskData.repeat = {
+                                type: repeatType
+                            };
+                            
+                            // Se for repetição semanal ou personalizada, obter dias da semana
+                            if (repeatType === 'weekly' || repeatType === 'custom') {
+                                const weekdays = [];
+                                for (let i = 0; i < 7; i++) {
+                                    if (document.getElementById(`weekday-${i}`).checked) {
+                                        weekdays.push(i);
+                                    }
+                                }
+                                taskData.repeat.weekdays = weekdays;
+                            }
+                            
+                            // Obter configurações de término
+                            const endType = document.getElementById('repeatEndType').value;
+                            taskData.repeat.end = {
+                                type: endType
+                            };
+                            
+                            if (endType === 'on') {
+                                taskData.repeat.end.date = document.getElementById('repeatEndDate').value;
+                            } else if (endType === 'after') {
+                                taskData.repeat.end.occurrences = parseInt(document.getElementById('repeatOccurrences').value);
+                            }
+                        }
+                        
+                        console.log('Enviando dados da tarefa:', taskData);
+                        
+                        // Enviar para a API
+                        const result = await TasksAPI.createTask(taskData);
+                        
+                        if (result.id) {
+                            // Limpar formulário
+                            taskForm.reset();
+                            
+                            // Esconder formulário
+                            document.getElementById('taskFormContainer').style.display = 'none';
+                            const chevronIcon = document.querySelector('#formToggler .fa-chevron-down');
+                            if (chevronIcon) {
+                                chevronIcon.style.transform = 'rotate(0deg)';
+                            }
+                            
+                            // Recarregar tarefas e atualizar calendário
+                            await loadTasks();
+                            
+                            // Mostrar mensagem de sucesso
+                            alert('Tarefa criada com sucesso!');
+                        } else {
+                            alert('Erro ao criar tarefa. Tente novamente.');
+                        }
+                    } catch (error) {
+                        console.error('Erro ao enviar formulário:', error);
+                        alert('Erro ao criar tarefa: ' + error.message);
+                    }
+                });
+            } else {
+                console.error('Formulário de tarefas não encontrado!');
+            }
+            
             // Carregar tarefas e renderizar calendário
             loadTasks();
         });

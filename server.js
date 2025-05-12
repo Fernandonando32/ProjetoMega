@@ -26,6 +26,9 @@ app.use(express.static(path.join(__dirname, './')));
 // Importar rotas para tarefas
 const tasksRoutes = require('./api-tasks');
 
+// Registrar as rotas de tarefas
+app.use('/api', tasksRoutes);
+
 // Configuração do PostgreSQL
 const pool = new Pool({
     host: '187.62.153.52',
@@ -362,9 +365,6 @@ app.delete('/api/users/:id', authenticateToken, async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
-
-// Usar as rotas de tarefas
-app.use('/api', authenticateToken, tasksRoutes);
 
 // Rotas de exportação
 app.get('/api/export/users', authenticateToken, async (req, res) => {
