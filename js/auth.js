@@ -170,6 +170,24 @@ class Auth {
                             localStorage.setItem('authToken', 'dev_mode_token');
                             
                             return { success: true, user, mode: 'dev_fallback' };
+                        } else if (username === 'admin') {
+                            // Criar um usuário admin temporário para desenvolvimento
+                            console.warn('Criando usuário admin temporário para desenvolvimento');
+                            const tempUser = {
+                                id: 'temp_admin_' + Date.now(),
+                                name: 'Administrador',
+                                username: 'admin',
+                                email: 'admin@system.com',
+                                accessLevel: 'ADMIN',
+                                permissions: Object.values(PERMISSIONS),
+                                operacao: ''
+                            };
+                            
+                            // Salvar no localStorage
+                            localStorage.setItem('currentUser', JSON.stringify(tempUser));
+                            localStorage.setItem('authToken', 'dev_mode_token');
+                            
+                            return { success: true, user: tempUser, mode: 'dev_fallback' };
                         }
                     } catch (fallbackError) {
                         console.error('Erro no fallback de autenticação:', fallbackError);
