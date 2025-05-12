@@ -41,6 +41,55 @@
         // Iniciar verificação de autenticação
         checkAuth();
         
+        // Variáveis para o sistema de notificações
+        let notificationSystem = null;
+        let notificationButton = null;
+        let notifications = [];
+        
+        // Inicializar sistema de notificações
+        function initNotificationSystem() {
+            notificationSystem = document.getElementById('notificationSystem');
+            if (!notificationSystem) return;
+            
+            notificationButton = document.getElementById('notificationButton');
+            if (!notificationButton) return;
+            
+            // Carregar notificações do localStorage
+            notifications = JSON.parse(localStorage.getItem('adminNotifications')) || [];
+            
+            // Atualizar contagem de notificações
+            updateNotificationCount();
+        }
+        
+        // Atualizar contagem de notificações
+        function updateNotificationCount() {
+            if (!notificationButton) return;
+            
+            const notificationCount = document.getElementById('notificationCount');
+            if (!notificationCount) return;
+            
+            const unreadCount = notifications.filter(notif => !notif.read).length;
+            notificationCount.textContent = unreadCount;
+            
+            // Mostrar/ocultar o indicador de contagem
+            notificationCount.style.display = unreadCount > 0 ? 'flex' : 'none';
+        }
+        
+        // Função para atualizar a UI do sistema de notificações
+        function updateNotificationUI() {
+            if (!notificationSystem) {
+                initNotificationSystem();
+            }
+            
+            if (!notificationSystem) return;
+            
+            // Mostrar o sistema de notificações
+            notificationSystem.style.display = 'block';
+            
+            // Atualizar contagem
+            updateNotificationCount();
+        }
+        
         // Função para configurar a interface do usuário
         function setupUI() {
             const currentUser = Auth.getCurrentUser();
@@ -74,11 +123,17 @@
                         }
                     }, 500); // Pequeno atraso para garantir que o DOM esteja pronto
                 }
+                
+                // Verificar permissões e ajustar a interface
+                checkPermissions();
             }
         }
 
         // Verificar permissões e ajustar a interface
         function checkPermissions() {
+            const currentUser = Auth.getCurrentUser();
+            if (!currentUser) return;
+            
             const taskFormContainer = document.getElementById('taskFormContainer');
             const completeTaskButton = document.getElementById('completeTask');
             const editTaskButton = document.getElementById('editTask');
@@ -125,11 +180,11 @@
                 clearTasksButton.style.display = 'block';
                 
                 // Inicializar sistema de notificações para administradores
-                if (notificationSystem) {
+                if (typeof notificationSystem !== 'undefined' && notificationSystem) {
                     updateNotificationUI();
                     
                     // Adicionar efeito de destaque para notificações ao iniciar
-                    if (notifications.some(notif => !notif.read)) {
+                    if (typeof notifications !== 'undefined' && notifications.some(notif => !notif.read)) {
                         setTimeout(() => {
                             const bellIcon = notificationButton.querySelector('i');
                             bellIcon.classList.add('bell-animation');
