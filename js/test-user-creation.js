@@ -20,7 +20,8 @@ async function testUserCreation() {
         role: 'VIEWER',
         permissions: [],
         operacao: 'BJ Fibra',
-        is_active: true
+        is_active: true,
+        password_hash: `temp_hash_${timestamp}_${randomString}`
     };
     
     console.log('Dados de teste:', testUser);
@@ -36,7 +37,8 @@ async function testUserCreation() {
                 name: testUser.name,
                 accessLevel: testUser.accessLevel,
                 permissions: testUser.permissions,
-                operacao: testUser.operacao
+                operacao: testUser.operacao,
+                password_hash: `temp_hash_${timestamp}_1_${randomString}`
             });
             
             console.log('Resultado Auth.createUser:', result);
@@ -58,7 +60,8 @@ async function testUserCreation() {
                 name: testUser.name,
                 accessLevel: testUser.accessLevel,
                 permissions: testUser.permissions,
-                operacao: testUser.operacao
+                operacao: testUser.operacao,
+                password_hash: `temp_hash_${timestamp}_2_${randomString}`
             });
             
             console.log('Resultado UserAPI.createUser:', result);

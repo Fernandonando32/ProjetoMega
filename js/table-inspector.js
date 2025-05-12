@@ -228,6 +228,9 @@ const TableInspector = {
                 
                 if (authError) throw authError;
                 
+                // Gerar um placeholder para password_hash (isso normalmente seria feito pelo trigger do Supabase)
+                const tempPasswordHash = `temp_hash_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+                
                 // Depois criar o registro na tabela users
                 const userData = {
                     id: authData.user.id,
@@ -237,7 +240,8 @@ const TableInspector = {
                     role: testUser.accessLevel,
                     permissions: testUser.permissions,
                     operacao: testUser.operacao,
-                    is_active: true
+                    is_active: true,
+                    password_hash: tempPasswordHash // Adicionar password_hash temporário
                 };
                 
                 const result = await window.supabaseManager.insertData('users', userData);

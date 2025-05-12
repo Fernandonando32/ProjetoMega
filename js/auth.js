@@ -217,6 +217,9 @@ class Auth {
                 authData = data;
             }
 
+            // Gerar um placeholder para password_hash (isso normalmente seria feito pelo trigger do Supabase)
+            const tempPasswordHash = `temp_hash_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
             // Criar registro na tabela users
             const { data, error } = await supabase
                 .from('users')
@@ -228,7 +231,8 @@ class Auth {
                     role: userData.accessLevel,
                     permissions: userData.permissions || [],
                     operacao: userData.operacao || '',
-                    is_active: true
+                    is_active: true,
+                    password_hash: tempPasswordHash // Adicionar password_hash temporário
                 }])
                 .select();
 
