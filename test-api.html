@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Conexão com API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        button {
+            background-color: #2a3d66;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        pre {
+            background-color: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        input {
+            padding: 8px;
+            margin-bottom: 10px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+    <h1>Teste de Conexão com API</h1>
+    
+    <div class="card">
+        <h2>Configuração da API</h2>
+        <div>
+            <label for="apiUrl">URL da API:</label>
+            <input type="text" id="apiUrl" value="http://localhost:3000/api/health">
+        </div>
+        <button id="testLocal">Testar Localhost</button>
+        <button id="testIP">Testar IP Local</button>
+        <button id="testRemoteIP">Testar IP Remoto</button>
+    </div>
+    
+    <div class="card">
+        <h2>Resultado do Teste</h2>
+        <div id="result">Clique em um dos botões para testar a conexão...</div>
+    </div>
+    
+    <div class="card">
+        <h2>Informações de Rede</h2>
+        <p>URL atual: <span id="currentUrl"></span></p>
+        <p>Hostname: <span id="hostname"></span></p>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Preencher informações de URL
+            document.getElementById('currentUrl').textContent = window.location.href;
+            document.getElementById('hostname').textContent = window.location.hostname;
+            
+            // Testar com localhost
+            document.getElementById('testLocal').addEventListener('click', function() {
+                testApi('http://localhost:3000/api/health');
+            });
+            
+            // Testar com IP local
+            document.getElementById('testIP').addEventListener('click', function() {
+                testApi('http://192.168.68.189:3000/api/health');
+            });
+            
+            // Testar com IP remoto
+            document.getElementById('testRemoteIP').addEventListener('click', function() {
+                testApi('http://187.62.153.52:3000/api/health');
+            });
+            
+            // Função para testar API
+            function testApi(url) {
+                const resultElement = document.getElementById('result');
+                resultElement.innerHTML = 'Testando conexão com ' + url + '...';
+                resultElement.className = '';
+                
+                fetch(url)
+                    .then(response => {
+                        if (response.ok) return response.json();
+                        throw new Error('Falha na resposta da API: ' + response.status);
+                    })
+                    .then(data => {
+                        resultElement.innerHTML = '<p class="success">Conexão bem-sucedida!</p><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                    })
+                    .catch(error => {
+                        resultElement.innerHTML = '<p class="error">Erro de conexão: ' + error.message + '</p>';
+                        resultElement.innerHTML += '<p>Verifique se o servidor está em execução e se o endereço está correto.</p>';
+                    });
+            }
+        });
+    </script>
+</body>
+</html> 

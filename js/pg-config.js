@@ -63,7 +63,8 @@ class DbManager {
 
     // Método para fazer requisição à API REST que comunica com o PostgreSQL
     async makeRequest(endpoint, method = 'GET', data = null) {
-        const url = `http://localhost:3000/api/${endpoint}`;
+        const baseUrl = window.getBaseApiUrl ? window.getBaseApiUrl() : 'http://localhost:3000';
+        const url = `${baseUrl}/api/${endpoint}`;
         
         const options = {
             method,
