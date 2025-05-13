@@ -9,6 +9,7 @@ const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const exceljs = require('exceljs');
 const csv = require('fast-csv');
+const crypto = require('crypto');
 
 // Configuração do aplicativo Express
 const app = express();
@@ -16,8 +17,15 @@ const port = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Aumentar significativamente o limite para requisições grandes
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+
+// Também configurar body-parser explicitamente com limites maiores
+app.use(bodyParser.json({ limit: '100mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '100mb' }));
+
 app.use(express.static('.'));
 
 // Importar rotas para tarefas
@@ -28,7 +36,7 @@ app.use('/api', tasksRoutes);
 
 // Configuração do PostgreSQL
 const pool = new Pool({
-    host: '187.62.153.52',
+    host: '187.62.153.53',
     port: 6432,
     database: 'acompanhamento_ftth',
     user: 'ftth',
@@ -447,18 +455,31 @@ app.post('/api', async (req, res) => {
             
             // Verificar origem da requisição
             const requestOrigin = req.headers.origin || req.headers.referer || '';
-            const isValidOrigin = requestOrigin.includes('Pagina1') || 
-                                 requestOrigin.includes('localhost') || 
-                                 requestOrigin === '' || // Para permitir ferramentas de teste
-                                 tipo === 'teste';  // Para testes específicos
+            console.log('Detalhes da requisição:', {
+                headers: req.headers,
+                origin: req.headers.origin,
+                referer: req.headers.referer,
+                url: req.url,
+                host: req.headers.host,
+                tipo: tipo
+            });
             
-            // Verificar o tipo de operação - apenas aceitar tipos específicos
-            const validTypes = ['manual', 'import_csv', 'teste', 'api_test'];
-            if (!validTypes.includes(tipo)) {
+            // Flag para controlar aceitação da requisição
+            let isValidOrigin = false;
+            
+            // Sempre permitir solicitações da página "Pagina1 (1).html"
+            if (req.headers.referer && req.headers.referer.includes('Pagina1')) {
+                console.log('Origem da Pagina1 detectada');
+                // Origem válida, mas ainda precisamos verificar o tipo
+                isValidOrigin = true;
+            }
+            
+            // Verificar o tipo de operação - APENAS "manual" é aceito
+            if (tipo !== 'manual') {
                 console.warn(`Tentativa de inserção com tipo não permitido: ${tipo}`);
                 return res.status(403).json({
                     success: false,
-                    message: 'Tipo de operação não permitido'
+                    message: 'Apenas inserções manuais são permitidas. Tipo de operação não permitido: ' + tipo
                 });
             }
             
@@ -472,6 +493,22 @@ app.post('/api', async (req, res) => {
                     success: false,
                     message: 'Origem não autorizada para inserção de registros'
                 });
+            }
+            
+            // Verificar se os registros parecem ser automatizados (mesma operação em muitos registros)
+            if (registros.length > 10) {
+                const amostra = registros.slice(0, 10);
+                const operacoes = new Set(amostra.map(r => r.operacao).filter(Boolean));
+                const tecnicos = new Set(amostra.map(r => r.tecnico).filter(Boolean));
+                
+                // Se as amostras tiverem muitos registros com mesmas características, pode ser automático
+                if (operacoes.size <= 1 && tecnicos.size <= 1 && tipo !== 'manual') {
+                    console.warn('Padrão de dados sugere inserção automatizada não autorizada');
+                    return res.status(403).json({
+                        success: false,
+                        message: 'Inserção automática detectada e bloqueada. Use o botão "Salvar Manualmente no Banco de Dados".'
+                    });
+                }
             }
             
             // Preparar registros para inserção no banco
@@ -508,35 +545,61 @@ app.post('/api', async (req, res) => {
                 
                 // Inserir registros
                 let registrosInseridos = 0;
+                let registrosBloqueados = 0;
                 
                 for (const reg of registros) {
-                    const result = await client.query(`
-                        INSERT INTO ftth_registros 
-                        (cidade, tecnico, auxiliar, placa, modelo, operacao, equipes, 
-                         km_atual, ultima_troca_oleo, renavam, lat, lng, observacoes, 
-                         data_inicio_contrato, usuario_id, tipo_operacao)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-                        RETURNING id
-                    `, [
-                        reg.cidade || '',
-                        reg.tecnico || '',
-                        reg.auxiliar || '',
-                        reg.placa || '',
-                        reg.modelo || '',
-                        reg.operacao || '',
-                        reg.equipes || '',
-                        reg.kmAtual || '',
-                        reg.ultimaTrocaOleo || '',
-                        reg.renavam || '',
-                        reg.lat || '',
-                        reg.lng || '',
-                        reg.observacoes || '',
-                        reg.dataInicioContrato || null,
-                        usuario || null,
-                        tipo || 'manual'
-                    ]);
-                    
-                    registrosInseridos++;
+                    try {
+                        // Verificar se este registro foi previamente excluído
+                        const hash = gerarHashRegistro(reg);
+                        
+                        // Consultar tabela de exclusões
+                        const hashCheck = await client.query(
+                            'SELECT id FROM ftth_registros_excluidos WHERE registro_hash = $1',
+                            [hash]
+                        );
+                        
+                        // Se o hash existir na tabela de exclusões, não inserir
+                        if (hashCheck.rows.length > 0) {
+                            console.log(`Bloqueada reinserção de registro previamente excluído (hash: ${hash})`);
+                            registrosBloqueados++;
+                            continue; // Pular para o próximo registro
+                        }
+                        
+                        // Adicionar marcação de inserção manual para evitar que seja excluído
+                        const observacoes = (reg.observacoes || '') + (reg.observacoes ? ' | ' : '') + 
+                                        '(Inserido manualmente em ' + new Date().toLocaleString() + ')';
+                        
+                        const result = await client.query(`
+                            INSERT INTO ftth_registros 
+                            (cidade, tecnico, auxiliar, placa, modelo, operacao, equipes, 
+                            km_atual, ultima_troca_oleo, renavam, lat, lng, observacoes, 
+                            data_inicio_contrato, usuario_id, tipo_operacao)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                            RETURNING id
+                        `, [
+                            reg.cidade || '',
+                            reg.tecnico || '',
+                            reg.auxiliar || '',
+                            reg.placa || '',
+                            reg.modelo || '',
+                            reg.operacao || '',
+                            reg.equipes || '',
+                            reg.kmAtual || '',
+                            reg.ultimaTrocaOleo || '',
+                            reg.renavam || '',
+                            reg.lat || '',
+                            reg.lng || '',
+                            observacoes,
+                            reg.dataInicioContrato || null,
+                            usuario || null,
+                            'manual_inserido' // Forçar tipo manual_inserido para garantir que não seja confundido com inserções automáticas
+                        ]);
+                        
+                        registrosInseridos++;
+                    } catch (err) {
+                        console.error(`Erro ao processar registro individual:`, err);
+                        // Continuar processando os outros registros
+                    }
                 }
                 
                 // Confirmar transação
@@ -544,8 +607,9 @@ app.post('/api', async (req, res) => {
                 
                 return res.json({
                     success: true,
-                    message: `${registrosInseridos} registros salvos com sucesso no banco de dados`,
-                    total: registrosInseridos
+                    message: `${registrosInseridos} registros salvos com sucesso no banco de dados${registrosBloqueados > 0 ? `, ${registrosBloqueados} registros bloqueados por terem sido excluídos anteriormente` : ''}`,
+                    total: registrosInseridos,
+                    bloqueados: registrosBloqueados
                 });
                 
             } catch (error) {
@@ -580,6 +644,27 @@ app.get('/api', async (req, res) => {
     // Verificar se a ação é carregar registros FTTH
     if (action === 'carregar-ftth-registros') {
         try {
+            // Log para debug da origem
+            const requestOrigin = req.headers.origin || req.headers.referer || '';
+            console.log('Detalhes da requisição de carregamento:', {
+                headers: req.headers,
+                origin: req.headers.origin,
+                referer: req.headers.referer,
+                url: req.url,
+                host: req.headers.host
+            });
+            
+            // Validar origem - aqui vamos ser mais permissivos para carregamento
+            const isValidOrigin = true; // Permitir qualquer origem para carregamento
+            
+            if (!isValidOrigin) {
+                console.warn(`Tentativa de carregamento de origem não autorizada: ${requestOrigin}`);
+                return res.status(403).json({
+                    success: false,
+                    message: 'Origem não autorizada para carregamento de registros'
+                });
+            }
+            
             // Extrair parâmetros de consulta para filtragem
             const { cidade, tecnico, operacao, placa, auxiliar, limit, offset } = req.query;
             
@@ -681,6 +766,8 @@ app.get('/api', async (req, res) => {
             const countResult = await client.query(countQuery, queryParams.slice(0, queryParams.length - 2));
             const total = parseInt(countResult.rows[0].count);
             
+            console.log(`Total de registros encontrados: ${total}`);
+            
             // Consultar registros com paginação
             const query = `
                 SELECT * FROM ftth_registros 
@@ -740,6 +827,25 @@ app.get('/api', async (req, res) => {
     }
 });
 
+// Função para gerar hash de um registro para rastreamento de exclusões
+function gerarHashRegistro(registro) {
+    // Criar um objeto apenas com campos significativos para comparação
+    const dadosParaHash = {
+        cidade: registro.cidade || '',
+        tecnico: registro.tecnico || '',
+        auxiliar: registro.auxiliar || '',
+        placa: registro.placa || '',
+        modelo: registro.modelo || ''
+    };
+    
+    // Gerar hash usando os dados principais do registro
+    const hash = crypto.createHash('md5')
+        .update(JSON.stringify(dadosParaHash))
+        .digest('hex');
+    
+    return hash;
+}
+
 // Função para inicializar o banco de dados
 async function initializeDatabase() {
     try {
@@ -776,6 +882,17 @@ async function initializeDatabase() {
             console.log('Tabelas já existem no banco de dados.');
         }
         
+        // Criar tabela de controle para evitar re-inserções automáticas
+        await client.query(`
+            CREATE TABLE IF NOT EXISTS ftth_registros_excluidos (
+                id SERIAL PRIMARY KEY,
+                registro_hash TEXT UNIQUE,
+                data_exclusao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                motivo TEXT
+            );
+        `);
+        console.log('Tabela de controle de exclusões verificada/criada');
+        
         client.release();
     } catch (error) {
         console.error('Erro ao inicializar o banco de dados:', error);
@@ -785,6 +902,176 @@ async function initializeDatabase() {
 // Inicializar o banco de dados e depois iniciar o servidor
 initializeDatabase().then(() => {
     app.listen(port, '0.0.0.0', () => {
-        console.log(`Servidor rodando na porta ${port} e acessível em todas as interfaces de rede (http://192.168.68.189:3000)`);
+        console.log(`Servidor rodando na porta ${port} e acessível em todas as interfaces de rede (http://187.62.153.53:${port})`);
     });
+});
+
+// Rota para excluir registros FTTH
+app.delete('/api/ftth-registros/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        
+        // Verificar origem da requisição
+        const requestOrigin = req.headers.origin || req.headers.referer || '';
+        
+        // Permitir apenas solicitações da página Pagina1 (1).html
+        let isValidOrigin = false;
+        if (req.headers.referer && req.headers.referer.includes('Pagina1')) {
+            console.log('Origem da Pagina1 detectada para exclusão');
+            isValidOrigin = true;
+        }
+        
+        // Se a origem não for válida, rejeitar
+        if (!isValidOrigin) {
+            console.warn(`Tentativa de exclusão de origem não autorizada: ${requestOrigin}`);
+            return res.status(403).json({
+                success: false,
+                message: 'Origem não autorizada para exclusão de registros'
+            });
+        }
+        
+        const client = await pool.connect();
+        
+        try {
+            // Primeiro, obter os dados do registro a ser excluído para gerar hash
+            const getQuery = 'SELECT * FROM ftth_registros WHERE id = $1';
+            const getResult = await client.query(getQuery, [id]);
+            
+            if (getResult.rows.length === 0) {
+                client.release();
+                return res.status(404).json({
+                    success: false,
+                    message: 'Registro não encontrado'
+                });
+            }
+            
+            const registro = getResult.rows[0];
+            
+            // Gerar hash do registro
+            const hash = gerarHashRegistro(registro);
+            
+            // Iniciar transação
+            await client.query('BEGIN');
+            
+            // Adicionar à tabela de hashes excluídos para evitar reinserção
+            await client.query(
+                'INSERT INTO ftth_registros_excluidos (registro_hash, motivo) VALUES ($1, $2) ON CONFLICT (registro_hash) DO UPDATE SET data_exclusao = CURRENT_TIMESTAMP',
+                [hash, 'Excluído manualmente via API']
+            );
+            
+            // Excluir o registro
+            const deleteQuery = 'DELETE FROM ftth_registros WHERE id = $1';
+            await client.query(deleteQuery, [id]);
+            
+            // Finalizar transação
+            await client.query('COMMIT');
+            
+            client.release();
+            
+            return res.json({
+                success: true,
+                message: 'Registro excluído com sucesso e marcado para não ser reinserido automaticamente',
+                hash: hash
+            });
+            
+        } catch (error) {
+            await client.query('ROLLBACK');
+            client.release();
+            throw error;
+        }
+        
+    } catch (error) {
+        console.error('Erro ao excluir registro FTTH:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erro ao excluir registro',
+            error: error.message
+        });
+    }
+});
+
+// Rota para limpar todos os registros FTTH
+app.delete('/api/ftth-registros/limpar-todos', async (req, res) => {
+    try {
+        const { confirmacao, origem } = req.body;
+        
+        // Verificar confirmação de segurança
+        if (confirmacao !== 'LIMPAR_TODOS_OS_REGISTROS') {
+            return res.status(400).json({
+                success: false,
+                message: 'Confirmação de segurança inválida'
+            });
+        }
+        
+        // Verificar origem da requisição
+        const requestOrigin = req.headers.origin || req.headers.referer || '';
+        
+        // Permitir apenas solicitações da página Pagina1 (1).html
+        let isValidOrigin = false;
+        if (req.headers.referer && req.headers.referer.includes('Pagina1')) {
+            console.log('Origem da Pagina1 detectada para limpeza do banco');
+            isValidOrigin = true;
+        }
+        
+        // Se a origem não for válida, rejeitar
+        if (!isValidOrigin) {
+            console.warn(`Tentativa de limpeza total de origem não autorizada: ${requestOrigin}`);
+            return res.status(403).json({
+                success: false,
+                message: 'Origem não autorizada para limpeza de todos os registros'
+            });
+        }
+        
+        const client = await pool.connect();
+        
+        try {
+            // Iniciar transação
+            await client.query('BEGIN');
+            
+            // 1. Primeiro obter todos os registros para criar hashes e impedir reinserção automática
+            const getResult = await client.query('SELECT * FROM ftth_registros LIMIT 1000');
+            const registros = getResult.rows;
+            
+            console.log(`Processando ${registros.length} registros para limpeza total...`);
+            
+            // 2. Para cada registro, gerar hash e adicionar à tabela de exclusões
+            for (const registro of registros) {
+                const hash = gerarHashRegistro(registro);
+                await client.query(
+                    'INSERT INTO ftth_registros_excluidos (registro_hash, motivo) VALUES ($1, $2) ON CONFLICT (registro_hash) DO UPDATE SET data_exclusao = CURRENT_TIMESTAMP',
+                    [hash, 'Excluído na limpeza total do banco']
+                );
+            }
+            
+            // 3. Excluir todos os registros
+            const deleteResult = await client.query('DELETE FROM ftth_registros');
+            const registrosExcluidos = deleteResult.rowCount;
+            
+            // Finalizar transação
+            await client.query('COMMIT');
+            
+            console.log(`Todos os registros (${registrosExcluidos}) foram excluídos do banco de dados`);
+            
+            client.release();
+            
+            return res.json({
+                success: true,
+                message: `Todos os registros foram excluídos do banco de dados`,
+                registrosExcluidos
+            });
+            
+        } catch (error) {
+            await client.query('ROLLBACK');
+            client.release();
+            throw error;
+        }
+        
+    } catch (error) {
+        console.error('Erro ao limpar todos os registros FTTH:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erro ao limpar todos os registros',
+            error: error.message
+        });
+    }
 }); 

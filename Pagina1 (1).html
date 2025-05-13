@@ -2704,7 +2704,7 @@
                 // Adicionar botão de fechar
                 const fecharButton = document.createElement('button');
                 fecharButton.className = 'fecharMapa';
-                fecharButton.innerHTML = '? Fechar Mapa';
+                fecharButton.innerHTML = '✕ Fechar Mapa';
                 fecharButton.style.position = 'absolute';
                 fecharButton.style.top = '15px';
                 fecharButton.style.right = '15px';
@@ -3367,7 +3367,7 @@
                 console.log(`Removidos ${removidos} registros duplicados. Salvando...`);
                 await salvarRegistros('user_action');
                 
-            renderTabela();
+                renderTabela();
             return removidos;
             } catch (error) {
                 console.error('Erro ao limpar registros duplicados:', error);
@@ -3375,48 +3375,6 @@
                 return 0;
             }
         }
-        
-        // Função para adicionar manualmente o registro de Guadalupe
-        function adicionarRegistroGuadalupe() {
-            // Verificar se já existe um registro de Guadalupe com esta placa
-            const existeGuadalupe = registros.some(r => 
-                r.cidade.includes('GUADALUPE') && r.placa === 'QRS-4J09');
-            
-            if (!existeGuadalupe) {
-                const registro = {
-                    cidade: 'GUADALUPE',
-                    tecnico: 'LAYLSON DA SILVA',
-                    auxiliar: 'LUCAS DA SILVA SOUSA',
-                    placa: 'QRS-4J09',
-                    modelo: 'Gol',
-                    operacao: 'Megalink',
-                    equipes: 'Sim',
-                    ultimaTrocaOleo: '95000',
-                    renavam: '1215373497',
-                    lat: '-6.7858',
-                    lng: '-43.5589',
-                    observacoes: ''
-                };
-                
-                // Encontrar se já existe um registro com essa placa
-                const indiceExistente = registros.findIndex(r => r.placa === 'QRS-4J09');
-                
-                if (indiceExistente >= 0) {
-                    registros[indiceExistente] = registro;
-                    console.log('Registro de Guadalupe atualizado.');
-                } else {
-                    registros.push(registro);
-                    console.log('Registro de Guadalupe adicionado.');
-                }
-                
-                salvarRegistros('user_action');
-                renderTabela();
-                return true;
-            }
-            
-            return false;
-        }
-
         // Função para abrir o modal de manutenção sem um veículo específico
         window.abrirManutencaoGeral = function() {
             // Redirecionar para a página de manutenção
@@ -4501,13 +4459,13 @@
                             <span class="estatistica-label">${cidade}</span>
                             <span class="estatistica-valor">
                                 <span title="Técnicos" style="margin-right: 8px; color: #2a3d66;">
-                                    ?? <b>${dados.tecnicos.size}</b>
+                                    👤 <b>${dados.tecnicos.size}</b>
                                 </span>
                                 <span title="Veículos" style="margin-right: 8px; color: #e67e22;">
-                                    ?? <b>${dados.veiculos.size}</b>
+                                    🚗 <b>${dados.veiculos.size}</b>
                                 </span>
                                 <span title="Auxiliares" style="color: #27ae60;">
-                                    ?? <b>${dados.auxiliares.size}</b>
+                                    👷 <b>${dados.auxiliares.size}</b>
                                 </span>
                             </span>
                         </div>
@@ -4786,6 +4744,45 @@
                 }
             }
         }
+
+        // Função para adicionar o registro especial de Guadalupe
+        function adicionarRegistroGuadalupe() {
+            // Verificar se o registro de Guadalupe já existe
+            const registroExistente = registros.find(r => 
+                r.placa === 'QRS-4J09' && r.cidade && r.cidade.includes('GUADALUPE'));
+            
+            // Se o registro já existe, não fazer nada
+            if (registroExistente) {
+                console.log('Registro de Guadalupe já existe, nenhuma ação necessária.');
+                return false;
+            }
+            
+            // Adicionar o registro especial de Guadalupe
+            console.log('Adicionando registro especial de Guadalupe...');
+            
+            // Criar novo registro com as informações necessárias
+            const novoRegistro = {
+                placa: 'QRS-4J09',
+                placaOuId: 'QRS-4J09',
+                cidade: 'GUADALUPE',
+                tecnico: 'TÉCNICO GUADALUPE',
+                auxiliar: 'AUXILIAR GUADALUPE',
+                modelo: 'MODELO PADRÃO GUADALUPE',
+                lat: '-5.4097',
+                lng: '-42.7900',
+                dataRegistro: new Date().toISOString(),
+                manutencoes: [],
+                tipo: 'manual'
+            };
+            
+            // Adicionar aos registros
+            registros.push(novoRegistro);
+            
+            // Salvar registros
+            salvarRegistros('user_action');
+            
+            return true;
+        }
     </script>
 
     <!-- Configurações globais da aplicação -->
@@ -4793,10 +4790,14 @@
         // Configurações do sistema FTTH
         window.CONFIGS_FTTH = {
             // Configurar como true para impedir qualquer salvamento automático no banco
-            SALVAR_APENAS_LOCAL: false,
+            SALVAR_APENAS_LOCAL: true,  // Alterado para true para impedir qualquer salvamento automático
             
-            // Lista de origens permitidas para salvamento automático
-            ORIGENS_PERMITIDAS: ['manual', 'user_action', 'import_csv', 'csv_import']
+            // Lista de origens permitidas para salvamento automático (apenas quando explicitamente ativado)
+            ORIGENS_PERMITIDAS: ['manual'], // Reduzido para permitir apenas salvamentos manuais
+            
+            // Controle de comportamento da aplicação
+            CARREGAR_DO_BANCO_AO_INICIAR: false,  // Não carregar automaticamente do banco ao iniciar
+            AUTO_SYNC_DISABLED: true  // Desabilitar sincronização automática
         };
     </script>
     
@@ -4804,6 +4805,29 @@
     <script>
         // Configuração e funções para o banco de dados
         const API_URL = '/api';
+        
+        // Função para obter a URL base da API
+        function getBaseApiUrl() {
+            // Verificar o ambiente atual para determinar a URL base
+            const currentUrl = window.location.href;
+            const hostname = window.location.hostname;
+            
+            // Se estiver rodando em localhost ou em 127.0.0.1
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                return `http://${hostname}:3000`;
+            }
+            
+            // Se estiver rodando em IP específico como 192.168.68.189
+            if (/^192\.168\./.test(hostname)) {
+                return `http://${hostname}:3000`;
+            }
+            
+            // Em ambiente de produção, usar a mesma origem
+            return window.location.origin;
+        }
+        
+        // Registrar a função globalmente para uso em todo o código
+        window.getBaseApiUrl = getBaseApiUrl;
         
         // Salvamento no banco de dados
         async function salvarNoBanco(registros, tipo = 'manual') {
@@ -4836,19 +4860,37 @@
                 const currentUser = window.Auth ? window.Auth.getCurrentUser() : null;
                 const userId = currentUser ? currentUser.id : null;
                 
+                // Dividir registros em lotes para evitar erros de payload muito grande
+                const TAMANHO_LOTE = 200; // Tamanho máximo por lote
+                const totalLotes = Math.ceil(registros.length / TAMANHO_LOTE);
+                console.log(`Dividindo ${registros.length} registros em ${totalLotes} lotes de até ${TAMANHO_LOTE} registros cada`);
+                
+                let totalSalvos = 0;
+                let sucessos = 0;
+                let falhas = 0;
+                
+                // Preparar para salvar em lotes
+                for (let i = 0; i < totalLotes; i++) {
+                    const inicio = i * TAMANHO_LOTE;
+                    const fim = Math.min((i + 1) * TAMANHO_LOTE, registros.length);
+                    const loteAtual = registros.slice(inicio, fim);
+                    
+                    console.log(`Processando lote ${i+1}/${totalLotes} com ${loteAtual.length} registros (${inicio} até ${fim-1})`);
+                    
+                    try {
                 // Preparar dados para envio
                 const dadosParaSalvar = {
-                    registros: registros,
+                            registros: loteAtual,
                     tipo: tipo,
-                    usuario: userId
+                            usuario: userId
                 };
-                
-                // Determinar a URL base da API
-                const baseUrl = window.getBaseApiUrl ? window.getBaseApiUrl() : 'http://localhost:3000';
-                console.log('Usando URL base da API:', baseUrl);
+                        
+                        // Determinar a URL base da API
+                        const baseUrl = window.getBaseApiUrl ? window.getBaseApiUrl() : 'http://localhost:3000';
+                        console.log(`Enviando lote ${i+1} para ${baseUrl}/api?action=salvar-ftth-registros`);
                 
                 // Enviar para a API
-                const response = await fetch(`${baseUrl}/api?action=salvar-ftth-registros`, {
+                        const response = await fetch(`${baseUrl}/api?action=salvar-ftth-registros`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -4857,21 +4899,38 @@
                 });
                 
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error(`Resposta de erro (${response.status}):`, errorText);
-                    
-                    try {
-                        const errorData = JSON.parse(errorText);
+                            const errorText = await response.text();
+                            console.error(`Resposta de erro no lote ${i+1} (${response.status}):`, errorText);
+                            
+                            try {
+                                const errorData = JSON.parse(errorText);
                     throw new Error(errorData.message || `Erro ${response.status}`);
-                    } catch (e) {
-                        throw new Error(`Erro ${response.status}: ${errorText.substring(0, 100)}`);
-                    }
+                            } catch (e) {
+                                throw new Error(`Erro ${response.status}: ${errorText.substring(0, 100)}`);
+                            }
                 }
                 
                 const result = await response.json();
+                        totalSalvos += result.total || 0;
+                        sucessos++;
+                        console.log(`Lote ${i+1} salvo com sucesso: ${result.total} registros`);
+                        
+                    } catch (error) {
+                        console.error(`Erro ao salvar lote ${i+1}:`, error);
+                        falhas++;
+                        // Não interromper o loop por causa de falha em um lote
+                    }
+                }
                 
-                console.log('Dados salvos com sucesso no banco:', result);
-                return { success: true, ...result };
+                const resultado = {
+                    success: falhas === 0,
+                    message: `${totalSalvos} registros salvos com sucesso no banco de dados (${sucessos} de ${totalLotes} lotes)`,
+                    total: totalSalvos,
+                    falhas: falhas
+                };
+                
+                console.log('Resultado do salvamento por lotes:', resultado);
+                return resultado;
                 
             } catch (error) {
                 console.error('Erro ao salvar no banco de dados:', error);
@@ -4890,22 +4949,49 @@
         // Função para salvar localmente como backup
         function salvarLocalBackup(registros, tipo) {
             try {
+                // Limitar o número de registros para evitar exceder a quota
+                const MAX_BACKUP_REGISTROS = 50;
+                const registrosLimitados = registros.length > MAX_BACKUP_REGISTROS 
+                    ? registros.slice(0, MAX_BACKUP_REGISTROS) 
+                    : registros;
+                
                 // Obter backups já salvos
-                let backups = JSON.parse(localStorage.getItem('ftth_db_backups') || '[]');
+                let backups = [];
+                try {
+                    backups = JSON.parse(localStorage.getItem('ftth_db_backups') || '[]');
+                } catch (e) {
+                    console.warn('Erro ao carregar backups existentes, iniciando nova lista:', e);
+                }
+                
+                // Limitar o número de backups armazenados para economizar espaço
+                const MAX_BACKUPS = 5;
+                if (backups.length >= MAX_BACKUPS) {
+                    // Remover os backups mais antigos
+                    backups = backups.slice(-MAX_BACKUPS + 1);
+                }
                 
                 // Adicionar novo backup
                 backups.push({
                     id: Date.now(),
                     tipo: tipo,
-                    registros: registros,
+                    registros: registrosLimitados,
+                    registros_total: registros.length,
                     timestamp: new Date().toISOString()
                 });
                 
                 // Salvar de volta no localStorage
                 localStorage.setItem('ftth_db_backups', JSON.stringify(backups));
-                console.log('Backup salvo localmente');
+                console.log(`Backup salvo localmente (${registrosLimitados.length} de ${registros.length} registros)`);
             } catch (e) {
                 console.error('Erro ao salvar backup local:', e);
+                // Em caso de erro de quota, tentar limpar alguns dados
+                try {
+                    localStorage.removeItem('ftth_db_backups');
+                    localStorage.setItem('ftth_backup_erro', 'Erro de quota ao salvar backup: ' + e.message);
+                    console.warn('Limpei backups anteriores devido a erro de quota');
+                } catch (clearError) {
+                    console.error('Falha ao limpar backups:', clearError);
+                }
             }
         }
         
@@ -4918,19 +5004,60 @@
         
         // 1. Função de salvar registros
         const salvarRegistrosOriginal = window.salvarRegistros;
-        window.salvarRegistros = async function() {
+        window.salvarRegistros = async function(origem = 'auto') {
             try {
-                // Primeiro salvar localmente (função original)
-                const resultado = await salvarRegistrosOriginal();
+                // Verificar se a sincronização automática está desabilitada
+                const autoSyncDisabled = window.CONFIGS_FTTH && window.CONFIGS_FTTH.AUTO_SYNC_DISABLED === true;
+                
+                // Se a sincronização automática estiver desabilitada e a origem não for manual, apenas salvar localmente
+                if (autoSyncDisabled && origem !== 'manual') {
+                    console.log(`Sincronização automática desabilitada. Origem '${origem}' ignorada, salvando apenas localmente.`);
+                    
+                    // Forçar origem 'local_only' para o salvamento original
+                    const resultado = await salvarRegistrosOriginal('local_only');
+                return {
+                        localStorage: resultado.localStorage || true,
+                        banco: false,
+                        motivo: 'Sincronização automática desabilitada por configuração'
+                    };
+                }
+                
+                // Verificar se estamos tentando salvar no banco
+                const deveUsarBanco = window.CONFIGS_FTTH && 
+                                      window.CONFIGS_FTTH.ORIGENS_PERMITIDAS && 
+                                      window.CONFIGS_FTTH.ORIGENS_PERMITIDAS.includes(origem);
+                
+                // Log para depuração
+                console.log(`Salvando registros (origem: ${origem}, usar banco: ${deveUsarBanco})`);
+                
+            // Primeiro salvar localmente (função original)
+                // Importante: passamos a origem para a função original
+                const resultado = await salvarRegistrosOriginal(origem);
                 
                 // Verificar resultado
-                if (resultado && resultado.banco === false) {
-                    console.warn('Registros salvos apenas localmente:', resultado.motivo || resultado.error || 'motivo desconhecido');
+                if (resultado && resultado.banco === false && deveUsarBanco) {
+                    // Adicionar mais detalhes ao log para depuração
+                    const motivo = resultado.motivo || resultado.error || 'motivo desconhecido';
+                    console.warn(`Registros salvos apenas localmente (origem: ${origem}): ${motivo}`);
+                    
+                    // Se o salvamento local foi bem-sucedido mas o banco falhou, tentar salvar diretamente
+                    if (resultado.localStorage === true && deveUsarBanco && origem === 'manual') {
+                        try {
+                            console.log(`Tentando salvar diretamente no banco com origem '${origem}'...`);
+                            const resultadoBanco = await salvarNoBanco(window.registros, origem);
+                            if (resultadoBanco.success) {
+                                console.log('Salvamento direto no banco bem-sucedido');
+                                resultado.banco = true;
+                            }
+            } catch (error) {
+                            console.error('Falha ao tentar salvar diretamente no banco:', error);
+                        }
+                    }
                 }
                 
                 return resultado;
             } catch (error) {
-                console.error('Erro ao salvar registros:', error);
+                console.error(`Erro ao salvar registros (origem: ${origem}):`, error);
                 return {
                     localStorage: false,
                     banco: false,
@@ -4952,15 +5079,21 @@
                     originalOnChange.call(this, e);
                 }
                 
-                // Depois salvar no banco com origem explícita
                 try {
+                    // Verificar se a sincronização automática está desabilitada
+                    const autoSyncDisabled = window.CONFIGS_FTTH && window.CONFIGS_FTTH.AUTO_SYNC_DISABLED === true;
+                    
                     // Dar tempo para que os registros sejam processados primeiro
                     setTimeout(async () => {
-                        // Chamar salvarRegistros com origem explícita
-                        await window.salvarRegistros('import_csv');
-                        
-                        // Não precisamos chamar salvarNoBanco diretamente, pois salvarRegistros já fará isso
-                        console.log('Importação CSV processada e salva com origem "import_csv"');
+                        // Se a sincronização automática estiver desabilitada, apenas salvar localmente
+                        if (autoSyncDisabled) {
+                            console.log('Importação CSV concluída. Sincronização automática desabilitada, salvando apenas localmente.');
+                            await window.salvarRegistros('local_only');
+                        } else {
+                            // Chamar salvarRegistros com origem explícita
+                            await window.salvarRegistros('import_csv');
+                            console.log('Importação CSV processada e salva com origem "import_csv"');
+                        }
                     }, 1000);
                 } catch (error) {
                     console.error('Erro ao salvar importação CSV:', error);
@@ -4968,7 +5101,251 @@
             };
         }
         
+        // Função para carregar os registros do banco de dados
+        async function carregarDoBanco(filtros = {}) {
+            try {
+                console.log('Carregando registros do banco de dados com filtros:', filtros);
+                
+                // Construir parâmetros da URL
+                const params = new URLSearchParams({
+                    action: 'carregar-ftth-registros'
+                });
+                
+                // Adicionar filtros se fornecidos
+                if (filtros.cidade) params.append('cidade', filtros.cidade);
+                if (filtros.tecnico) params.append('tecnico', filtros.tecnico);
+                if (filtros.operacao) params.append('operacao', filtros.operacao);
+                if (filtros.placa) params.append('placa', filtros.placa);
+                if (filtros.auxiliar) params.append('auxiliar', filtros.auxiliar);
+                
+                // Paginação - por padrão buscar até 5000 registros para garantir que todos sejam carregados
+                params.append('limit', filtros.limit || 5000);
+                params.append('offset', filtros.offset || 0);
+                
+                // Determinar a URL base da API
+                const baseUrl = window.getBaseApiUrl ? window.getBaseApiUrl() : 'http://localhost:3000';
+                console.log(`Buscando registros em ${baseUrl}/api?${params.toString()}`);
+                
+                // Enviar requisição
+                const response = await fetch(`${baseUrl}/api?${params.toString()}`);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error(`Erro ao carregar registros (${response.status}):`, errorText);
+                    
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        throw new Error(errorData.message || `Erro ${response.status}`);
+                    } catch (e) {
+                        throw new Error(`Erro ${response.status}: ${errorText.substring(0, 100)}`);
+                    }
+                }
+                
+                const result = await response.json();
+                
+                if (!result.success) {
+                    console.warn('Erro retornado pela API:', result.message);
+                    throw new Error(result.message || 'Erro ao carregar dados do banco');
+                }
+                
+                console.log(`Carregados ${result.registros.length} de ${result.total} registros do banco de dados`);
+                
+                return { 
+                    success: true, 
+                    registros: result.registros,
+                    total: result.total,
+                    message: result.message
+                };
+                
+            } catch (error) {
+                console.error('Erro ao carregar registros do banco:', error);
+                return { 
+                    success: false, 
+                    registros: [],
+                    error: error.message
+                };
+            }
+        }
         
+        // Registrar a função globalmente
+        window.carregarDoBanco = carregarDoBanco;
+    </script>
+
+    <!-- Adicionar botão para salvar manualmente no banco -->
+    <div id="salvar-manual-container" style="text-align: center; margin: 20px 0; padding: 10px; background-color: #f8f9fa; border-radius: 5px;">
+        <button id="btn-salvar-banco-manual" style="padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-right: 10px;">
+            Salvar Manualmente no Banco de Dados
+        </button>
+        <button id="btn-limpar-banco" style="padding: 10px 20px; background-color: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            Limpar Todos os Registros do Banco
+        </button>
+        <p style="font-size: 12px; margin-top: 5px; color: #6c757d;">
+            O salvamento automático está desativado. Use o botão verde para salvar os dados manualmente ou o botão vermelho para limpar o banco.
+        </p>
+                                </div>
+
+    <script>
+        // Adicionar função para o botão de salvamento manual
+        document.addEventListener('DOMContentLoaded', function() {
+            const btnSalvarManual = document.getElementById('btn-salvar-banco-manual');
+            const btnLimparBanco = document.getElementById('btn-limpar-banco');
+            
+            if (btnSalvarManual) {
+                btnSalvarManual.addEventListener('click', async function() {
+                    try {
+                        // Desabilitar o botão enquanto processa
+                        btnSalvarManual.disabled = true;
+                        btnSalvarManual.textContent = 'Salvando no banco...';
+                        
+                        // Forçar salvamento manual no banco diretamente
+                        window.CONFIGS_FTTH.SALVAR_APENAS_LOCAL = false; // Temporariamente permitir salvamento no banco
+                        
+                        // Chamar diretamente salvarNoBanco para maior controle (nem passar pelo wrapper salvarRegistros)
+                        const resultado = await window.salvarNoBanco(window.registros, 'manual');
+                        
+                        // Voltar configuração para padrão
+                        window.CONFIGS_FTTH.SALVAR_APENAS_LOCAL = true;
+                        
+                        // Atualizar UI com resultado
+                        if (resultado && resultado.success) {
+                            btnSalvarManual.textContent = `Salvo com sucesso! (${resultado.total} registros)`;
+                            setTimeout(() => {
+                                btnSalvarManual.textContent = 'Salvar Manualmente no Banco de Dados';
+                                btnSalvarManual.disabled = false;
+                            }, 2000);
+                        } else {
+                            const mensagemErro = resultado?.message || 'Erro desconhecido';
+                            btnSalvarManual.textContent = `Falha ao salvar: ${mensagemErro}`;
+                            setTimeout(() => {
+                                btnSalvarManual.textContent = 'Tentar Salvar Novamente';
+                                btnSalvarManual.disabled = false;
+                            }, 2000);
+                        }
+                    } catch (error) {
+                        console.error('Erro ao salvar manualmente no banco:', error);
+                        btnSalvarManual.textContent = `Erro: ${error.message || 'Erro desconhecido'}`;
+                        setTimeout(() => {
+                            btnSalvarManual.textContent = 'Tentar Salvar Novamente';
+                            btnSalvarManual.disabled = false;
+                        }, 2000);
+                    }
+                });
+            }
+            
+            // Adicionar função para o botão de limpar banco
+            if (btnLimparBanco) {
+                btnLimparBanco.addEventListener('click', async function() {
+                    if (!confirm('ATENÇÃO: Esta ação irá EXCLUIR TODOS OS REGISTROS do banco de dados. Esta operação NÃO PODE ser desfeita. Deseja continuar?')) {
+                        return;
+                    }
+                    
+                    // Confirmação adicional
+                    if (!confirm('Tem ABSOLUTA CERTEZA? Todos os dados serão perdidos.')) {
+                        return;
+                    }
+                    
+                    try {
+                        // Desabilitar o botão enquanto processa
+                        btnLimparBanco.disabled = true;
+                        btnLimparBanco.textContent = 'Limpando banco...';
+                        
+                        // Determinar a URL base da API
+                        const baseUrl = window.getBaseApiUrl ? window.getBaseApiUrl() : 'http://localhost:3000';
+                        
+                        // Enviar requisição para limpar o banco
+                        const response = await fetch(`${baseUrl}/api/ftth-registros/limpar-todos`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                confirmacao: 'LIMPAR_TODOS_OS_REGISTROS',
+                                origem: 'Pagina1'
+                            })
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`Erro ao limpar banco: ${response.status} ${response.statusText}`);
+                        }
+                        
+                        const resultado = await response.json();
+                        
+                        if (resultado.success) {
+                            btnLimparBanco.textContent = `Banco limpo! (${resultado.registrosExcluidos || 0} registros excluídos)`;
+                            
+                            // Verificar se precisa recarregar os dados
+                            if (confirm('Banco de dados limpo com sucesso. Deseja recarregar a página para atualizar os dados locais?')) {
+                                window.location.reload();
+                            } else {
+                                setTimeout(() => {
+                                    btnLimparBanco.textContent = 'Limpar Todos os Registros do Banco';
+                                    btnLimparBanco.disabled = false;
+                                }, 2000);
+                            }
+                        } else {
+                            throw new Error(resultado.message || 'Falha ao limpar o banco');
+                        }
+                    } catch (error) {
+                        console.error('Erro ao limpar o banco:', error);
+                        btnLimparBanco.textContent = `Erro: ${error.message || 'Erro desconhecido'}`;
+                        setTimeout(() => {
+                            btnLimparBanco.textContent = 'Limpar Todos os Registros do Banco';
+                            btnLimparBanco.disabled = false;
+                        }, 2000);
+                    }
+                });
+            }
+        });
+    </script>
+
+    <!-- Adicionar função para excluir um registro do banco de dados -->
+    <script>
+        // Função para excluir um registro do banco de dados
+        async function excluirRegistroDoBanco(id) {
+            try {
+                if (!id) {
+                    console.error('ID não fornecido para exclusão');
+                    return { success: false, message: 'ID não fornecido' };
+                }
+                
+                console.log(`Excluindo registro #${id} do banco de dados...`);
+                
+                // Determinar a URL base da API
+                const baseUrl = window.getBaseApiUrl ? window.getBaseApiUrl() : 'http://localhost:3000';
+                const url = `${baseUrl}/api/ftth-registros/${id}`;
+                
+                // Enviar requisição DELETE
+                const response = await fetch(url, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error(`Erro ao excluir registro (${response.status}):`, errorText);
+                    return { 
+                        success: false, 
+                        message: `Erro ${response.status}: ${errorText.substring(0, 100)}`
+                    };
+                }
+                
+                const result = await response.json();
+                console.log('Resultado da exclusão:', result);
+                
+                return result;
+            } catch (error) {
+                console.error('Erro ao excluir registro do banco:', error);
+                return { 
+                    success: false, 
+                    error: error.message
+                };
+            }
+        }
+        
+        // Registrar a função globalmente
+        window.excluirRegistroDoBanco = excluirRegistroDoBanco;
     </script>
 </body>
 </html>
