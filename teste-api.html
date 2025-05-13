@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .card {
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .success { color: green; }
+        .error { color: red; }
+        pre {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            overflow: auto;
+        }
+        button {
+            background: #2a3d66;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background: #1a2540;
+        }
+        .section {
+            margin-bottom: 30px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Teste de Conexão com a API</h1>
+    
+    <div class="section">
+        <h2>Verificação de Saúde</h2>
+        <button id="checkHealth">Verificar Saúde</button>
+        <div id="healthResult" class="card"></div>
+    </div>
+    
+    <div class="section">
+        <h2>Configuração da URL Base</h2>
+        <div class="card">
+            <p>URL base atual: <span id="currentBaseUrl"></span></p>
+            <input type="text" id="baseUrlInput" placeholder="http://localhost:3000" style="width: 300px; padding: 8px;">
+            <button id="updateBaseUrl">Atualizar URL Base</button>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>Teste de Salvar Registros</h2>
+        <button id="testSaveRecords">Testar Salvar Registros</button>
+        <div id="saveResult" class="card"></div>
+    </div>
+    
+    <div class="section">
+        <h2>Teste de Carregar Registros</h2>
+        <button id="testLoadRecords">Testar Carregar Registros</button>
+        <div id="loadResult" class="card"></div>
+    </div>
+    
+    <script>
+        // Carregar ou definir a URL base
+        let baseUrl = localStorage.getItem('api_base_url') || 'http://localhost:3000';
+        
+        // Definir a função global para obter a URL base
+        window.getBaseApiUrl = function() {
+            return baseUrl;
+        };
+        
+        // Atualizar a exibição da URL atual
+        document.getElementById('currentBaseUrl').textContent = baseUrl;
+        document.getElementById('baseUrlInput').value = baseUrl;
+        
+        // Função para atualizar a URL base
+        document.getElementById('updateBaseUrl').addEventListener('click', function() {
+            const newUrl = document.getElementById('baseUrlInput').value.trim();
+            if (!newUrl) return;
+            
+            baseUrl = newUrl;
+            localStorage.setItem('api_base_url', baseUrl);
+            document.getElementById('currentBaseUrl').textContent = baseUrl;
+            alert('URL base atualizada para: ' + baseUrl);
+        });
+        
+        // Função para verificar saúde do sistema
+        document.getElementById('checkHealth').addEventListener('click', async function() {
+            const resultDiv = document.getElementById('healthResult');
+            resultDiv.innerHTML = 'Verificando...';
+            
+            try {
+                const response = await fetch(`${baseUrl}/api/health`);
+                const data = await response.json();
+                
+                resultDiv.innerHTML = `
+                    <p class="success">Conexão bem-sucedida!</p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <p class="error">Erro na conexão: ${error.message}</p>
+                    <p>Verifique se o servidor está rodando e se a URL base está correta.</p>
+                `;
+            }
+        });
+        
+        // Função para testar o salvamento de registros
+        document.getElementById('testSaveRecords').addEventListener('click', async function() {
+            const resultDiv = document.getElementById('saveResult');
+            resultDiv.innerHTML = 'Testando salvamento...';
+            
+            try {
+                // Dados de teste para enviar
+                const dadosTeste = {
+                    registros: [
+                        {
+                            cidade: 'Teste',
+                            tecnico: 'Técnico Teste',
+                            auxiliar: 'Auxiliar Teste',
+                            placa: 'ABC1234',
+                            modelo: 'Modelo Teste',
+                            operacao: 'Operação Teste',
+                            kmAtual: '5000',
+                            ultimaTrocaOleo: '2023-01-01',
+                            renavam: '123456789',
+                            lat: '-15.123456',
+                            lng: '-47.123456',
+                            observacoes: 'Observações de teste'
+                        }
+                    ],
+                    tipo: 'teste',
+                    usuario: 'teste-api'
+                };
+                
+                // Enviar requisição
+                const response = await fetch(`${baseUrl}/api?action=salvar-ftth-registros`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dadosTeste)
+                });
+                
+                // Processar resultado
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.innerHTML = `
+                        <p class="success">Registros salvos com sucesso!</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    const errorText = await response.text();
+                    resultDiv.innerHTML = `
+                        <p class="error">Erro ao salvar registros: ${response.status} - ${response.statusText}</p>
+                        <pre>${errorText}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <p class="error">Erro ao salvar registros: ${error.message}</p>
+                    <p>Verifique se o servidor está rodando e se a URL base está correta.</p>
+                `;
+            }
+        });
+        
+        // Função para testar o carregamento de registros
+        document.getElementById('testLoadRecords').addEventListener('click', async function() {
+            const resultDiv = document.getElementById('loadResult');
+            resultDiv.innerHTML = 'Carregando registros...';
+            
+            try {
+                // Construir URL com parâmetros
+                const url = new URL(`${baseUrl}/api`);
+                url.searchParams.append('action', 'carregar-ftth-registros');
+                
+                // Enviar requisição
+                const response = await fetch(url);
+                
+                // Processar resultado
+                if (response.ok) {
+                    const data = await response.json();
+                    const recordsCount = data.registros ? data.registros.length : 0;
+                    
+                    resultDiv.innerHTML = `
+                        <p class="success">Registros carregados com sucesso: ${recordsCount} encontrados</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                    
+                    // Se houver muitos registros, truncar para não sobrecarregar a página
+                    if (recordsCount > 5) {
+                        const dataToShow = {
+                            ...data,
+                            registros: data.registros.slice(0, 5).concat(['... mais registros truncados ...'])
+                        };
+                        resultDiv.querySelector('pre').textContent = JSON.stringify(dataToShow, null, 2);
+                    }
+                } else {
+                    const errorText = await response.text();
+                    resultDiv.innerHTML = `
+                        <p class="error">Erro ao carregar registros: ${response.status} - ${response.statusText}</p>
+                        <pre>${errorText}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <p class="error">Erro ao carregar registros: ${error.message}</p>
+                    <p>Verifique se o servidor está rodando e se a URL base está correta.</p>
+                `;
+            }
+        });
+    </script>
+</body>
+</html> 

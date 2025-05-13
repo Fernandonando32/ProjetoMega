@@ -84,12 +84,14 @@ class DbManager {
         }
 
         try {
+            console.log(`Enviando requisição para ${url}`);
             const response = await fetch(url, options);
             
-            // Verificar se a resposta é bem-sucedida
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Erro na requisição: ${response.status} ${response.statusText} - ${errorText}`);
+                const errorData = await response.json().catch(() => ({
+                    message: `HTTP error ${response.status}: ${response.statusText}`
+                }));
+                throw new Error(errorData.message || `Erro de rede: ${response.status}`);
             }
             
             return await response.json();
@@ -370,4 +372,122 @@ window.UserDB = {
             throw error;
         }
     }
-}; 
+};
+
+// Define a base URL para a API
+window.getBaseApiUrl = function() {
+    // Em produção, usa o hostname atual
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    // Usar o IP local ou o hostname atual
+    if (isLocalhost) {
+        return 'http://localhost:3000';
+    } else {
+        return `http://${window.location.hostname}:3000`;
+    }
+};
+
+// Método para salvar registros no banco de dados através da API
+async function salvarNoBanco(registros, tipo = 'manual') {
+    try {
+        console.log('Salvando registros no banco de dados:', registros.length);
+        
+        // Obter usuário atual
+        const currentUser = window.Auth ? window.Auth.getCurrentUser() : null;
+        const userId = currentUser ? currentUser.id : null;
+        
+        // Preparar dados para envio
+        const dadosParaSalvar = {
+            registros: registros,
+            tipo: tipo,
+            usuario: userId
+        };
+        
+        // Enviar para a API
+        const response = await fetch(`${window.getBaseApiUrl()}/api?action=salvar-ftth-registros`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(dadosParaSalvar),
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({
+                message: `Erro ${response.status}`
+            }));
+            throw new Error(errorData.message || `Erro ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        console.log('Dados salvos com sucesso no banco:', result);
+        return { success: true, ...result };
+        
+    } catch (error) {
+        console.error('Erro ao salvar no banco de dados:', error);
+        return { 
+            success: false, 
+            error: error.message
+        };
+    }
+}
+
+// Método para carregar registros do banco de dados através da API
+async function carregarDoBanco(filtros = {}) {
+    try {
+        console.log('Carregando registros do banco de dados com filtros:', filtros);
+        
+        // Construir parâmetros da URL
+        const params = new URLSearchParams({
+            action: 'carregar-ftth-registros'
+        });
+        
+        // Adicionar filtros se fornecidos
+        if (filtros.cidade) params.append('cidade', filtros.cidade);
+        if (filtros.tecnico) params.append('tecnico', filtros.tecnico);
+        if (filtros.operacao) params.append('operacao', filtros.operacao);
+        if (filtros.placa) params.append('placa', filtros.placa);
+        if (filtros.auxiliar) params.append('auxiliar', filtros.auxiliar);
+        
+        // Paginação
+        params.append('limit', filtros.limit || 1000); // Valor padrão alto para pegar todos
+        params.append('offset', filtros.offset || 0);
+        
+        // Enviar requisição
+        const response = await fetch(`${window.getBaseApiUrl()}/api?${params.toString()}`);
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({
+                message: `Erro ${response.status}`
+            }));
+            throw new Error(errorData.message || `Erro ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.message || 'Erro ao carregar dados do banco');
+        }
+        
+        console.log(`Carregados ${result.registros.length} registros do banco de dados`);
+        return { 
+            success: true, 
+            registros: result.registros,
+            total: result.total,
+            message: result.message
+        };
+        
+    } catch (error) {
+        console.error('Erro ao carregar registros do banco:', error);
+        return { 
+            success: false, 
+            registros: [],
+            error: error.message
+        };
+    }
+}
+
+// Exportar funções para o escopo global
+window.salvarNoBanco = salvarNoBanco;
+window.carregarDoBanco = carregarDoBanco; 

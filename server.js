@@ -431,6 +431,289 @@ app.get('/api/export/users', authenticateToken, async (req, res) => {
     }
 });
 
+// Rota para salvar registros FTTH
+app.post('/api', async (req, res) => {
+    const action = req.query.action;
+    
+    // Verificar se a ação é salvar registros FTTH
+    if (action === 'salvar-ftth-registros') {
+        try {
+            const { registros, tipo, usuario } = req.body;
+            
+            // Validar dados
+            if (!registros || !Array.isArray(registros)) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Formato inválido: registros deve ser um array' 
+                });
+            }
+            
+            // Preparar registros para inserção no banco
+            const client = await pool.connect();
+            
+            try {
+                // Iniciar transação
+                await client.query('BEGIN');
+                
+                // Verificar se a tabela existe, caso contrário, criá-la
+                await client.query(`
+                    CREATE TABLE IF NOT EXISTS ftth_registros (
+                        id SERIAL PRIMARY KEY,
+                        cidade VARCHAR(100),
+                        tecnico VARCHAR(100),
+                        auxiliar VARCHAR(100),
+                        placa VARCHAR(20),
+                        modelo VARCHAR(50),
+                        operacao VARCHAR(50),
+                        equipes VARCHAR(100),
+                        km_atual VARCHAR(20),
+                        ultima_troca_oleo VARCHAR(50),
+                        renavam VARCHAR(50),
+                        lat VARCHAR(20),
+                        lng VARCHAR(20),
+                        observacoes TEXT,
+                        data_inicio_contrato DATE,
+                        usuario_id VARCHAR(50),
+                        tipo_operacao VARCHAR(50),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                `);
+                
+                // Inserir registros
+                let registrosInseridos = 0;
+                
+                for (const reg of registros) {
+                    const result = await client.query(`
+                        INSERT INTO ftth_registros 
+                        (cidade, tecnico, auxiliar, placa, modelo, operacao, equipes, 
+                         km_atual, ultima_troca_oleo, renavam, lat, lng, observacoes, 
+                         data_inicio_contrato, usuario_id, tipo_operacao)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                        RETURNING id
+                    `, [
+                        reg.cidade || '',
+                        reg.tecnico || '',
+                        reg.auxiliar || '',
+                        reg.placa || '',
+                        reg.modelo || '',
+                        reg.operacao || '',
+                        reg.equipes || '',
+                        reg.kmAtual || '',
+                        reg.ultimaTrocaOleo || '',
+                        reg.renavam || '',
+                        reg.lat || '',
+                        reg.lng || '',
+                        reg.observacoes || '',
+                        reg.dataInicioContrato || null,
+                        usuario || null,
+                        tipo || 'manual'
+                    ]);
+                    
+                    registrosInseridos++;
+                }
+                
+                // Confirmar transação
+                await client.query('COMMIT');
+                
+                return res.json({
+                    success: true,
+                    message: `${registrosInseridos} registros salvos com sucesso no banco de dados`,
+                    total: registrosInseridos
+                });
+                
+            } catch (error) {
+                // Reverter em caso de erro
+                await client.query('ROLLBACK');
+                throw error;
+            } finally {
+                client.release();
+            }
+            
+        } catch (error) {
+            console.error('Erro ao salvar registros FTTH:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Erro ao salvar registros no banco de dados',
+                error: error.message
+            });
+        }
+    } else {
+        // Se a ação não for reconhecida
+        return res.status(404).json({
+            success: false,
+            message: 'Ação não reconhecida'
+        });
+    }
+});
+
+// Rota para carregar registros FTTH
+app.get('/api', async (req, res) => {
+    const action = req.query.action;
+    
+    // Verificar se a ação é carregar registros FTTH
+    if (action === 'carregar-ftth-registros') {
+        try {
+            // Extrair parâmetros de consulta para filtragem
+            const { cidade, tecnico, operacao, placa, auxiliar, limit, offset } = req.query;
+            
+            // Preparar consulta
+            let whereConditions = [];
+            let queryParams = [];
+            let whereClause = '';
+            
+            // Adicionar condições de filtro, se fornecidas
+            if (cidade) {
+                queryParams.push(`%${cidade}%`);
+                whereConditions.push(`LOWER(cidade) LIKE LOWER($${queryParams.length})`);
+            }
+            
+            if (tecnico) {
+                queryParams.push(`%${tecnico}%`);
+                whereConditions.push(`LOWER(tecnico) LIKE LOWER($${queryParams.length})`);
+            }
+            
+            if (operacao) {
+                queryParams.push(operacao);
+                whereConditions.push(`operacao = $${queryParams.length}`);
+            }
+            
+            if (placa) {
+                queryParams.push(`%${placa}%`);
+                whereConditions.push(`LOWER(placa) LIKE LOWER($${queryParams.length})`);
+            }
+            
+            if (auxiliar) {
+                queryParams.push(`%${auxiliar}%`);
+                whereConditions.push(`LOWER(auxiliar) LIKE LOWER($${queryParams.length})`);
+            }
+            
+            // Construir cláusula WHERE se existirem condições
+            if (whereConditions.length > 0) {
+                whereClause = 'WHERE ' + whereConditions.join(' AND ');
+            }
+            
+            // Configurar paginação
+            const limitValue = limit ? parseInt(limit) : 100;
+            const offsetValue = offset ? parseInt(offset) : 0;
+            
+            // Adicionar parâmetros de paginação
+            queryParams.push(limitValue);
+            queryParams.push(offsetValue);
+            
+            // Executar consulta
+            const client = await pool.connect();
+            
+            // Verificar se a tabela existe
+            const tableExists = await client.query(`
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'ftth_registros'
+                );
+            `);
+            
+            if (!tableExists.rows[0].exists) {
+                // Se a tabela não existir, criar a tabela antes de continuar
+                await client.query(`
+                    CREATE TABLE IF NOT EXISTS ftth_registros (
+                        id SERIAL PRIMARY KEY,
+                        cidade VARCHAR(100),
+                        tecnico VARCHAR(100),
+                        auxiliar VARCHAR(100),
+                        placa VARCHAR(20),
+                        modelo VARCHAR(50),
+                        operacao VARCHAR(50),
+                        equipes VARCHAR(100),
+                        km_atual VARCHAR(20),
+                        ultima_troca_oleo VARCHAR(50),
+                        renavam VARCHAR(50),
+                        lat VARCHAR(20),
+                        lng VARCHAR(20),
+                        observacoes TEXT,
+                        data_inicio_contrato DATE,
+                        usuario_id VARCHAR(50),
+                        tipo_operacao VARCHAR(50),
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                `);
+                
+                client.release();
+                
+                // Retornar array vazio já que a tabela acabou de ser criada
+                return res.json({
+                    success: true,
+                    message: 'Nenhum registro encontrado',
+                    registros: [],
+                    total: 0
+                });
+            }
+            
+            // Consultar total de registros que correspondem ao filtro
+            const countQuery = `SELECT COUNT(*) FROM ftth_registros ${whereClause}`;
+            const countResult = await client.query(countQuery, queryParams.slice(0, queryParams.length - 2));
+            const total = parseInt(countResult.rows[0].count);
+            
+            // Consultar registros com paginação
+            const query = `
+                SELECT * FROM ftth_registros 
+                ${whereClause} 
+                ORDER BY created_at DESC 
+                LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length}
+            `;
+            
+            const result = await client.query(query, queryParams);
+            client.release();
+            
+            // Converter dados do banco para o formato esperado pelo frontend
+            const registros = result.rows.map(row => ({
+                id: row.id,
+                cidade: row.cidade,
+                tecnico: row.tecnico,
+                auxiliar: row.auxiliar,
+                placa: row.placa,
+                modelo: row.modelo,
+                operacao: row.operacao,
+                equipes: row.equipes,
+                kmAtual: row.km_atual,
+                ultimaTrocaOleo: row.ultima_troca_oleo,
+                renavam: row.renavam,
+                lat: row.lat,
+                lng: row.lng,
+                observacoes: row.observacoes,
+                dataInicioContrato: row.data_inicio_contrato,
+                // Outras propriedades conforme necessário
+                dataCriacao: row.created_at,
+                dataAtualizacao: row.updated_at
+            }));
+            
+            return res.json({
+                success: true,
+                message: `${registros.length} registros encontrados`,
+                registros,
+                total,
+                limit: limitValue,
+                offset: offsetValue
+            });
+            
+        } catch (error) {
+            console.error('Erro ao carregar registros FTTH:', error);
+            return res.status(500).json({
+                success: false,
+                message: 'Erro ao carregar registros do banco de dados',
+                error: error.message
+            });
+        }
+    } else {
+        // Se a ação não for reconhecida
+        return res.status(404).json({
+            success: false,
+            message: 'Ação não reconhecida'
+        });
+    }
+});
+
 // Função para inicializar o banco de dados
 async function initializeDatabase() {
     try {
