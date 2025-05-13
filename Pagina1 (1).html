@@ -2368,23 +2368,26 @@
         carregarRegistros();
         
         // Verificar e corrigir problemas automicamente
-        setTimeout(() => {
-            const duplicadosRemovidos = limparRegistrosDuplicados();
-            const guadalupeAdicionado = adicionarRegistroGuadalupe();
-            
-            if (duplicadosRemovidos > 0 || guadalupeAdicionado) {
-                console.log(`Correção automática: ${duplicadosRemovidos} duplicados removidos, Guadalupe ${guadalupeAdicionado ? 'adicionado' : 'já existente'}`);
+        setTimeout(async () => {
+            try {
+                const duplicadosRemovidos = await limparRegistrosDuplicados();
+                const guadalupeAdicionado = adicionarRegistroGuadalupe();
+                
+                if (duplicadosRemovidos > 0 || guadalupeAdicionado) {
+                    console.log(`Correção automática: ${duplicadosRemovidos} duplicados removidos, Guadalupe ${guadalupeAdicionado ? 'adicionado' : 'já existente'}`);
+                }
+                
+                renderTabela();
+                
+                // Verificar alertas de contratos e manutenções frequentes após carregar a tabela
+                verificarAlertasContratos();
+                verificarAlertasManutencoesFrequentes();
+                verificarAlertasTrocaOleo();
+            } catch (error) {
+                console.error('Erro durante a correção automática de registros:', error);
             }
-            
-        renderTabela();
-            
-            // Verificar alertas de contratos e manutenções frequentes após carregar a tabela
-            verificarAlertasContratos();
-            verificarAlertasManutencoesFrequentes();
-            verificarAlertasTrocaOleo();
         }, 500);
-        
-        // Adicionar um botão para corrigir registros
+            // Adicionar um botão para corrigir registros
         const divBotoes = document.querySelector('div[style="margin: 20px 0;"]');
         const btnCorrigir = document.createElement('button');
         btnCorrigir.textContent = 'Corrigir Registros';
@@ -3341,26 +3344,36 @@
         };
 
         // Função para limpar registros duplicados
-        function limparRegistrosDuplicados() {
-            const registrosUnicos = [];
-            const idsVistos = new Set();
-            
-            registros.forEach(reg => {
-                // Usar placaOuId para identificar registros
-                const id = reg.placaOuId ? reg.placaOuId.toUpperCase() : 
-                         (reg.placa ? reg.placa.toUpperCase() : null);
+        async function limparRegistrosDuplicados() {
+            try {
+                const registrosUnicos = [];
+                const idsVistos = new Set();
                 
-                if (id && !idsVistos.has(id)) {
-                    idsVistos.add(id);
-                    registrosUnicos.push(reg);
-                }
-            });
-            
-            const removidos = registros.length - registrosUnicos.length;
-            registros = registrosUnicos;
-            salvarRegistros();
-            renderTabela();
-            return removidos;
+                registros.forEach(reg => {
+                    // Usar placaOuId para identificar registros
+                    const id = reg.placaOuId ? reg.placaOuId.toUpperCase() : 
+                             (reg.placa ? reg.placa.toUpperCase() : null);
+                    
+                    if (id && !idsVistos.has(id)) {
+                        idsVistos.add(id);
+                        registrosUnicos.push(reg);
+                    }
+                });
+                
+                const removidos = registros.length - registrosUnicos.length;
+                registros = registrosUnicos;
+                
+                // Salvar registros de forma assíncrona
+                console.log(`Removidos ${removidos} registros duplicados. Salvando...`);
+                await salvarRegistros();
+                
+                renderTabela();
+                return removidos;
+            } catch (error) {
+                console.error('Erro ao limpar registros duplicados:', error);
+                alert('Ocorreu um erro ao limpar registros duplicados: ' + error.message);
+                return 0;
+            }
         }
         
         // Função para adicionar manualmente o registro de Guadalupe
@@ -4942,15 +4955,23 @@
         // 1. Função de salvar registros
         const salvarRegistrosOriginal = window.salvarRegistros;
         window.salvarRegistros = async function() {
-            // Primeiro salvar localmente (função original)
-            salvarRegistrosOriginal();
-            
-            // Depois tentar salvar no banco
             try {
-                await salvarNoBanco(registros, 'save');
+                // Primeiro salvar localmente (função original)
+                const resultado = await salvarRegistrosOriginal();
+                
+                // Verificar resultado
+                if (resultado && resultado.banco === false) {
+                    console.warn('Registros salvos apenas localmente:', resultado.motivo || resultado.error || 'motivo desconhecido');
+                }
+                
+                return resultado;
             } catch (error) {
-                console.error('Erro ao salvar registros no banco:', error);
-                // Continuar sem interromper a operação do usuário
+                console.error('Erro ao salvar registros:', error);
+                return {
+                    localStorage: false,
+                    banco: false,
+                    error: error.message
+                };
             }
         };
         

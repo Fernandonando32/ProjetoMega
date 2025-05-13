@@ -47,23 +47,43 @@ async function carregarRegistros(forcarLocal = false) {
 }
 
 // Função para salvar registros no localStorage
-function salvarRegistros() {
+async function salvarRegistros() {
+    // Primeiro, salvar no localStorage
     localStorage.setItem('registrosFTTH', JSON.stringify(window.registros));
     console.log(`Salvos ${window.registros.length} registros no localStorage.`);
     
     // Se existir a função para salvar no banco, chamar também
     if (typeof window.salvarNoBanco === 'function') {
         try {
-            // Chamar assincronamente para não bloquear
-            setTimeout(async () => {
-                await window.salvarNoBanco(window.registros, 'auto_save');
-            }, 100);
+            console.log('Tentando salvar registros no banco de dados...');
+            const resultado = await window.salvarNoBanco(window.registros, 'auto_save');
+            
+            if (resultado.success) {
+                console.log('Registros salvos com sucesso no banco:', resultado);
+            } else {
+                console.warn('Registros salvos apenas localmente. Erro ao salvar no banco:', resultado.error);
+            }
+            
+            return {
+                localStorage: true,
+                banco: resultado.success,
+                resultado
+            };
         } catch (error) {
-            console.error('Erro ao salvar no banco (em segundo plano):', error);
+            console.error('Erro ao salvar no banco:', error);
+            return {
+                localStorage: true,
+                banco: false,
+                error: error.message
+            };
         }
     }
     
-    return true;
+    return {
+        localStorage: true,
+        banco: false,
+        motivo: 'Função salvarNoBanco não disponível'
+    };
 }
 
 // Exportar funções como globais

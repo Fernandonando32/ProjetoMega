@@ -396,34 +396,52 @@ async function salvarNoBanco(registros, tipo = 'manual') {
         const currentUser = window.Auth ? window.Auth.getCurrentUser() : null;
         const userId = currentUser ? currentUser.id : null;
         
-        // Preparar dados para envio
-        const dadosParaSalvar = {
-            registros: registros,
-            tipo: tipo,
-            usuario: userId
-        };
+        // Se os registros forem muitos, dividir em lotes
+        const BATCH_SIZE = 100; // Tamanho do lote
         
-        // Enviar para a API
-        const response = await fetch(`${window.getBaseApiUrl()}/api?action=salvar-ftth-registros`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(dadosParaSalvar),
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({
-                message: `Erro ${response.status}`
-            }));
-            throw new Error(errorData.message || `Erro ${response.status}`);
+        if (registros.length > BATCH_SIZE) {
+            console.log(`Dividindo ${registros.length} registros em lotes de ${BATCH_SIZE}`);
+            let resultados = [];
+            let totalSalvos = 0;
+            
+            // Processar em lotes
+            for (let i = 0; i < registros.length; i += BATCH_SIZE) {
+                const lote = registros.slice(i, i + BATCH_SIZE);
+                console.log(`Processando lote ${Math.floor(i/BATCH_SIZE) + 1} de ${Math.ceil(registros.length/BATCH_SIZE)} (${lote.length} registros)`);
+                
+                try {
+                    const resultado = await salvarLoteNoBanco(lote, tipo, userId);
+                    resultados.push(resultado);
+                    
+                    if (resultado.success) {
+                        totalSalvos += resultado.total || 0;
+                    }
+                } catch (err) {
+                    console.error(`Erro ao processar lote ${Math.floor(i/BATCH_SIZE) + 1}:`, err);
+                    resultados.push({
+                        success: false,
+                        error: err.message,
+                        lote: Math.floor(i/BATCH_SIZE) + 1
+                    });
+                }
+            }
+            
+            // Retornar resultado consolidado
+            const sucessos = resultados.filter(r => r.success).length;
+            const falhas = resultados.length - sucessos;
+            
+            return {
+                success: sucessos > 0,
+                message: `${sucessos} de ${resultados.length} lotes processados com sucesso. Total: ${totalSalvos} registros.`,
+                totalSalvos,
+                sucessos,
+                falhas,
+                resultados
+            };
         }
         
-        const result = await response.json();
-        
-        console.log('Dados salvos com sucesso no banco:', result);
-        return { success: true, ...result };
-        
+        // Para poucos registros, processar diretamente
+        return await salvarLoteNoBanco(registros, tipo, userId);
     } catch (error) {
         console.error('Erro ao salvar no banco de dados:', error);
         return { 
@@ -431,6 +449,40 @@ async function salvarNoBanco(registros, tipo = 'manual') {
             error: error.message
         };
     }
+}
+
+// Função auxiliar para salvar um lote no banco
+async function salvarLoteNoBanco(registros, tipo, userId) {
+    // Preparar dados para envio
+    const dadosParaSalvar = {
+        registros: registros,
+        tipo: tipo,
+        usuario: userId
+    };
+    
+    // Determinar a URL base da API
+    const baseUrl = window.getBaseApiUrl ? window.getBaseApiUrl() : 'http://localhost:3000';
+    
+    // Enviar para a API
+    const response = await fetch(`${baseUrl}/api?action=salvar-ftth-registros`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(dadosParaSalvar),
+    });
+    
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({
+            message: `Erro ${response.status}`
+        }));
+        throw new Error(errorData.message || `Erro ${response.status}`);
+    }
+    
+    const result = await response.json();
+    
+    console.log('Lote salvo com sucesso no banco:', result);
+    return { success: true, ...result };
 }
 
 // Método para carregar registros do banco de dados através da API
