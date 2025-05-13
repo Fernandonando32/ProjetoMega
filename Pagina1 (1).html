@@ -15,6 +15,45 @@
     <script src="./js/auth.js"></script>
     
     <script>
+        // Verificar se o objeto Auth está disponível globalmente
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Verificando disponibilidade do objeto Auth...');
+            
+            // Verificar se Auth existe
+            if (!window.Auth) {
+                console.warn('Objeto Auth não está disponível globalmente. Tentando criar um substituto.');
+                
+                // Criar um objeto Auth substituto básico
+                window.Auth = {
+                    getCurrentUser: function() {
+                        try {
+                            const userStr = localStorage.getItem('currentUser');
+                            return userStr ? JSON.parse(userStr) : null;
+                        } catch (e) {
+                            console.error('Erro ao obter usuário atual:', e);
+                            return null;
+                        }
+                    },
+                    
+                    hasPermission: function(user, permission) {
+                        if (!user) return false;
+                        if (user.accessLevel === 'ADMIN') return true;
+                        return user.permissions && Array.isArray(user.permissions) && user.permissions.includes(permission);
+                    },
+                    
+                    PERMISSIONS: {
+                        VIEW_BY_OPERATION: 'view_by_operation',
+                        MANAGE_USERS: 'manage_users'
+                        // Outras permissões podem ser adicionadas conforme necessário
+                    }
+                };
+                
+                console.log('Objeto Auth substituto criado.');
+            }
+        });
+    </script>
+    
+    <script>
         // Verificar autenticação
         async function checkAuth() {
             if (!Auth.isAuthenticated()) {
@@ -1271,73 +1310,16 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Variáveis globais
         let registros = [];
-        let currentUser = null;
         let editIndex = null;
-
-        // Inicializar usuário atual
-        try {
-            const userStr = localStorage.getItem('currentUser');
-            if (userStr) {
-                currentUser = JSON.parse(userStr);
-            } else {
-                // Redirecionar para o login se não houver usuário
-                window.location.href = 'login.html';
-            }
-        } catch (error) {
-            console.error('Erro ao carregar dados do usuário:', error);
-            // Redirecionar para o login em caso de erro
-            window.location.href = 'login.html';
-        }
+        let lastSortColumn = null;
+        let lastSortDirection = 'asc';
+        let filtroAtual = '';
+        // Definir a variável de usuário atual
+        let currentUser = window.Auth ? window.Auth.getCurrentUser() : null;
         
-        // Definir PERMISSIONS como uma propriedade de Auth se não existir
-        if (window.Auth && !Auth.PERMISSIONS) {
-            // Definir constantes de permissões localmente
-            Auth.PERMISSIONS = {
-                MANAGE_USERS: 'manage_users',
-                VIEW_TASKS: 'view_tasks',
-                CREATE_TASKS: 'create_tasks',
-                EDIT_TASKS: 'edit_tasks',
-                DELETE_TASKS: 'delete_tasks',
-                COMPLETE_TASKS: 'complete_tasks',
-                VIEW_COMPLETED: 'view_completed',
-                VIEW_TECHNICIANS: 'view_technicians',
-                ADD_TECHNICIAN: 'add_technician',
-                EDIT_TECHNICIAN: 'edit_technician',
-                DELETE_TECHNICIAN: 'delete_technician',
-                VIEW_STATISTICS: 'view_statistics',
-                VIEW_MAP: 'view_map',
-                VIEW_MAINTENANCE: 'view_maintenance',
-                ADD_MAINTENANCE: 'add_maintenance',
-                EDIT_MAINTENANCE: 'edit_maintenance',
-                DELETE_MAINTENANCE: 'delete_maintenance',
-                VIEW_BY_OPERATION: 'view_by_operation'
-            };
-            console.log('PERMISSIONS adicionado ao objeto Auth', Auth.PERMISSIONS);
-        } else if (!window.Auth) {
-            console.error('Objeto Auth não encontrado. Verificar carregamento de auth.js');
-        }
-
-        // Função para carregar registros do localStorage
-        function carregarRegistros() {
-            const dados = localStorage.getItem('registrosFTTH');
-            if (dados) {
-                try {
-                    registros = JSON.parse(dados);
-                } catch (e) {
-                    registros = [];
-                }
-            }
-        }
-
-        // Salvar registros no localStorage
-        function salvarRegistros() {
-            localStorage.setItem('registrosFTTH', JSON.stringify(registros));
-        }
-
-        // Inicialização da página
-        document.addEventListener('DOMContentLoaded', function() {
+        // Carregar registros do localStorage ao carregar a página
+        document.addEventListener("DOMContentLoaded", function() {
             // Definir ACCESS_LEVELS se não existir no Auth
             if (!Auth.ACCESS_LEVELS) {
                 Auth.ACCESS_LEVELS = {
@@ -1605,7 +1587,7 @@
                     DELETE_MAINTENANCE: 'delete_maintenance',
                     VIEW_BY_OPERATION: 'view_by_operation'
                 };
-                console.log('PERMISSIONS adicionado ao objeto Auth em checkPermissions', Auth.PERMISSIONS);
+                console.log('PERMISSIONS adicionado ao objeto Auth', Auth.PERMISSIONS);
             }
             
             const adminButton = document.getElementById('adminButton');
@@ -1757,11 +1739,11 @@
 
         function atualizarEstatisticas() {
             // Verificar permissão para visualizar todas operações
-            const podeVerTodasOperacoes = Auth.hasPermission(currentUser, Auth.PERMISSIONS.VIEW_BY_OPERATION);
+            const podeVerTodasOperacoes = window.Auth && currentUser ? window.Auth.hasPermission(currentUser, window.Auth.PERMISSIONS.VIEW_BY_OPERATION) : false;
             
             // Filtrar registros pela operação do usuário se necessário
             let registrosFiltrados = registros;
-            if (!podeVerTodasOperacoes && currentUser.operacao) {
+            if (!podeVerTodasOperacoes && currentUser && currentUser.operacao) {
                 registrosFiltrados = registros.filter(r => r.operacao === currentUser.operacao);
             }
             
@@ -2982,12 +2964,12 @@
             const filtroOperacao = document.getElementById('filtroOperacao').value;
 
             // Verificar se o usuário tem permissão para visualizar todas as operações
-            const podeVerTodasOperacoes = Auth.hasPermission(currentUser, Auth.PERMISSIONS.VIEW_BY_OPERATION);
+            const podeVerPorOperacao = Auth.hasPermission(currentUser, Auth.PERMISSIONS.VIEW_BY_OPERATION);
             
             // Determinar qual filtro de operação aplicar:
             // - Se tem permissão para todas operações: usar o filtro selecionado pelo usuário
             // - Se não tem permissão: forçar filtro para operação atribuída ao usuário
-            const operacaoFiltro = !podeVerTodasOperacoes && currentUser.operacao ? 
+            const operacaoFiltro = !podeVerPorOperacao && currentUser.operacao ? 
                 currentUser.operacao : filtroOperacao;
 
             const registrosFiltrados = registros.filter(reg => {
@@ -3008,7 +2990,7 @@
                 
                 // Se não tem permissão de visualizar todas operações e tem uma operação atribuída,
                 // então só mostrar registros da própria operação
-                const permissaoOperacaoMatch = podeVerTodasOperacoes || 
+                const permissaoOperacaoMatch = podeVerPorOperacao || 
                     !currentUser.operacao || reg.operacao === currentUser.operacao;
 
                 return cidadeMatch && tecnicoMatch && auxiliarMatch && 
@@ -4705,9 +4687,7 @@
     </script>
 
     <!-- Script para integração com o banco de dados -->
-    <script type="module">
-        import * as Auth from './js/auth.js';
-        
+    <script>
         // Configuração e funções para o banco de dados
         const API_URL = '/api';
         
@@ -4717,7 +4697,7 @@
                 console.log('Salvando registros no banco de dados:', registros.length);
                 
                 // Obter usuário atual
-                const currentUser = Auth.getCurrentUser();
+                const currentUser = window.Auth ? window.Auth.getCurrentUser() : null;
                 const userId = currentUser ? currentUser.id : null;
                 
                 // Preparar dados para envio
