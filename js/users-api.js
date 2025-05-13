@@ -115,8 +115,8 @@ const UserAPI = {
             // Criar o usuário
             const result = await window.dbManager.createUser(userToCreate);
             
-            return {
-                success: true,
+            return { 
+                success: true, 
                 user: result
             };
         } catch (error) {
@@ -131,8 +131,8 @@ const UserAPI = {
                 }
             }
             
-            return {
-                success: false,
+            return { 
+                success: false, 
                 message: error.message
             };
         }
@@ -185,8 +185,8 @@ const UserAPI = {
             // Atualizar o usuário
             const result = await window.dbManager.updateUser(userId, userToUpdate);
             
-            return {
-                success: true,
+            return { 
+                success: true, 
                 user: result
             };
         } catch (error) {
@@ -201,8 +201,8 @@ const UserAPI = {
                 }
             }
             
-            return {
-                success: false,
+            return { 
+                success: false, 
                 message: error.message
             };
         }
@@ -227,13 +227,13 @@ const UserAPI = {
         try {
             const result = await window.dbManager.deleteUser(userId);
             
-            return {
+            return { 
                 success: true
             };
         } catch (error) {
             console.error('Erro ao excluir usuário:', error);
-            return {
-                success: false,
+            return { 
+                success: false, 
                 message: error.message
             };
         }

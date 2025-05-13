@@ -15,14 +15,10 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors({
-    origin: '*', // Permite qualquer origem
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-}));
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.static(path.join(__dirname, './')));
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.static('.'));
 
 // Importar rotas para tarefas
 const tasksRoutes = require('./api-tasks');
@@ -441,11 +437,40 @@ app.post('/api', async (req, res) => {
         try {
             const { registros, tipo, usuario } = req.body;
             
-            // Validar dados
+            // Validação mais rigorosa
             if (!registros || !Array.isArray(registros)) {
                 return res.status(400).json({ 
                     success: false, 
                     message: 'Formato inválido: registros deve ser um array' 
+                });
+            }
+            
+            // Verificar origem da requisição
+            const requestOrigin = req.headers.origin || req.headers.referer || '';
+            const isValidOrigin = requestOrigin.includes('Pagina1') || 
+                                 requestOrigin.includes('localhost') || 
+                                 requestOrigin === '' || // Para permitir ferramentas de teste
+                                 tipo === 'teste';  // Para testes específicos
+            
+            // Verificar o tipo de operação - apenas aceitar tipos específicos
+            const validTypes = ['manual', 'import_csv', 'teste', 'api_test'];
+            if (!validTypes.includes(tipo)) {
+                console.warn(`Tentativa de inserção com tipo não permitido: ${tipo}`);
+                return res.status(403).json({
+                    success: false,
+                    message: 'Tipo de operação não permitido'
+                });
+            }
+            
+            // Log para debug da origem da requisição
+            console.log(`Requisição de salvamento recebida. Origem: ${requestOrigin}, Tipo: ${tipo}, Quantidade: ${registros.length}`);
+            
+            // Se a origem não for válida, rejeitar
+            if (!isValidOrigin) {
+                console.warn(`Tentativa de inserção de origem não autorizada: ${requestOrigin}`);
+                return res.status(403).json({
+                    success: false,
+                    message: 'Origem não autorizada para inserção de registros'
                 });
             }
             
