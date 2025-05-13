@@ -1275,7 +1275,7 @@
         let registros = [];
         let currentUser = null;
         let editIndex = null;
-        
+
         // Inicializar usuário atual
         try {
             const userStr = localStorage.getItem('currentUser');
@@ -1387,11 +1387,11 @@
             if (currentUser.accessLevel === 'ADMIN') {
                 const adminButton = document.getElementById('adminButton');
                 if (adminButton) {
-                    adminButton.style.display = 'block';
-                    adminButton.addEventListener('click', () => {
-                        localStorage.setItem('adminOriginPage', 'Pagina1 (1).html');
-                        window.location.href = 'admin.html';
-                    });
+                adminButton.style.display = 'block';
+                adminButton.addEventListener('click', () => {
+                    localStorage.setItem('adminOriginPage', 'Pagina1 (1).html');
+                    window.location.href = 'admin.html';
+                });
                 } else {
                     console.warn('Elemento adminButton não encontrado');
                 }
