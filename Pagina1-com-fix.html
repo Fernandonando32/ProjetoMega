@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Sistema de Gestão FTTH (Versão com correções)</title>
+    
+    <!-- Resto do head -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Estilo para o spinner de carregamento -->
+    <style>
+        .loading-message {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Status indicando carregamento de dados */
+        #statusCarregamentoDados {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(52, 152, 219, 0.9);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-weight: bold;
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+    </style>
+    
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./js/pg-config.js"></script>
+    
+    <!-- Scripts de autenticação e correção -->
+    <script src="auth-fix.js"></script>
+    <script src="./js/permissions.js"></script>
+    <script src="./js/auth.js"></script>
+    <script src="./js/database-functions.js"></script>
+    
+    <script>
+        // Define a URL base da API
+        window.getBaseApiUrl = function() {
+            // Verificar se estamos em localhost
+            const isLocalhost = window.location.hostname === 'localhost' || 
+                               window.location.hostname === '127.0.0.1' ||
+                               window.location.hostname === '';
+            
+            // Se estiver em ambiente local, usar localhost
+            if (isLocalhost) {
+                return 'http://localhost:3000';
+            }
+            
+            // Em produção, usar o atual hostname
+            return `http://${window.location.hostname}:3000`;
+        };
+        
+        console.log('URL base da API definida como:', window.getBaseApiUrl());
+    </script>
+</head>
+<body>
+    <!-- Div de status de carregamento -->
+    <div id="statusCarregamentoDados" style="display: none;">
+        <div class="spinner"></div>
+        <span id="textoStatusCarregamento">Carregando dados do banco...</span>
+    </div>
+    
+    <header>
+        <div style="display: flex; align-items: center;">
+            <i class="fas fa-truck" style="font-size: 24px; margin-right: 10px;"></i>
+            <h1 style="font-size: 20px; margin: 0; color: white;">Acompanhamento de Técnicos e Veículos - FTTH (Versão Corrigida)</h1>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <div id="currentUserName" style="font-size: 14px;"></div>
+            
+            <!-- Sistema de notificação para administradores -->
+            <div id="notificationSystem" style="display: none; position: relative;">
+                <button id="notificationButton" style="background: none; border: none; color: white; position: relative; padding: 5px; cursor: pointer;" title="Notificações">
+                    <i class="fas fa-bell"></i>
+                    <span id="notificationCount" style="position: absolute; top: -5px; right: -5px; background: #c0392b; color: white; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; display: flex; align-items: center; justify-content: center; font-weight: bold;">0</span>
+                </button>
+                <div id="notificationDropdown" style="display: none; position: absolute; right: 0; top: 100%; width: 300px; max-height: 400px; overflow-y: auto; background: white; border-radius: 5px; box-shadow: 0 3px 10px rgba(0,0,0,0.2); color: #333; z-index: 1000;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; border-bottom: 1px solid #eee;">
+                        <h3 style="margin: 0; font-size: 16px;">Notificações</h3>
+                        <button id="markAllReadButton" style="font-size: 12px; padding: 3px 8px; background: #eaf0fa; color: #2a3d66; border: none; border-radius: 3px; cursor: pointer;">Marcar todas como lidas</button>
+                    </div>
+                    <div id="notificationList" style="padding: 0;">
+                        <div style="padding: 20px; text-align: center; color: #666;">
+                            Nenhuma notificação
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="admin-button" id="adminButton" style="display: none; padding: 5px 8px; font-size: 14px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 3px; cursor: pointer;" title="Administrar Usuários">
+                <i class="fas fa-cog"></i>
+            </button>
+            <button id="logoutButton" style="padding: 5px 10px; font-size: 12px; background: #c0392b; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                <i class="fas fa-sign-out-alt"></i> Sair
+            </button>
+        </div>
+    </header>
+
+    <!-- Incluir o restante da página original aqui -->
+    <iframe src="Pagina1 (1).html" style="display:none;" id="paginaOriginal"></iframe>
+
+    <!-- Informações de depuração -->
+    <div style="margin: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px;">
+        <h2>Status de Carregamento de Dados</h2>
+        <div id="logContainer" style="background-color: #f0f0f0; border: 1px solid #ddd; padding: 10px; border-radius: 5px; max-height: 300px; overflow-y: auto; margin-top: 20px; font-family: monospace; white-space: pre-wrap; font-size: 12px;"></div>
+        
+        <div style="margin-top: 20px;">
+            <button id="carregarDadosBtn" class="button" style="background-color: #2a3d66; color: white; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer;">Forçar Carregamento de Dados</button>
+            <button id="continuarBtn" class="button" style="background-color: #27ae60; color: white; padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">Continuar para Página Principal</button>
+        </div>
+    </div>
+
+    <!-- Scripts para corrigir problemas de carregamento -->
+    <script src="fix-load-data.js"></script>
+    
+    <script>
+        // Script específico para esta página de depuração
+        document.addEventListener('DOMContentLoaded', function() {
+            const logContainer = document.getElementById('logContainer');
+            const carregarDadosBtn = document.getElementById('carregarDadosBtn');
+            const continuarBtn = document.getElementById('continuarBtn');
+            const statusCarregamento = document.getElementById('statusCarregamentoDados');
+            const textoStatus = document.getElementById('textoStatusCarregamento');
+            
+            // Função para adicionar mensagens ao log
+            function logMessage(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                const formattedMessage = `[${timestamp}] [${type.toUpperCase()}] ${message}`;
+                logContainer.innerHTML += formattedMessage + '\n';
+                logContainer.scrollTop = logContainer.scrollHeight; // Auto-scroll para o final
+                console.log(formattedMessage);
+            }
+            
+            // Função para atualizar o status de carregamento
+            function updateStatus(message, show = true) {
+                textoStatus.textContent = message;
+                statusCarregamento.style.display = show ? 'flex' : 'none';
+            }
+            
+            // Forçar carregamento de dados quando clicar no botão
+            carregarDadosBtn.addEventListener('click', async function() {
+                updateStatus('Carregando dados do banco...');
+                logMessage('Iniciando carregamento forçado de dados...', 'info');
+                
+                try {
+                    if (typeof window.carregarRegistros !== 'function') {
+                        throw new Error('Função carregarRegistros não está disponível');
+                    }
+                    
+                    // Forçar carregamento do banco (false = não forçar local)
+                    const registros = await window.carregarRegistros(false);
+                    
+                    logMessage(`Carregados ${registros.length} registros do banco de dados`, 'success');
+                    updateStatus(`Carregados ${registros.length} registros com sucesso!`, false);
+                    
+                    // Atualizar a interface
+                    if (typeof window.renderizarTabela === 'function') {
+                        window.renderizarTabela();
+                        logMessage('Tabela atualizada com os novos dados', 'success');
+                    } else if (typeof window.filtrarRegistros === 'function') {
+                        window.filtrarRegistros();
+                        logMessage('Dados filtrados e atualizados na interface', 'success');
+                    }
+                    
+                } catch (error) {
+                    logMessage(`Erro ao carregar dados: ${error.message}`, 'error');
+                    updateStatus('Erro ao carregar dados', false);
+                    console.error('Erro completo:', error);
+                }
+            });
+            
+            // Continuar para a página principal
+            continuarBtn.addEventListener('click', function() {
+                window.location.href = 'Pagina1 (1).html';
+            });
+            
+            // Log inicial
+            logMessage('Página de diagnóstico inicializada', 'info');
+            logMessage(`URL base da API: ${window.getBaseApiUrl()}`, 'info');
+            
+            // Verificar autenticação
+            if (window.Auth && typeof window.Auth.isAuthenticated === 'function') {
+                const isAuthenticated = window.Auth.isAuthenticated();
+                logMessage(`Status de autenticação: ${isAuthenticated ? 'Autenticado' : 'Não autenticado'}`, isAuthenticated ? 'success' : 'warning');
+                
+                if (isAuthenticated) {
+                    const user = window.Auth.getCurrentUser();
+                    logMessage(`Usuário atual: ${user.name} (${user.accessLevel})`, 'info');
+                } else {
+                    logMessage('Usuário não autenticado. Algumas funcionalidades podem não estar disponíveis.', 'warning');
+                }
+            } else {
+                logMessage('Objeto Auth não está disponível ou não está funcionando corretamente', 'error');
+            }
+        });
+    </script>
+</body>
+</html> 

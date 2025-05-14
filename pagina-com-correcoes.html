@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carregador de Dados com Correções</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        header {
+            background: #2a3d66;
+            color: white;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            text-align: center;
+            border-radius: 5px;
+        }
+        h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 20px;
+            margin-top: 20px;
+            background-color: #f9f9f9;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .status.warning {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        button {
+            background-color: #2a3d66;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #1d2d4d;
+        }
+        .loading {
+            display: none;
+            margin-top: 20px;
+            text-align: center;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2a3d66;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .step {
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 5px;
+            background-color: #f5f5f5;
+            border-left: 5px solid #2a3d66;
+        }
+        .step h3 {
+            margin-top: 0;
+            color: #2a3d66;
+        }
+        .resultado {
+            margin-top: 5px;
+            font-weight: bold;
+        }
+        a {
+            color: #2a3d66;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Carregador de Dados com Correções</h1>
+    </header>
+
+    <div class="container">
+        <div class="step">
+            <h3>Passo 1: Carregar Scripts de Correção</h3>
+            <p>Carregando scripts de correção para resolver problemas de autenticação e carregamento de dados.</p>
+            <div id="resultadoScripts" class="resultado"></div>
+        </div>
+
+        <div class="step">
+            <h3>Passo 2: Verificar Autenticação</h3>
+            <p>Verificando se o usuário está autenticado no sistema.</p>
+            <div id="resultadoAuth" class="resultado"></div>
+        </div>
+
+        <div class="step">
+            <h3>Passo 3: Carregar Dados do Banco</h3>
+            <p>Tentando carregar dados diretamente do banco de dados.</p>
+            <div id="resultadoDados" class="resultado"></div>
+        </div>
+
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Processando... por favor aguarde.</p>
+        </div>
+
+        <div id="botoes" style="margin-top: 20px; text-align: center;">
+            <button id="btnIniciar">Iniciar Carregamento de Dados</button>
+            <button id="btnContinuar" style="display: none; background-color: #27ae60;">Continuar para Página Principal</button>
+        </div>
+    </div>
+
+    <!-- Carregando scripts de correção -->
+    <script src="auth-fix.js"></script>
+    <script src="fix-load-data.js"></script>
+
+    <script>
+        // Esperar o DOM ser carregado
+        document.addEventListener('DOMContentLoaded', function() {
+            // Obter referências aos elementos
+            const btnIniciar = document.getElementById('btnIniciar');
+            const btnContinuar = document.getElementById('btnContinuar');
+            const loading = document.querySelector('.loading');
+            const resultadoScripts = document.getElementById('resultadoScripts');
+            const resultadoAuth = document.getElementById('resultadoAuth');
+            const resultadoDados = document.getElementById('resultadoDados');
+
+            // Verificar se os scripts foram carregados
+            if (window.Auth && typeof window.forcarCarregamentoDados === 'function') {
+                resultadoScripts.textContent = '✅ Scripts carregados com sucesso!';
+                resultadoScripts.style.color = '#155724';
+            } else {
+                resultadoScripts.textContent = '❌ Erro ao carregar scripts. Verifique o console.';
+                resultadoScripts.style.color = '#721c24';
+                console.error('Scripts não foram carregados corretamente:', {
+                    'Auth existe': !!window.Auth,
+                    'forcarCarregamentoDados existe': typeof window.forcarCarregamentoDados === 'function'
+                });
+            }
+
+            // Verificar autenticação
+            setTimeout(function() {
+                if (window.Auth && window.Auth.isAuthenticated()) {
+                    const user = window.Auth.getCurrentUser();
+                    resultadoAuth.textContent = `✅ Autenticado como ${user.name || 'Usuário'} (${user.accessLevel || 'Nível desconhecido'})`;
+                    resultadoAuth.style.color = '#155724';
+                } else {
+                    resultadoAuth.textContent = '❌ Não autenticado. Você será redirecionado para a página de login.';
+                    resultadoAuth.style.color = '#721c24';
+                    
+                    // Redirecionar para login após 3 segundos
+                    setTimeout(function() {
+                        window.location.href = 'login.html';
+                    }, 3000);
+                }
+            }, 500);
+
+            // Função para iniciar carregamento de dados
+            btnIniciar.addEventListener('click', function() {
+                loading.style.display = 'block';
+                btnIniciar.disabled = true;
+                resultadoDados.textContent = '⏳ Carregando dados...';
+                resultadoDados.style.color = '#0c5460';
+
+                // Tentar carregar dados
+                try {
+                    if (typeof window.carregarRegistros === 'function') {
+                        window.carregarRegistros(false) // false = não usar cache local
+                            .then(function(registros) {
+                                loading.style.display = 'none';
+                                
+                                if (registros && registros.length > 0) {
+                                    resultadoDados.textContent = `✅ ${registros.length} registros carregados com sucesso!`;
+                                    resultadoDados.style.color = '#155724';
+                                    btnContinuar.style.display = 'inline-block';
+                                } else {
+                                    resultadoDados.textContent = '⚠️ Nenhum registro encontrado no banco de dados.';
+                                    resultadoDados.style.color = '#856404';
+                                    btnContinuar.style.display = 'inline-block';
+                                }
+                            })
+                            .catch(function(erro) {
+                                loading.style.display = 'none';
+                                resultadoDados.textContent = `❌ Erro ao carregar dados: ${erro.message || 'Erro desconhecido'}`;
+                                resultadoDados.style.color = '#721c24';
+                                btnIniciar.disabled = false;
+                            });
+                    } else if (typeof window.forcarCarregamentoDados === 'function') {
+                        // Se não encontrou carregarRegistros, usar a função de forçar carregamento
+                        window.forcarCarregamentoDados();
+                        
+                        // Verificar em intervalos de 1 segundo se os dados foram carregados
+                        const verificarDados = setInterval(function() {
+                            if (window.registros) {
+                                clearInterval(verificarDados);
+                                loading.style.display = 'none';
+                                
+                                if (window.registros.length > 0) {
+                                    resultadoDados.textContent = `✅ ${window.registros.length} registros carregados com sucesso!`;
+                                    resultadoDados.style.color = '#155724';
+                                } else {
+                                    resultadoDados.textContent = '⚠️ Nenhum registro encontrado no banco de dados.';
+                                    resultadoDados.style.color = '#856404';
+                                }
+                                
+                                btnContinuar.style.display = 'inline-block';
+                            }
+                        }, 1000);
+                        
+                        // Definir timeout para parar de verificar após 15 segundos
+                        setTimeout(function() {
+                            clearInterval(verificarDados);
+                            loading.style.display = 'none';
+                            
+                            if (!window.registros || window.registros.length === 0) {
+                                resultadoDados.textContent = '❌ Timeout ao carregar dados. Tente novamente.';
+                                resultadoDados.style.color = '#721c24';
+                                btnIniciar.disabled = false;
+                            }
+                        }, 15000);
+                    } else {
+                        loading.style.display = 'none';
+                        resultadoDados.textContent = '❌ Função de carregamento não encontrada.';
+                        resultadoDados.style.color = '#721c24';
+                        btnIniciar.disabled = false;
+                    }
+                } catch (erro) {
+                    loading.style.display = 'none';
+                    resultadoDados.textContent = `❌ Erro ao carregar dados: ${erro.message}`;
+                    resultadoDados.style.color = '#721c24';
+                    btnIniciar.disabled = false;
+                }
+            });
+
+            // Botão para continuar para a página principal
+            btnContinuar.addEventListener('click', function() {
+                window.location.href = 'Pagina1 (1).html';
+            });
+        });
+    </script>
+</body>
+</html> 

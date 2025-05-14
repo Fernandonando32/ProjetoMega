@@ -36,7 +36,7 @@ app.use('/api', tasksRoutes);
 
 // Configuração do PostgreSQL
 const pool = new Pool({
-    host: '187.62.153.53',
+    host: '187.62.153.52',
     port: 6432,
     database: 'acompanhamento_ftth',
     user: 'ftth',
@@ -475,11 +475,11 @@ app.post('/api', async (req, res) => {
             }
             
             // Verificar o tipo de operação - APENAS "manual" é aceito
-            if (tipo !== 'manual') {
+            if (tipo !== 'manual' && tipo !== 'import_csv') {
                 console.warn(`Tentativa de inserção com tipo não permitido: ${tipo}`);
                 return res.status(403).json({
                     success: false,
-                    message: 'Apenas inserções manuais são permitidas. Tipo de operação não permitido: ' + tipo
+                    message: 'Apenas inserções manuais ou importações CSV são permitidas. Tipo de operação não permitido: ' + tipo
                 });
             }
             
@@ -502,7 +502,8 @@ app.post('/api', async (req, res) => {
                 const tecnicos = new Set(amostra.map(r => r.tecnico).filter(Boolean));
                 
                 // Se as amostras tiverem muitos registros com mesmas características, pode ser automático
-                if (operacoes.size <= 1 && tecnicos.size <= 1 && tipo !== 'manual') {
+                // Permitir 'manual' e 'import_csv' mesmo com características similares
+                if (operacoes.size <= 1 && tecnicos.size <= 1 && tipo !== 'manual' && tipo !== 'import_csv') {
                     console.warn('Padrão de dados sugere inserção automatizada não autorizada');
                     return res.status(403).json({
                         success: false,
@@ -522,22 +523,22 @@ app.post('/api', async (req, res) => {
                 await client.query(`
                     CREATE TABLE IF NOT EXISTS ftth_registros (
                         id SERIAL PRIMARY KEY,
-                        cidade VARCHAR(100),
-                        tecnico VARCHAR(100),
-                        auxiliar VARCHAR(100),
-                        placa VARCHAR(20),
-                        modelo VARCHAR(50),
-                        operacao VARCHAR(50),
-                        equipes VARCHAR(100),
-                        km_atual VARCHAR(20),
-                        ultima_troca_oleo VARCHAR(50),
-                        renavam VARCHAR(50),
-                        lat VARCHAR(20),
-                        lng VARCHAR(20),
+                        cidade VARCHAR(500),
+                        tecnico VARCHAR(500),
+                        auxiliar VARCHAR(500),
+                        placa VARCHAR(100),
+                        modelo VARCHAR(500),
+                        operacao VARCHAR(500),
+                        equipes VARCHAR(500),
+                        km_atual VARCHAR(100),
+                        ultima_troca_oleo VARCHAR(500),
+                        renavam VARCHAR(100),
+                        lat VARCHAR(100),
+                        lng VARCHAR(100),
                         observacoes TEXT,
                         data_inicio_contrato DATE,
-                        usuario_id VARCHAR(50),
-                        tipo_operacao VARCHAR(50),
+                        usuario_id VARCHAR(100),
+                        tipo_operacao VARCHAR(100),
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -546,9 +547,15 @@ app.post('/api', async (req, res) => {
                 // Inserir registros
                 let registrosInseridos = 0;
                 let registrosBloqueados = 0;
+                let errosRegistros = 0;
                 
+                // Processar cada registro em uma transação separada para evitar abortar todas as inserções quando uma falha
                 for (const reg of registros) {
+                    const client = await pool.connect();  // Nova conexão para cada registro
                     try {
+                        // Iniciar transação separada para este registro
+                        await client.query('BEGIN');
+                        
                         // Verificar se este registro foi previamente excluído
                         const hash = gerarHashRegistro(reg);
                         
@@ -562,12 +569,43 @@ app.post('/api', async (req, res) => {
                         if (hashCheck.rows.length > 0) {
                             console.log(`Bloqueada reinserção de registro previamente excluído (hash: ${hash})`);
                             registrosBloqueados++;
+                            await client.query('COMMIT');
                             continue; // Pular para o próximo registro
                         }
                         
+                        // Função para normalizar texto, removendo acentos e caracteres especiais
+                        function normalizarTexto(texto) {
+                            if (!texto) return '';
+                            
+                            try {
+                                // Converter para formato NFD e remover acentos
+                                return texto.normalize("NFD")
+                                        .replace(/[\u0300-\u036f]/g, "") // Remove acentos
+                                        .replace(/[^\w\s.-]/g, " ") // Substitui caracteres especiais por espaços
+                                        .trim().toUpperCase();
+                            } catch (e) {
+                                console.log("Erro ao normalizar texto para hash:", e, texto);
+                                return texto ? texto.toString().trim().toUpperCase() : '';
+                            }
+                        }
+                        
                         // Adicionar marcação de inserção manual para evitar que seja excluído
-                        const observacoes = (reg.observacoes || '') + (reg.observacoes ? ' | ' : '') + 
-                                        '(Inserido manualmente em ' + new Date().toLocaleString() + ')';
+                        const observacoes = normalizarTexto((reg.observacoes || '') + (reg.observacoes ? ' | ' : '') + 
+                                        '(Inserido manualmente em ' + new Date().toLocaleString() + ')');
+                        
+                        // Normalizar os campos que podem causar problemas
+                        const cidade = normalizarTexto(reg.cidade || '').substring(0, 490);
+                        const tecnico = normalizarTexto(reg.tecnico || '').substring(0, 490);
+                        const auxiliar = normalizarTexto(reg.auxiliar || '').substring(0, 490);
+                        const placa = normalizarTexto(reg.placa || '').substring(0, 90);
+                        const modelo = normalizarTexto(reg.modelo || '').substring(0, 490);
+                        const operacao = normalizarTexto(reg.operacao || '').substring(0, 490);
+                        const equipes = normalizarTexto(reg.equipes || '').substring(0, 490);
+                        const kmAtual = normalizarTexto(reg.kmAtual || '').substring(0, 90);
+                        const ultimaTrocaOleo = normalizarTexto(reg.ultimaTrocaOleo || '').substring(0, 490);
+                        const renavam = normalizarTexto(reg.renavam || '').substring(0, 90);
+                        const lat = normalizarTexto(reg.lat || '').substring(0, 90);
+                        const lng = normalizarTexto(reg.lng || '').substring(0, 90);
                         
                         const result = await client.query(`
                             INSERT INTO ftth_registros 
@@ -577,28 +615,33 @@ app.post('/api', async (req, res) => {
                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
                             RETURNING id
                         `, [
-                            reg.cidade || '',
-                            reg.tecnico || '',
-                            reg.auxiliar || '',
-                            reg.placa || '',
-                            reg.modelo || '',
-                            reg.operacao || '',
-                            reg.equipes || '',
-                            reg.kmAtual || '',
-                            reg.ultimaTrocaOleo || '',
-                            reg.renavam || '',
-                            reg.lat || '',
-                            reg.lng || '',
+                            cidade,
+                            tecnico,
+                            auxiliar,
+                            placa,
+                            modelo,
+                            operacao,
+                            equipes,
+                            kmAtual,
+                            ultimaTrocaOleo,
+                            renavam,
+                            lat,
+                            lng,
                             observacoes,
                             reg.dataInicioContrato || null,
                             usuario || null,
                             'manual_inserido' // Forçar tipo manual_inserido para garantir que não seja confundido com inserções automáticas
                         ]);
                         
+                        await client.query('COMMIT');
                         registrosInseridos++;
                     } catch (err) {
+                        await client.query('ROLLBACK');
                         console.error(`Erro ao processar registro individual:`, err);
+                        errosRegistros++;
                         // Continuar processando os outros registros
+                    } finally {
+                        client.release();
                     }
                 }
                 
@@ -606,10 +649,11 @@ app.post('/api', async (req, res) => {
                 await client.query('COMMIT');
                 
                 return res.json({
-                    success: true,
-                    message: `${registrosInseridos} registros salvos com sucesso no banco de dados${registrosBloqueados > 0 ? `, ${registrosBloqueados} registros bloqueados por terem sido excluídos anteriormente` : ''}`,
+                    success: registrosInseridos > 0,
+                    message: `${registrosInseridos} registros salvos com sucesso no banco de dados${registrosBloqueados > 0 ? `, ${registrosBloqueados} registros bloqueados por terem sido excluídos anteriormente` : ''}${errosRegistros > 0 ? `, ${errosRegistros} registros com erro de processamento` : ''}`,
                     total: registrosInseridos,
-                    bloqueados: registrosBloqueados
+                    bloqueados: registrosBloqueados,
+                    erros: errosRegistros
                 });
                 
             } catch (error) {
@@ -729,22 +773,22 @@ app.get('/api', async (req, res) => {
                 await client.query(`
                     CREATE TABLE IF NOT EXISTS ftth_registros (
                         id SERIAL PRIMARY KEY,
-                        cidade VARCHAR(100),
-                        tecnico VARCHAR(100),
-                        auxiliar VARCHAR(100),
-                        placa VARCHAR(20),
-                        modelo VARCHAR(50),
-                        operacao VARCHAR(50),
-                        equipes VARCHAR(100),
-                        km_atual VARCHAR(20),
-                        ultima_troca_oleo VARCHAR(50),
-                        renavam VARCHAR(50),
-                        lat VARCHAR(20),
-                        lng VARCHAR(20),
+                        cidade VARCHAR(500),
+                        tecnico VARCHAR(500),
+                        auxiliar VARCHAR(500),
+                        placa VARCHAR(100),
+                        modelo VARCHAR(500),
+                        operacao VARCHAR(500),
+                        equipes VARCHAR(500),
+                        km_atual VARCHAR(100),
+                        ultima_troca_oleo VARCHAR(500),
+                        renavam VARCHAR(100),
+                        lat VARCHAR(100),
+                        lng VARCHAR(100),
                         observacoes TEXT,
                         data_inicio_contrato DATE,
-                        usuario_id VARCHAR(50),
-                        tipo_operacao VARCHAR(50),
+                        usuario_id VARCHAR(100),
+                        tipo_operacao VARCHAR(100),
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -829,13 +873,29 @@ app.get('/api', async (req, res) => {
 
 // Função para gerar hash de um registro para rastreamento de exclusões
 function gerarHashRegistro(registro) {
+    // Função para normalizar texto, removendo acentos e caracteres especiais
+    function normalizarTexto(texto) {
+        if (!texto) return '';
+        
+        try {
+            // Converter para formato NFD e remover acentos
+            return texto.normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "") // Remove acentos
+                    .replace(/[^\w\s.-]/g, " ") // Substitui caracteres especiais por espaços
+                    .trim().toUpperCase();
+        } catch (e) {
+            console.log("Erro ao normalizar texto para hash:", e, texto);
+            return texto ? texto.toString().trim().toUpperCase() : '';
+        }
+    }
+    
     // Criar um objeto apenas com campos significativos para comparação
     const dadosParaHash = {
-        cidade: registro.cidade || '',
-        tecnico: registro.tecnico || '',
-        auxiliar: registro.auxiliar || '',
-        placa: registro.placa || '',
-        modelo: registro.modelo || ''
+        cidade: normalizarTexto(registro.cidade || ''),
+        tecnico: normalizarTexto(registro.tecnico || ''),
+        auxiliar: normalizarTexto(registro.auxiliar || ''),
+        placa: normalizarTexto(registro.placa || ''),
+        modelo: normalizarTexto(registro.modelo || '')
     };
     
     // Gerar hash usando os dados principais do registro
@@ -899,101 +959,94 @@ async function initializeDatabase() {
     }
 }
 
-// Inicializar o banco de dados e depois iniciar o servidor
-initializeDatabase().then(() => {
-    app.listen(port, '0.0.0.0', () => {
-        console.log(`Servidor rodando na porta ${port} e acessível em todas as interfaces de rede (http://187.62.153.53:${port})`);
-    });
-});
-
-// Rota para excluir registros FTTH
-app.delete('/api/ftth-registros/:id', async (req, res) => {
+// Verificação e atualização do esquema da tabela
+async function atualizarEsquemaDaTabela() {
+    const client = await pool.connect();
     try {
-        const id = req.params.id;
+        console.log('Verificando e atualizando o esquema da tabela ftth_registros...');
         
-        // Verificar origem da requisição
-        const requestOrigin = req.headers.origin || req.headers.referer || '';
+        // Verificar se a tabela existe
+        const checkResult = await client.query(`
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'ftth_registros'
+            )
+        `);
         
-        // Permitir apenas solicitações da página Pagina1 (1).html
-        let isValidOrigin = false;
-        if (req.headers.referer && req.headers.referer.includes('Pagina1')) {
-            console.log('Origem da Pagina1 detectada para exclusão');
-            isValidOrigin = true;
+        if (checkResult.rows[0].exists) {
+            console.log('Tabela ftth_registros existe. Alterando colunas para suportar textos maiores...');
+            
+            // Alterar colunas para aceitar textos mais longos
+            await client.query(`
+                ALTER TABLE ftth_registros 
+                ALTER COLUMN cidade TYPE VARCHAR(500),
+                ALTER COLUMN tecnico TYPE VARCHAR(500),
+                ALTER COLUMN auxiliar TYPE VARCHAR(500),
+                ALTER COLUMN placa TYPE VARCHAR(100),
+                ALTER COLUMN modelo TYPE VARCHAR(500),
+                ALTER COLUMN operacao TYPE VARCHAR(500),
+                ALTER COLUMN equipes TYPE VARCHAR(500),
+                ALTER COLUMN km_atual TYPE VARCHAR(100),
+                ALTER COLUMN ultima_troca_oleo TYPE VARCHAR(500),
+                ALTER COLUMN renavam TYPE VARCHAR(100),
+                ALTER COLUMN lat TYPE VARCHAR(100),
+                ALTER COLUMN lng TYPE VARCHAR(100),
+                ALTER COLUMN usuario_id TYPE VARCHAR(100),
+                ALTER COLUMN tipo_operacao TYPE VARCHAR(100)
+            `);
+            
+            console.log('Esquema da tabela atualizado com sucesso!');
+        } else {
+            console.log('Tabela ftth_registros não existe. Será criada durante a inicialização normal.');
         }
-        
-        // Se a origem não for válida, rejeitar
-        if (!isValidOrigin) {
-            console.warn(`Tentativa de exclusão de origem não autorizada: ${requestOrigin}`);
-            return res.status(403).json({
-                success: false,
-                message: 'Origem não autorizada para exclusão de registros'
-            });
-        }
-        
-        const client = await pool.connect();
-        
-        try {
-            // Primeiro, obter os dados do registro a ser excluído para gerar hash
-            const getQuery = 'SELECT * FROM ftth_registros WHERE id = $1';
-            const getResult = await client.query(getQuery, [id]);
-            
-            if (getResult.rows.length === 0) {
-                client.release();
-                return res.status(404).json({
-                    success: false,
-                    message: 'Registro não encontrado'
-                });
-            }
-            
-            const registro = getResult.rows[0];
-            
-            // Gerar hash do registro
-            const hash = gerarHashRegistro(registro);
-            
-            // Iniciar transação
-            await client.query('BEGIN');
-            
-            // Adicionar à tabela de hashes excluídos para evitar reinserção
-            await client.query(
-                'INSERT INTO ftth_registros_excluidos (registro_hash, motivo) VALUES ($1, $2) ON CONFLICT (registro_hash) DO UPDATE SET data_exclusao = CURRENT_TIMESTAMP',
-                [hash, 'Excluído manualmente via API']
-            );
-            
-            // Excluir o registro
-            const deleteQuery = 'DELETE FROM ftth_registros WHERE id = $1';
-            await client.query(deleteQuery, [id]);
-            
-            // Finalizar transação
-            await client.query('COMMIT');
-            
-            client.release();
-            
-            return res.json({
-                success: true,
-                message: 'Registro excluído com sucesso e marcado para não ser reinserido automaticamente',
-                hash: hash
-            });
-            
-        } catch (error) {
-            await client.query('ROLLBACK');
-            client.release();
-            throw error;
-        }
-        
     } catch (error) {
-        console.error('Erro ao excluir registro FTTH:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Erro ao excluir registro',
-            error: error.message
-        });
+        console.error('Erro ao atualizar esquema da tabela:', error);
+    } finally {
+        client.release();
     }
-});
+}
+
+// Inicializar o banco de dados e depois iniciar o servidor
+async function inicializarServidor() {
+    try {
+        // Primeiro, atualizar o esquema da tabela
+        await atualizarEsquemaDaTabela();
+        
+        // Depois, executar inicialização normal
+        await initializeDatabase();
+        
+        // Finalmente, iniciar o servidor
+        app.listen(port, '0.0.0.0', () => {
+            console.log(`Servidor rodando na porta ${port} e acessível em todas as interfaces de rede (http://192.168.68.189:3000)`);
+        });
+    } catch (error) {
+        console.error('Erro durante inicialização do servidor:', error);
+    }
+}
+
+// Chamar a função de inicialização
+inicializarServidor();
 
 // Rota para limpar todos os registros FTTH
 app.delete('/api/ftth-registros/limpar-todos', async (req, res) => {
     try {
-        const { confirmacao, origem } = req.body;
+        console.log('Recebida solicitação para limpar todos os registros:', req.body);
+        
+        // Verificar se o corpo da requisição existe
+        if (!req.body || typeof req.body !== 'object') {
+            console.error('Corpo da requisição inválido:', req.body);
+            return res.status(400).json({
+                success: false,
+                message: 'Corpo da requisição inválido ou ausente'
+            });
+        }
+        
+        // Extrair confirmação e origem com valores padrão
+        const confirmacao = req.body.confirmacao || '';
+        const origem = req.body.origem || '';
+        
+        console.log('Requisição de limpeza recebida:', { confirmacao, origem });
         
         // Verificar confirmação de segurança
         if (confirmacao !== 'LIMPAR_TODOS_OS_REGISTROS') {
@@ -1028,22 +1081,7 @@ app.delete('/api/ftth-registros/limpar-todos', async (req, res) => {
             // Iniciar transação
             await client.query('BEGIN');
             
-            // 1. Primeiro obter todos os registros para criar hashes e impedir reinserção automática
-            const getResult = await client.query('SELECT * FROM ftth_registros LIMIT 1000');
-            const registros = getResult.rows;
-            
-            console.log(`Processando ${registros.length} registros para limpeza total...`);
-            
-            // 2. Para cada registro, gerar hash e adicionar à tabela de exclusões
-            for (const registro of registros) {
-                const hash = gerarHashRegistro(registro);
-                await client.query(
-                    'INSERT INTO ftth_registros_excluidos (registro_hash, motivo) VALUES ($1, $2) ON CONFLICT (registro_hash) DO UPDATE SET data_exclusao = CURRENT_TIMESTAMP',
-                    [hash, 'Excluído na limpeza total do banco']
-                );
-            }
-            
-            // 3. Excluir todos os registros
+            // Excluir todos os registros - não precisamos do ID
             const deleteResult = await client.query('DELETE FROM ftth_registros');
             const registrosExcluidos = deleteResult.rowCount;
             
@@ -1071,6 +1109,107 @@ app.delete('/api/ftth-registros/limpar-todos', async (req, res) => {
         return res.status(500).json({
             success: false,
             message: 'Erro ao limpar todos os registros',
+            error: error.message
+        });
+    }
+});
+
+// Rota para excluir registros FTTH
+app.delete('/api/ftth-registros/:id', async (req, res) => {
+    try {
+        const id = req.params.id;
+        
+        // Caso especial para o endpoint 'limpar-todos' - redirecionar para o outro handler
+        if (id === 'limpar-todos') {
+            console.log('Redirecionando para endpoint limpar-todos');
+            return app._router.handle(req, res);
+        }
+        
+        // Verificar origem da requisição
+        const requestOrigin = req.headers.origin || req.headers.referer || '';
+        
+        // Permitir apenas solicitações da página Pagina1 (1).html
+        let isValidOrigin = false;
+        if (req.headers.referer && req.headers.referer.includes('Pagina1')) {
+            console.log('Origem da Pagina1 detectada para exclusão');
+            isValidOrigin = true;
+        }
+        
+        // Se a origem não for válida, rejeitar
+        if (!isValidOrigin) {
+            console.warn(`Tentativa de exclusão de origem não autorizada: ${requestOrigin}`);
+            return res.status(403).json({
+                success: false,
+                message: 'Origem não autorizada para exclusão de registros'
+            });
+        }
+        
+        const client = await pool.connect();
+        
+        try {
+            // Tentar converter para inteiro
+            const idNumerico = parseInt(id);
+            
+            if (isNaN(idNumerico)) {
+                client.release();
+                return res.status(400).json({
+                    success: false,
+                    message: `ID inválido: ${id}. Deve ser um número.`
+                });
+            }
+            
+            // Primeiro, obter os dados do registro a ser excluído para gerar hash
+            const getQuery = 'SELECT * FROM ftth_registros WHERE id = $1';
+            const getResult = await client.query(getQuery, [idNumerico]);
+            
+            if (getResult.rows.length === 0) {
+                client.release();
+                return res.status(404).json({
+                    success: false,
+                    message: 'Registro não encontrado'
+                });
+            }
+            
+            const registro = getResult.rows[0];
+            
+            // Gerar hash do registro
+            const hash = gerarHashRegistro(registro);
+            
+            // Iniciar transação
+            await client.query('BEGIN');
+            
+            // Adicionar à tabela de hashes excluídos para evitar reinserção
+            await client.query(
+                'INSERT INTO ftth_registros_excluidos (registro_hash, motivo) VALUES ($1, $2) ON CONFLICT (registro_hash) DO UPDATE SET data_exclusao = CURRENT_TIMESTAMP',
+                [hash, 'Excluído manualmente via API']
+            );
+            
+            // Excluir o registro
+            const deleteQuery = 'DELETE FROM ftth_registros WHERE id = $1';
+            await client.query(deleteQuery, [idNumerico]);
+            
+            // Finalizar transação
+            await client.query('COMMIT');
+            
+            client.release();
+            
+            return res.json({
+                success: true,
+                message: 'Registro excluído com sucesso e marcado para não ser reinserido automaticamente',
+                hash: hash
+            });
+            
+        } catch (error) {
+            await client.query('ROLLBACK');
+            client.release();
+            throw error;
+        }
+        
+    } catch (error) {
+        console.error('Erro ao excluir registro FTTH:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Erro ao excluir registro',
             error: error.message
         });
     }

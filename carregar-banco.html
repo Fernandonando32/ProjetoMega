@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carregamento de Dados FTTH</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        header {
+            background: #2a3d66;
+            color: white;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            text-align: center;
+            border-radius: 5px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: white;
+            margin: 0;
+        }
+        .container {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 20px;
+            margin-top: 20px;
+            background-color: #f9f9f9;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .success {
+            background-color: #e6f7e6;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            color: #856404;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .button {
+            display: inline-block;
+            background-color: #2a3d66;
+            color: white;
+            padding: 10px 15px;
+            text-decoration: none;
+            border-radius: 5px;
+            cursor: pointer;
+            border: none;
+            margin-top: 10px;
+        }
+        .button:hover {
+            background-color: #1a2d56;
+        }
+        .log {
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 20px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            font-size: 12px;
+        }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top-color: #2a3d66;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Carregamento de Dados FTTH</h1>
+    </header>
+    
+    <div style="max-width: 800px; margin: 0 auto 20px auto; padding: 15px; background-color: #e6f7e6; border: 1px solid #c3e6cb; border-radius: 5px; color: #155724;">
+        <h2 style="margin-top: 0; color: #155724;">Como resolver problemas de carregamento de dados</h2>
+        <p>Esta página ajuda a diagnosticar e resolver problemas com o carregamento de dados do banco de dados para o sistema FTTH.</p>
+        <p><strong>O que fazer se seus dados não estão aparecendo:</strong></p>
+        <ol>
+            <li>Use esta página para verificar a autenticação e tentar carregar os dados diretamente do banco</li>
+            <li>Se esta página conseguir carregar os dados, clique em "Continuar para Página Principal"</li>
+            <li>Se ainda tiver problemas, você pode usar os seguintes arquivos auxiliares:
+                <ul>
+                    <li><strong>auth-fix.js</strong> - Corrige problemas com autenticação</li>
+                    <li><strong>fix-load-data.js</strong> - Força o carregamento de dados do banco</li>
+                    <li><strong>Pagina1-com-fix.html</strong> - Versão da página principal com todas as correções aplicadas</li>
+                </ul>
+            </li>
+        </ol>
+    </div>
+    
+    <div class="container">
+        <h2>Status do Carregamento</h2>
+        <div id="statusMessage" class="status info">
+            <div class="spinner"></div>
+            Inicializando carregamento de dados...
+        </div>
+        
+        <div id="logContainer">
+            <h3>Log de Operações</h3>
+            <div id="log" class="log"></div>
+        </div>
+        
+        <div style="margin-top: 20px; text-align: center;">
+            <button id="tryAgainButton" class="button" style="display: none;" onclick="tryAgain()">Tentar Novamente</button>
+            <button id="continueButton" class="button" style="display: none;" onclick="continueToPagina()">Continuar para Página Principal</button>
+            <button id="fixAuthButton" class="button" style="display: none;" onclick="fixAuthentication()">Corrigir Autenticação</button>
+        </div>
+    </div>
+    
+    <!-- Script para detecção de configuração base da API -->
+    <script>
+        // Define a URL base da API
+        window.getBaseApiUrl = function() {
+            // Verificar se estamos em localhost
+            const isLocalhost = window.location.hostname === 'localhost' || 
+                               window.location.hostname === '127.0.0.1' ||
+                               window.location.hostname === '';
+            
+            // Se estiver em ambiente local, usar localhost
+            if (isLocalhost) {
+                return 'http://localhost:3000';
+            }
+            
+            // Em produção, usar o atual hostname
+            return `http://${window.location.hostname}:3000`;
+        };
+        
+        console.log('URL base da API definida como:', window.getBaseApiUrl());
+    </script>
+    
+    <!-- Scripts para autenticação -->
+    <script src="auth-fix.js"></script>
+    <script src="./js/auth.js"></script>
+    <script src="./js/database-functions.js"></script>
+    
+    <script>
+        let logElement = document.getElementById('log');
+        let statusElement = document.getElementById('statusMessage');
+        let tryAgainButton = document.getElementById('tryAgainButton');
+        let continueButton = document.getElementById('continueButton');
+        let fixAuthButton = document.getElementById('fixAuthButton');
+        
+        // Função para adicionar mensagens ao log
+        function logMessage(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const formattedMessage = `[${timestamp}] [${type.toUpperCase()}] ${message}`;
+            logElement.innerHTML += formattedMessage + '\n';
+            logElement.scrollTop = logElement.scrollHeight; // Auto-scroll para o final
+            console.log(formattedMessage);
+        }
+        
+        // Função para atualizar o status
+        function updateStatus(message, type = 'info') {
+            statusElement.className = `status ${type}`;
+            statusElement.innerHTML = type === 'info' ? `<div class="spinner"></div>${message}` : message;
+            logMessage(message, type);
+        }
+        
+        // Função para tentar novamente
+        function tryAgain() {
+            tryAgainButton.style.display = 'none';
+            continueButton.style.display = 'none';
+            fixAuthButton.style.display = 'none';
+            
+            updateStatus('Tentando carregar dados novamente...', 'info');
+            
+            // Resetar o log
+            logElement.innerHTML = '';
+            
+            // Iniciar verificação após um breve delay
+            setTimeout(checkAuthentication, 500);
+        }
+        
+        // Função para continuar para a página principal
+        function continueToPagina() {
+            window.location.href = 'Pagina1 (1).html';
+        }
+        
+        // Função para corrigir autenticação
+        function fixAuthentication() {
+            updateStatus('Tentando corrigir autenticação...', 'info');
+            
+            // Verificar se Auth existe e implementar suas funções
+            if (!window.Auth) {
+                logMessage('Objeto Auth não existe. Criando...', 'warning');
+                window.Auth = {};
+            }
+            
+            // Inicializar usuário padrão
+            Auth.initDefaultUser();
+            
+            logMessage('Autenticação corrigida. Tentando carregar dados...', 'success');
+            
+            // Tentar carregar dados novamente após um breve delay
+            setTimeout(tryLoadData, 1000);
+        }
+        
+        // Verificar autenticação
+        async function checkAuthentication() {
+            updateStatus('Verificando autenticação...', 'info');
+            
+            try {
+                if (!window.Auth) {
+                    throw new Error('Objeto Auth não está disponível');
+                }
+                
+                if (!Auth.isAuthenticated()) {
+                    updateStatus('Usuário não autenticado. É necessário corrigir a autenticação.', 'warning');
+                    fixAuthButton.style.display = 'inline-block';
+                    return;
+                }
+                
+                const currentUser = Auth.getCurrentUser();
+                logMessage(`Usuário autenticado: ${currentUser.name} (${currentUser.accessLevel})`, 'success');
+                
+                // Continuar para carregar dados
+                tryLoadData();
+                
+            } catch (error) {
+                updateStatus(`Erro ao verificar autenticação: ${error.message}`, 'error');
+                logMessage(`Detalhes do erro: ${error.stack}`, 'error');
+                fixAuthButton.style.display = 'inline-block';
+            }
+        }
+        
+        // Tentar carregar dados do banco
+        async function tryLoadData() {
+            updateStatus('Tentando carregar dados do banco...', 'info');
+            
+            try {
+                if (!window.carregarDoBanco) {
+                    throw new Error('Função carregarDoBanco não está disponível');
+                }
+                
+                const result = await window.carregarDoBanco();
+                
+                if (result.success && Array.isArray(result.registros) && result.registros.length > 0) {
+                    updateStatus(`Carregados ${result.registros.length} registros do banco com sucesso!`, 'success');
+                    
+                    // Atualizar registros globais e localStorage
+                    window.registros = result.registros;
+                    
+                    try {
+                        // Limitar para os últimos 100 registros para economizar espaço
+                        const MAX_LOCAL_REGISTROS = 100;
+                        const registrosParaSalvar = window.registros.slice(0, MAX_LOCAL_REGISTROS);
+                        
+                        logMessage(`Salvando ${registrosParaSalvar.length} registros no localStorage para backup local`, 'info');
+                        localStorage.setItem('registrosFTTH', JSON.stringify(registrosParaSalvar));
+                        localStorage.setItem('ftth_total_registros', window.registros.length.toString());
+                        logMessage('Dados do banco sincronizados com localStorage para backup', 'success');
+                    } catch (storageError) {
+                        logMessage(`Não foi possível salvar no localStorage devido a limite de quota: ${storageError.message}`, 'warning');
+                    }
+                    
+                    // Mostrar botão para continuar
+                    continueButton.style.display = 'inline-block';
+                    
+                } else {
+                    updateStatus('Nenhum registro encontrado no banco ou erro ao carregar.', 'warning');
+                    logMessage(`Detalhes: ${result.message || 'Sem detalhes disponíveis'}`, 'warning');
+                    
+                    // Mostrar botões
+                    tryAgainButton.style.display = 'inline-block';
+                    continueButton.style.display = 'inline-block';
+                }
+                
+            } catch (error) {
+                updateStatus(`Erro ao carregar dados: ${error.message}`, 'error');
+                logMessage(`Detalhes do erro: ${error.stack}`, 'error');
+                
+                // Mostrar botão para tentar novamente
+                tryAgainButton.style.display = 'inline-block';
+                continueButton.style.display = 'inline-block';
+            }
+        }
+        
+        // Iniciar verificação quando a página carregar
+        document.addEventListener('DOMContentLoaded', function() {
+            logMessage('Página de diagnóstico de carregamento de dados iniciada', 'info');
+            logMessage(`URL base da API: ${window.getBaseApiUrl()}`, 'info');
+            
+            // Iniciar verificação após um breve delay
+            setTimeout(checkAuthentication, 1000);
+        });
+    </script>
+</body>
+</html> 
